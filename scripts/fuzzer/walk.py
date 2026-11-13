@@ -26,6 +26,14 @@ then run once more on a gcov build of the merge, and while they leave too
 many of its changed lines unrun, more rounds ask Claude for tests that reach
 them (:func:`cover`).
 
+``model`` keeps the fuzzer's TLA+ models current: ``plan`` routes each new
+Valkey merge to the bundles under the fuzzer's ``formal/`` whose scope it
+touches (:func:`~scripts.fuzzer.spec_draft.route`), and ``model``, in a job
+of its own per bundle, asks Claude whether the change alters what the bundle
+models and, if it does, for an update that the spec draft's gates judge
+(:func:`~scripts.fuzzer.spec_draft.draft_spec`). The workflow opens an update
+that passed as a pull request on the fuzzer, for a person to review.
+
 ``update`` folds a run's results into its repository's state on the state
 branch, copies each merge's proven tests beside it under ``tests/``,
 writes ``PROGRESS.md`` from every repository's state, and pushes, again
@@ -88,6 +96,9 @@ from scripts.fuzzer.propose import (
     write_results,
 )
 from scripts.fuzzer.replay import _PR_SUBJECT_RE
+from scripts.fuzzer.spec_draft import PROFILE as SPEC_DRAFT_PROFILE
+from scripts.fuzzer.spec_draft import RESULT_FILE as SPEC_DRAFT_FILE
+from scripts.fuzzer.spec_draft import SpecTools, bundle_scopes, draft_spec, route
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +118,8 @@ STATE_DIR = "state"
 MAX_PUSHES = 5
 PROGRESS_FILE = "PROGRESS.md"
 RESULT_FILE = "result.json"
+# A model job's record of its update: the merge, the bundle, the verdict.
+MODEL_FILE = "model.json"
 TESTS_DIR = "tests"
 # GitHub runs at most this many jobs from one matrix.
 MAX_JOBS = 256
@@ -266,11 +279,28 @@ def _has_file(repo_dir: Path, sha: str, path: str) -> bool:
     return bool(_git(repo_dir, "ls-tree", "--name-only", sha, "--", path))
 
 
+def model_jobs(repo_dir: Path, merge: dict[str, Any], scopes: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """One model job per bundle whose scope ``merge`` touches, with what of the scope it touches."""
+    diff = _git(repo_dir, "diff", "-U0", merge["parent"], merge["sha"], "--", "*.c", "*.h")
+
+    def head_file(path: str) -> str | None:
+        shown = subprocess.run(["git", "-C", str(repo_dir), "show", f"{merge['sha']}:{path}"],
+                               capture_output=True, text=True)
+        return shown.stdout if shown.returncode == 0 else None
+
+    return [{**{key: merge.get(key) for key in MERGE_KEYS}, "protocol": protocol, "touched": touched}
+            for protocol, touched in route(diff, head_file, scopes).items()]
+
+
 def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str, *,
-         now: str) -> dict[str, Any]:
+         now: str, scopes: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, Any]:
     """The run's merges, the merges done without a job, the repository's new pointer, and the heads the run
     builds: the repository's, and for a module the Valkey ``unstable`` commit ``valkey_head`` it loads into.
     A merge to retry is taken once its ``retry_after``, if it has one, is no later than ``now``.
+
+    With the fuzzer's bundle ``scopes``, a new Valkey merge also gets a model job for each bundle it touches.
+    Only a new one: the bundles model the code as it is now, which a backlog merge's change is long part of,
+    and a retried merge got its model jobs in its first run.
 
     ``repo_dir`` is a full clone of ``repo`` with its default branch checked out. A repository the state does
     not know yet starts at its head: the forward head and the backlog cursor both name the newest merge, so the
@@ -288,6 +318,7 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
     backlog = [(i, "backlog") for i in range(index[pointer["cursor"]], index[pointer["end"]])]
     jobs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    models: list[dict[str, Any]] = []
     buildable = MODULES[_name(repo)].buildable if module_repository(repo) else ""
 
     def predates_recipe(merge: dict[str, Any]) -> bool:
@@ -323,6 +354,8 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
             skipped.append({**merge, "skip_outcome": "predates-build-recipe"})
         else:
             jobs.append(merge)
+            if kind == "new" and repo == VALKEY_REPO and scopes:
+                models += model_jobs(repo_dir, merge, scopes)
     cursor = history[index[pointer["cursor"]]]
     pointer.update(remaining=index[pointer["end"]] - index[pointer["cursor"]], cursor_pr=cursor["pr"],
                    cursor_date=cursor["date"])
@@ -330,7 +363,7 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
     extra = {"name": _name(repo), "deps": MODULES[_name(repo)].deps if module_repository(repo) else ""}
     heads = {repo: history[0]["sha"]} if repo == VALKEY_REPO else {VALKEY_REPO: valkey_head, repo: history[0]["sha"]}
     return {"repo": repo, "merges": [{**job, **extra} for job in jobs], "skipped": skipped, "pointer": pointer,
-            "heads": heads}
+            "heads": heads, "models": models}
 
 
 def clone(repo: str, dest: Path) -> Path:
@@ -1340,6 +1373,40 @@ class _Unmeasured(Exception):
     """The coverage build, its runs or gcov failed: the merge's coverage is not known, and the merge goes on."""
 
 
+def model(job: dict[str, Any], *, gh: Any, token: str, fuzzer_dir: Path, fuzzer_bin: str, tla2tools: str, out: Path,
+          runner: Callable[[str, Path], AgentRunResult] | None = None) -> dict[str, Any]:
+    """Ask for an update of the bundle a merge touches (one of plan's model jobs), gated as a spec draft is. The
+    spec draft's output goes in ``out``, and beside it the walk's record of the job, model.json."""
+    out.mkdir(parents=True, exist_ok=True)
+    record = {**{key: job.get(key) for key in MERGE_KEYS}, "protocol": job["protocol"], "verdict": "error",
+              "reason": "the run did not finish", "cost_usd": 0.0}
+    cost = [0.0]
+
+    def ask(prompt: str, workdir: Path) -> AgentRunResult:
+        answer = runner(prompt, workdir) if runner else run_agent(SPEC_DRAFT_PROFILE, prompt, cwd=str(workdir))
+        cost[0] += claude_cost(answer.stdout)
+        return answer
+
+    try:
+        change = fetch_change(gh, token, ChangeRequest(repo=job["repo"], base=job["parent"], head=job["sha"]))
+        change.title = job["subject"]
+        if job.get("pr") and _pr_repo(job) == job["repo"]:
+            change.pr_number = job["pr"]
+        tools = SpecTools(fuzzer_bin, tla2tools)
+        catalog = load_catalog(fuzzer_bin)
+        tools.preflight(fuzzer_dir)
+        with tempfile.TemporaryDirectory(prefix="fuzzer-walk-model-") as td:
+            drafted = draft_spec(change, workdir=Path(td), out_dir=out, catalog=catalog, fuzzer_dir=fuzzer_dir,
+                                 tools=tools, runner=ask, update=job["protocol"])
+        record.update(verdict=drafted.verdict, reason=drafted.reason)
+    except Exception as exc:
+        logger.warning("The model update of %s for %s failed: %s", job["protocol"], job["sha"], exc, exc_info=True)
+        record["reason"] = " ".join(str(exc).split())[:1000]
+    record["cost_usd"] = round(cost[0], 4)
+    (out / MODEL_FILE).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return record
+
+
 # --- State ---------------------------------------------------------------------
 
 
@@ -1391,10 +1458,11 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
 
 
 def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[str, Any]], *, now: str,
-           run_url: str = "") -> dict[str, Any]:
-    """The state after a run: its pointer, the merges done (and those with no code change), and the merges
-    to retry. A merge whose run failed counts an attempt, and after MAX_ATTEMPTS it is done with its error; one
-    whose job left no result (it never ran, or died) counts a miss, and is given up after MAX_MISSES."""
+           run_url: str = "", models: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The state after a run: its pointer, the merges done (and those with no code change), the merges to
+    retry, and its model jobs' outcomes (``models``, their model.json records). A merge whose run failed counts
+    an attempt, and after MAX_ATTEMPTS it is done with its error; one whose job left no result (it never ran,
+    or died) counts a miss, and is given up after MAX_MISSES."""
     state = copy.deepcopy(state)
     state["pointer"] = planned["pointer"]
     by_sha = {result["sha"]: result for result in results}
@@ -1430,8 +1498,21 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
             state["failed"].pop(sha, None)
         else:
             state["failed"][sha] = entry
+    # Each model job's outcome, by merge and bundle; a job is never retried, so one that left no record says so.
+    by_model = {(record["sha"], record["protocol"]): record for record in models or []}
+    for job in planned.get("models") or []:
+        record = by_model.get((job["sha"], job["protocol"])) or {"verdict": "error", "reason": "the job left no result"}
+        cost += float(record.get("cost_usd") or 0)
+        entry = {**{key: job.get(key) for key in ("repo", "pr", "pr_repo", "subject")}, "at": now,
+                 "verdict": record["verdict"], "cost_usd": float(record.get("cost_usd") or 0)}
+        for key, limit in (("reason", 300), ("pull_request", 200)):
+            if record.get(key):
+                entry[key] = str(record[key])[:limit]
+        state.setdefault("models", {}).setdefault(job["sha"], {})[job["protocol"]] = entry
     state["last_run"] = {"at": now, "url": run_url, "merges": [m["sha"] for m in planned["merges"]],
                          "skipped": len(planned["skipped"]), "cost_usd": round(cost, 4)}
+    if planned.get("models"):
+        state["last_run"]["models"] = [[job["sha"], job["protocol"]] for job in planned["models"]]
     return state
 
 
@@ -1439,7 +1520,7 @@ def dump_state(state: dict[str, Any]) -> str:
     """The state as JSON, one line per merge, so its history diffs by merge."""
     parts = []
     for key, value in state.items():
-        if key in ("done", "failed"):
+        if key in ("done", "failed", "models"):
             lines = [f"  {json.dumps(sha)}: {json.dumps(entry, sort_keys=True)}" for sha, entry in value.items()]
             parts.append(f"{json.dumps(key)}: {{\n" + ",\n".join(lines) + ("\n" if lines else "") + "}")
         else:
@@ -1451,6 +1532,8 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
     """PROGRESS.md, from every repository's state alone."""
     done = {sha: entry for state in states for sha, entry in state["done"].items()}
     failed = {sha: entry for state in states for sha, entry in state["failed"].items()}
+    models = [entry for state in states for bundles in (state.get("models") or {}).values()
+              for entry in bundles.values()]
 
     def since(entry: dict[str, Any], days: float) -> bool:
         return datetime.fromisoformat(entry["at"]) >= now - timedelta(days=days)
@@ -1461,7 +1544,17 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
         return f"[{_where(merge)}]({_pr_url(merge)}){tests}"
 
     def spend(days: float | None) -> str:
-        return f"${sum(float(e.get('cost_usd') or 0) for e in done.values() if days is None or since(e, days)):.2f}"
+        spent = [e for e in [*done.values(), *models] if days is None or since(e, days)]
+        return f"${sum(float(e.get('cost_usd') or 0) for e in spent):.2f}"
+
+    def model_outcome(entry: dict[str, Any]) -> str:
+        if entry["verdict"] == "passed":
+            pull = entry.get("pull_request")
+            return f"the update passed every gate, [pull request]({pull})" if pull else \
+                "the update passed every gate, no pull request"
+        what = {"no_model_change": "no model change", "rejected": "the update was rejected"}.get(entry["verdict"],
+                                                                                              entry["verdict"])
+        return f"{what}: {entry.get('reason', '')}"[:300]
 
     states = sorted(states, key=lambda state: state["repo"])
     lines = ["# Fuzzer walk", "", f"Updated {now.isoformat(timespec='minutes')}.", "",
@@ -1500,6 +1593,10 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
             else:
                 what += f"{entry['outcome']}: {entry.get('reason', '')}"[:300]
             lines.append(f"- {name(sha, entry)}: {what}")
+        for sha, protocol in last.get("models") or []:
+            entry = ((state.get("models") or {}).get(sha) or {}).get(protocol)
+            if entry is not None:
+                lines.append(f"- model `{protocol}` for {name(sha, entry)}: {model_outcome(entry)}")
     tested = [e for e in done.values() if e["outcome"] == "tested"]
     fixes = [e for e in tested if _FIX_RE.search(e.get("subject") or "")]
     issues = sorted({f["issue"] for e in done.values() for f in e.get("findings", []) if f.get("issue")})
@@ -1513,13 +1610,31 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
               f"- Recall: {sum(1 for e in fixes if e.get('recall'))} parents flagged of {len(fixes)} fix merges",
               f"- Claude: {spend(1)} in the last 24 hours, {spend(7)} in the last 7 days, {spend(None)} in all",
               f"- Issues filed: {len(issues)}", *(f"  - {url}" for url in issues)]
+    pulls = sorted(e["pull_request"] for e in models if e.get("pull_request"))
+    verdicts = [e["verdict"] for e in models]
+    lines += [f"- Model updates: {len(models)} asked for, {verdicts.count('no_model_change')} with no model change, "
+              f"{verdicts.count('rejected')} rejected, {verdicts.count('error')} failed; {len(pulls)} pull request(s)",
+              *(f"  - {url}" for url in pulls)]
     lines += ["", "## Retries", ""]
     lines += [f"- {name(sha, e)}: attempt {e['attempts']} of {MAX_ATTEMPTS}, {e['error'][:200]}"
               for sha, e in failed.items()] or ["None."]
     return "\n".join(lines) + "\n"
 
 
-def record(branch: Path, planned: dict[str, Any], results_dir: Path, *, now: datetime, run_url: str) -> None:
+def model_records(models_dir: Path | None) -> list[dict[str, Any]]:
+    """The model jobs' records, each one folder of ``models_dir``, with the pull request the job opened."""
+    records = []
+    for path in sorted(models_dir.glob(f"*/{MODEL_FILE}")) if models_dir else []:
+        record = json.loads(path.read_text())
+        draft = path.with_name(SPEC_DRAFT_FILE)
+        if draft.is_file():
+            record["pull_request"] = json.loads(draft.read_text()).get("pull_request")
+        records.append(record)
+    return records
+
+
+def record(branch: Path, planned: dict[str, Any], results_dir: Path, *, now: datetime, run_url: str,
+           models_dir: Path | None = None) -> None:
     """Fold a run into the state branch's checkout: its repository's state and the done merges' tests, then
     PROGRESS.md from every repository's state."""
     path = branch / STATE_DIR / f"{_name(planned['repo'])}.json"
@@ -1527,7 +1642,8 @@ def record(branch: Path, planned: dict[str, Any], results_dir: Path, *, now: dat
     results = []
     for result_file in sorted(results_dir.glob(f"{TESTS_DIR}/*/*/{RESULT_FILE}")):
         results.append(json.loads(result_file.read_text()))
-    state = update(state, planned, results, now=now.isoformat(timespec="seconds"), run_url=run_url)
+    state = update(state, planned, results, now=now.isoformat(timespec="seconds"), run_url=run_url,
+                   models=model_records(models_dir))
     for result in results:
         if result["sha"] in state["done"] and not result.get("error"):
             target = branch / merge_folder(result)
@@ -1580,6 +1696,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--state", type=Path, required=True, help="its state file; absent means a walk that starts now")
     p.add_argument("--work", type=Path, required=True, help="where the repository is cloned")
     p.add_argument("--max", type=int, default=20, help="jobs in the run")
+    p.add_argument("--fuzzer-dir", type=Path, help="the fuzzer, whose formal/ bundles new merges are routed to")
     p.add_argument("--out", type=Path, required=True)
     b = commands.add_parser("build", help="build a head for the run")
     b.add_argument("--repo", required=True, choices=NAMES)
@@ -1598,11 +1715,18 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tests-url", required=True, help="where the state branch keeps the tests, for the issues")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--work", type=Path, required=True)
+    m = commands.add_parser("model", help="ask for an update of the bundle a merge touches")
+    m.add_argument("--model", required=True, help="one of plan's model jobs, as JSON")
+    m.add_argument("--fuzzer-dir", type=Path, required=True)
+    m.add_argument("--fuzzer-bin", required=True)
+    m.add_argument("--tla2tools", required=True)
+    m.add_argument("--out", type=Path, required=True)
     u = commands.add_parser("update", help="fold a run into the state branch and publish it")
     u.add_argument("--remote", required=True, help="the repository whose state branch holds the walk's state")
     u.add_argument("--work", type=Path, required=True, help="where the state branch is checked out")
     u.add_argument("--plan", type=Path, required=True)
     u.add_argument("--results", type=Path, required=True, help="the jobs' tests folders, merged")
+    u.add_argument("--models", type=Path, help="the model jobs' folders, one each")
     u.add_argument("--run-url", default="")
     args = parser.parse_args(argv)
     configure_logging()
@@ -1614,10 +1738,12 @@ def main(argv: list[str] | None = None) -> int:
         state = json.loads(args.state.read_text()) if args.state.is_file() else initial_state(repo)
         planned = plan(clone(repo, args.work / args.repo), repo, state, args.max,
                        "" if repo == VALKEY_REPO else remote_head(VALKEY_REPO),
-                       now=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+                       now=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                       scopes=bundle_scopes(args.fuzzer_dir) if args.fuzzer_dir else None)
         args.out.write_text(json.dumps(planned, indent=2), encoding="utf-8")
         log_outcome(logger, logging.INFO, f"{len(planned['merges'])} merge(s) of {repo} to walk, "
-                                          f"{len(planned['skipped'])} without a code change")
+                                          f"{len(planned['skipped'])} without a code change, "
+                                          f"{len(planned['models'])} model update(s)")
         return 0
     if args.command == "build":
         repo = f"{VALKEY_REPO.split('/')[0]}/{args.repo}"
@@ -1628,7 +1754,8 @@ def main(argv: list[str] | None = None) -> int:
         planned = json.loads(args.plan.read_text())
         now = datetime.now(timezone.utc)
         publish(args.remote, args.work,
-                lambda branch: record(branch, planned, args.results, now=now, run_url=args.run_url),
+                lambda branch: record(branch, planned, args.results, now=now, run_url=args.run_url,
+                                      models_dir=args.models),
                 f"Walk {planned['repo']}: {len(planned['merges'])} merge(s), {len(planned['skipped'])} without code")
         log_outcome(logger, logging.INFO, f"Published the walk's state of {planned['repo']} on {STATE_BRANCH}")
         return 0
@@ -1639,6 +1766,14 @@ def main(argv: list[str] | None = None) -> int:
     from github import Auth, Github
 
     gh = Github(auth=Auth.Token(token))
+    if args.command == "model":
+        job = json.loads(args.model)
+        done = model(job, gh=gh, token=token, fuzzer_dir=args.fuzzer_dir, fuzzer_bin=args.fuzzer_bin,
+                     tla2tools=args.tla2tools, out=args.out)
+        log_outcome(logger, logging.ERROR if done["verdict"] == "error" else logging.INFO,
+                    f"formal/{job['protocol']} for {_short(job)}: {done['verdict']}"
+                    + (f" ({done['reason']})" if done["reason"] else ""))
+        return 1 if done["verdict"] == "error" else 0
     merge = json.loads(args.merge)
     result = run(merge, gh=gh, token=token, publisher=IssueDedupPublisher(gh, marker_namespace=MARKER_NAMESPACE),
                  fuzzer_repo=args.fuzzer_repo, fuzzer_dir=args.fuzzer_dir, fuzzer_bin=args.fuzzer_bin,

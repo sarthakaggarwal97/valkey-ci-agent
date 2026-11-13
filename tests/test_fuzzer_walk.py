@@ -932,7 +932,7 @@ def test_the_workflow_is_dispatched_per_repository_by_name_and_never_overlaps_it
 
 def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
     jobs = _workflow()["jobs"]
-    assert list(jobs) == ["plan", "heads", "walk", "record"]
+    assert list(jobs) == ["plan", "heads", "walk", "model", "record"]
     matrix = jobs["walk"]["strategy"]
     assert (matrix["fail-fast"], matrix["max-parallel"]) == ("false", "16")
     assert jobs["walk"]["permissions"] == {"contents": "read", "id-token": "write"}
@@ -1481,3 +1481,191 @@ def test_a_fix_merge_already_shown_gets_no_recall_round(monkeypatch, tmp_path):
     extras: list[str] = []
     result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,), extras=extras)
     assert extras == [""] and result["recall"] is True and "recall_round" not in result
+
+
+# --- Model jobs ---------------------------------------------------------------------
+
+
+REGISTER_C = "int registerWrite(int v) {\n    return v;\n}\n\nint other(void) {\n    return 0;\n}\n"
+SCOPES = {"register": [{"file": "src/register.c", "functions": ["registerWrite"]}]}
+
+
+def _commit_files(repo: Path, subject: str, files: dict[str, str]) -> str:
+    for path, text in files.items():
+        (repo / path).parent.mkdir(parents=True, exist_ok=True)
+        (repo / path).write_text(text)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", subject)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_new_valkey_merges_get_a_model_job_per_bundle_they_touch(tmp_path):
+    repo = _repo(tmp_path, "valkey", [])
+    base = _commit_files(repo, "Base", {"src/register.c": REGISTER_C})
+    head = _commit_files(repo, "Old fix (#1)", {"src/register.c": REGISTER_C.replace("return v;", "return v + 1;")})
+    _commit_files(repo, "Fix the write (#2)", {"src/register.c": REGISTER_C.replace("return v;", "return v + 2;")})
+    _commit_files(repo, "Change other (#3)", {"src/register.c": REGISTER_C.replace("return v;", "return v + 2;")
+                                       .replace("return 0;", "return 1;")})
+    _commit_files(repo, "Call it (#4)", {"src/server.c": "void cron(void) {\n    registerWrite(1);\n}\n"})
+    state = initial_state(walk.VALKEY_REPO)
+    state["pointer"] = {"head": head, "cursor": head, "end": base}
+    planned = plan(repo, walk.VALKEY_REPO, state, 10, "", now=NOW, scopes=SCOPES)
+    assert _jobs(planned) == [2, 3, 4, 1]
+    # Only new merges: the backlog's #1 changes registerWrite too, but the bundles model the code as it is now.
+    assert [(m["pr"], m["protocol"], m["touched"]) for m in planned["models"]] == [
+        (2, "register", ["src/register.c:registerWrite"]), (4, "register", ["src/register.c:registerWrite"])]
+    assert set(planned["models"][0]) == {*walk.MERGE_KEYS, "protocol", "touched"}
+    assert plan(repo, walk.VALKEY_REPO, state, 10, "", now=NOW)["models"] == []
+
+
+def test_a_modules_merges_get_no_model_job(json_repo):
+    state = initial_state(JSON)
+    shas = _shas(json_repo)
+    state["pointer"] = {"head": shas[1], "cursor": shas[1], "end": shas[-1]}
+    # #5 changes src/d.c, which the bundle names whole; the bundles model Valkey, not a module.
+    planned = plan(json_repo, JSON, state, 10, UNSTABLE, now=NOW, scopes={"x": [{"file": "src/d.c"}]})
+    assert _jobs(planned)[0] == 5 and planned["models"] == []
+
+
+def _models(*jobs: tuple[dict, str]) -> list[dict]:
+    return [{**merge, "protocol": protocol, "touched": []} for merge, protocol in jobs]
+
+
+def test_the_state_keeps_each_model_jobs_outcome_and_progress_shows_it():
+    merge, other = _merge(), _merge(sha="c" * 40, pr=5, subject="Add a command (#5)")
+    pull = "https://github.com/me/valkey-fuzzer/pull/7"
+    planned = {"repo": walk.VALKEY_REPO, "merges": [merge], "skipped": [], "pointer": {},
+               "models": _models((merge, "replication"), (merge, "persistence"), (other, "replication"))}
+    records = [{**merge, "protocol": "replication", "verdict": "passed", "reason": "", "cost_usd": 2.0,
+                "pull_request": pull},
+               {**merge, "protocol": "persistence", "verdict": "no_model_change", "reason": "only a log line",
+                "cost_usd": 0.5}]
+    state = update(initial_state(walk.VALKEY_REPO), planned, [_result(merge)], now=NOW, run_url="u", models=records)
+    common = {"repo": walk.VALKEY_REPO, "pr": 4716, "pr_repo": walk.VALKEY_REPO, "subject": "Fix LSET (#4716)",
+              "at": NOW}
+    assert state["models"][merge["sha"]] == {
+        "replication": {**common, "verdict": "passed", "cost_usd": 2.0, "pull_request": pull},
+        "persistence": {**common, "verdict": "no_model_change", "cost_usd": 0.5, "reason": "only a log line"}}
+    # A job that left no record is not retried: it says so.
+    assert state["models"][other["sha"]]["replication"]["verdict"] == "error"
+    assert state["models"][other["sha"]]["replication"]["reason"] == "the job left no result"
+    assert state["last_run"]["cost_usd"] == 4.0
+    assert state["last_run"]["models"] == [[merge["sha"], "replication"], [merge["sha"], "persistence"],
+                                           [other["sha"], "replication"]]
+    # One line per merge in the state file.
+    assert f'  "{merge["sha"]}": {{"persistence": ' in dump_state(state)
+
+    text = progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+    where = "[valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716)"
+    assert f"- model `replication` for {where}: the update passed every gate, [pull request]({pull})" in text
+    assert f"- model `persistence` for {where}: no model change: only a log line" in text
+    assert ("- model `replication` for [valkey-io/valkey#5](https://github.com/valkey-io/valkey/pull/5): "
+            "error: the job left no result") in text
+    assert ("- Model updates: 3 asked for, 1 with no model change, 0 rejected, 1 failed; 1 pull request(s)\n"
+            f"  - {pull}") in text
+    # Claude's spend counts the model jobs too.
+    assert "- Claude: $4.00 in the last 24 hours" in text
+
+
+def test_record_takes_each_model_jobs_record_and_its_pull_request(tmp_path):
+    merge = _merge()
+    planned = {"repo": walk.VALKEY_REPO, "merges": [], "skipped": [], "pointer": {},
+               "models": _models((merge, "replication"), (merge, "persistence"))}
+    models = tmp_path / "models"
+    for protocol, outcome in (("replication", "passed"), ("persistence", "rejected")):
+        folder = models / f"walk-model-{merge['sha']}-{protocol}"
+        folder.mkdir(parents=True)
+        (folder / "model.json").write_text(json.dumps({**merge, "protocol": protocol, "verdict": outcome,
+                                                       "reason": "", "cost_usd": 1.0}))
+        (folder / "spec-draft.json").write_text(json.dumps(
+            {"verdict": outcome, **({"pull_request": "https://p/1"} if outcome == "passed" else {})}))
+    branch = tmp_path / "branch"
+    record(branch, planned, tmp_path / "results", now=datetime(2026, 11, 4, tzinfo=timezone.utc), run_url="u",
+           models_dir=models)
+    state = json.loads((branch / "state/valkey.json").read_text())
+    assert state["models"][merge["sha"]]["replication"]["pull_request"] == "https://p/1"
+    assert state["models"][merge["sha"]]["persistence"]["verdict"] == "rejected"
+
+
+def _cost(dollars: float) -> AgentRunResult:
+    return AgentRunResult(profile="p", stdout=json.dumps({"type": "result", "total_cost_usd": dollars}), stderr="",
+                          returncode=0, prompt_sha256="x", cwd="", allowed_tools="", model="", started_at="",
+                          finished_at="")
+
+
+def test_a_model_job_asks_for_an_update_of_its_bundle_and_records_the_verdict(tmp_path, monkeypatch):
+    asked = {}
+
+    def fake_draft(change, **kw):
+        asked.update(change=change, **kw)
+        kw["runner"]("prompt", tmp_path)
+        return dataclasses.make_dataclass("Run", ["verdict", "reason"])("no_model_change", "the guard is unchanged")
+
+    def fetch(gh, token, request):
+        return Change(repo=request.repo, pr_number=None, title="2 commit(s)", base_sha=request.base,
+                      head_sha=request.head, diff="")
+
+    monkeypatch.setattr(walk, "fetch_change", fetch)
+    monkeypatch.setattr(walk, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})
+    monkeypatch.setattr(walk.SpecTools, "preflight", lambda self, fuzzer_dir: None)
+    monkeypatch.setattr(walk, "draft_spec", fake_draft)
+    job = {**_merge(), "protocol": "replication", "touched": ["src/replication.c:syncCommand"]}
+    out = tmp_path / "out"
+    done = walk.model(job, gh=None, token="t", fuzzer_dir=tmp_path, fuzzer_bin="vf", tla2tools="jar", out=out,
+                      runner=lambda prompt, workdir: _cost(0.75))
+    assert asked["update"] == "replication" and asked["out_dir"] == out and asked["fuzzer_dir"] == tmp_path
+    # The merge against its first parent, named by its pull request.
+    change = asked["change"]
+    assert (change.base_sha, change.head_sha, change.pr_number, change.title) == (
+        "a" * 40, "b" * 40, 4716, "Fix LSET (#4716)")
+    assert done == json.loads((out / "model.json").read_text())
+    assert (done["protocol"], done["verdict"], done["reason"], done["cost_usd"]) == (
+        "replication", "no_model_change", "the guard is unchanged", 0.75)
+
+    # A job that fails records why, as its verdict.
+    def broken(change, **kw):
+        raise RuntimeError("spec check fails on the fuzzer's own register bundle")
+
+    monkeypatch.setattr(walk, "draft_spec", broken)
+    done = walk.model(job, gh=None, token="t", fuzzer_dir=tmp_path, fuzzer_bin="vf", tla2tools="jar", out=out)
+    assert (done["verdict"], done["reason"]) == ("error", "spec check fails on the fuzzer's own register bundle")
+
+
+def test_the_model_jobs_run_beside_the_walk_and_get_a_write_token_only_after_claude():
+    workflow = _workflow()
+    jobs = workflow["jobs"]
+    planning = next(s for s in jobs["plan"]["steps"] if s.get("name") == "Plan the run")["run"]
+    assert "--fuzzer-dir valkey-fuzzer" in planning and '("models", plan["models"])' in planning
+    bundles = next(s for s in jobs["plan"]["steps"] if s.get("name") == "Check out valkey-fuzzer's bundles")
+    assert bundles["with"]["sparse-checkout"] == "formal" and bundles["with"]["ref"] == "${{ env.FUZZER_REF }}"
+    job = jobs["model"]
+    assert (job["needs"], job["if"]) == ("plan", "needs.plan.outputs.models != '[]'")
+    assert job["permissions"] == {"contents": "read", "id-token": "write"}
+    assert job["strategy"]["matrix"]["model"] == "${{ fromJSON(needs.plan.outputs.models) }}"
+    steps = {s.get("name"): s for s in job["steps"]}
+    names = list(steps)
+    claude = steps["Update the model"]
+    assert int(claude["timeout-minutes"]) < int(job["timeout-minutes"]) <= 360
+    assert 'walk model --model "${MODEL}"' in claude["run"] and '--tla2tools "${TLA2TOOLS_JAR}"' in claude["run"]
+    # The token Claude's step holds reads; the one that pushes is made after it, for an update that passed.
+    assert steps["Generate GitHub App token"]["with"]["permission-contents"] == "read"
+    assert "pull-token" not in claude["env"]["TARGET_TOKEN"]
+    assert names.index("Update the model") < names.index("Generate pull request token") < names.index(
+        "Open the pull request")
+    token = steps["Generate pull request token"]
+    assert token["if"] == "steps.update.outputs.verdict == 'passed' && env.HAS_APP == 'true'"
+    assert {key: token["with"][key] for key in ("repositories", "permission-contents", "permission-pull-requests")} \
+        == {"repositories": "valkey-fuzzer", "permission-contents": "write", "permission-pull-requests": "write"}
+    opening = steps["Open the pull request"]
+    assert opening["if"] == "steps.update.outputs.verdict == 'passed'"
+    assert '--fuzzer-repo "${FUZZER_REPOSITORY}"' in opening["run"] and '--base "${FUZZER_REF}"' in opening["run"]
+    assert "sha256sum -c" in steps["Download tla2tools.jar"]["run"]
+    assert workflow["env"]["TLA_TOOLS_VERSION"] == "v1.7.4"
+    assert steps["Upload the model update"]["with"]["name"] == \
+        "walk-model-${{ matrix.model.sha }}-${{ matrix.model.protocol }}"
+    # The record job waits for them and folds each one's folder in.
+    assert jobs["record"]["needs"] == ["plan", "walk", "model"]
+    download = next(s for s in jobs["record"]["steps"] if s.get("name") == "Download the model updates")
+    assert download["with"] == {"pattern": "walk-model-*", "path": "models"}
+    recording = next(s for s in jobs["record"]["steps"] if s.get("name") == "Record the run")["run"]
+    assert "--models models" in recording

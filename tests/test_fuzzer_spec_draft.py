@@ -484,10 +484,11 @@ def test_a_good_draft_passes_every_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
     assert [c["argv"][:3] for c in calls] == [
         ["spec", "check", "./register"], ["spec", "translate", "./register"],
         ["validate", "scenarios/ack-before-save/spec-register-ack-before-save.yaml", "--format"]]
-    # The fuzzer's own --timeout bounds TLC; no bundle experiments, so no spec path.
+    # The fuzzer's own --timeout bounds TLC; the protocol's name finds the draft, before any installed bundle.
     assert calls[0]["argv"][calls[0]["argv"].index("--timeout") + 1] == "1800"
     assert "--timeout" in calls[1]["argv"]
-    assert all(c["spec_path"] is None for c in calls) and "--experiment-dir" not in calls[2]["argv"]
+    assert all(c["spec_path"] == calls[0]["spec_path"] and c["spec_path"].endswith("round-0") for c in calls)
+    assert "--experiment-dir" not in calls[2]["argv"]
 
 
 def test_a_vacuous_claim_is_rejected_by_the_negative_control_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
@@ -668,6 +669,281 @@ def test_the_fuzzer_gets_no_credentials(tmp_path, fuzzer_dir, jar, monkeypatch):
     assert not {"TARGET_TOKEN", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"} & set(env)
     # The spec path is the attempt's, never the caller's.
     assert env["VALKEY_FUZZER_SPEC_PATH"] == str((tmp_path / "attempt").resolve())
+
+
+# --- Routing a change to the bundles it touches -----------------------------------
+
+
+REGISTER_C = textwrap.dedent("""\
+    static int helper(int x);
+
+    int registerWrite(int v) {
+        int x = v;
+        return x;
+    }
+
+    static void
+    registerSave(void) {
+        save();
+    }
+
+    int other(void) {
+        return 0;
+    }
+""")
+SCOPES = {"register": [{"file": "src/register.c", "functions": ["registerWrite", "registerAck", "registerSave"]},
+                       {"file": "src/register.h"}]}
+
+
+def _diff(path: str, hunks: str, old: str | None = None) -> str:
+    return f"diff --git a/{old or path} b/{path}\n--- a/{old or path}\n+++ b/{path}\n" + textwrap.dedent(hunks)
+
+
+def _route(diff: str, files: dict[str, str] | None = None) -> dict[str, list[str]]:
+    files = {"src/register.c": REGISTER_C} if files is None else files
+    return spec_mod.route(diff, files.get, SCOPES)
+
+
+def test_functions_at_finds_definitions_not_declarations():
+    assert spec_mod.functions_at(REGISTER_C) == [("registerWrite", 3, 6), ("registerSave", 9, 11), ("other", 13, 15)]
+
+
+def test_a_change_inside_a_scoped_function_routes_to_its_bundle():
+    inside = _diff("src/register.c", """\
+        @@ -4 +4 @@ int registerWrite(int v) {
+        -    int x = v;
+        +    int x = v + 1;
+    """)
+    assert _route(inside) == {"register": ["src/register.c:registerWrite"]}
+    # A deletion counts at the line before it: still inside registerSave.
+    deleted = _diff("src/register.c", """\
+        @@ -10,2 +9,0 @@ registerSave(void) {
+        -    save();
+        -    save();
+    """)
+    assert _route(deleted) == {"register": ["src/register.c:registerSave"]}
+    # The same file, outside every scoped function: no bundle.
+    outside = _diff("src/register.c", """\
+        @@ -14 +14 @@ int other(void) {
+        -    return 0;
+        +    return 1;
+    """)
+    assert _route(outside) == {}
+
+
+def test_a_changed_line_that_names_a_scoped_function_routes_to_its_bundle():
+    call = _diff("src/server.c", """\
+        @@ -1,0 +2 @@ void serverCron(void) {
+        +    registerAck(); registerWriteAll();
+    """)
+    assert _route(call) == {"register": ["src/register.c:registerAck"]}
+    # Only C sources: a test that names it changes no code.
+    assert _route(_diff("tests/unit/register.tcl", "@@ -1 +1 @@\n-registerAck\n+registerAck 1\n")) == {}
+
+
+def test_a_scope_file_without_functions_or_gone_at_the_head_is_touched_whole():
+    assert _route(_diff("src/register.h", "@@ -1 +1 @@\n-#define A 1\n+#define A 2\n")) == {
+        "register": ["src/register.h"]}
+    renamed = _diff("src/store.c", "@@ -1 +1 @@\n-x\n+y\n", old="src/register.c")
+    assert _route(renamed, {"src/store.c": "x\n"}) == {"register": ["src/register.c"]}
+
+
+def test_bundle_scopes_are_the_installed_bundles_claims(fuzzer_dir, installed):
+    assert spec_mod.bundle_scopes(fuzzer_dir) == {
+        "register": [{"file": "register.c", "functions": ["registerWrite", "registerAck", "registerSave"]}]}
+
+
+# --- Updating an installed bundle --------------------------------------------------
+
+
+APPROVED = REGISTER["claims.yaml"].replace(
+    "status: draft\n", "# Approved after review.\nstatus: approved\napproved_by: maintainer\n")
+# The change: a save also syncs, and the claims name the new function.
+UPDATED = {
+    "claims.yaml": REGISTER["claims.yaml"].replace("registerSave]", "registerSave, registerSync]"),
+    "model.tla": REGISTER["model.tla"].replace("\\* A toy register", "\\* A toy register that syncs its saves"),
+}
+
+
+@pytest.fixture
+def installed(fuzzer_dir) -> Path:
+    """The fuzzer's own bundle formal/register/, approved, with a README."""
+    root = fuzzer_dir / "formal" / "register"
+    for name, text in {**REGISTER, "claims.yaml": APPROVED, "README.md": "# register\n"}.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    return root
+
+
+def _update(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar, change=None):
+    out = tmp_path / "out"
+    work = tmp_path / "work"
+    work.mkdir()
+    run = draft_spec(change or _change(), workdir=work, out_dir=out, catalog=CATALOG, fuzzer_dir=fuzzer_dir,
+                     tools=SpecTools(fake_fuzzer, str(jar)), runner=runner, update="register")
+    return run, json.loads((out / "spec-draft.json").read_text()), out
+
+
+def test_an_update_writes_its_files_over_the_installed_bundle_and_passes_the_gates(
+        tmp_path, fuzzer_dir, installed, fake_fuzzer, jar, no_clone, monkeypatch):
+    # The head's register.c, where the clone put it: the change is inside registerSave.
+    def clone(repo, dest, sha=None, *, fetch_ref=None):
+        (dest / "register.c").parent.mkdir(parents=True, exist_ok=True)
+        (dest / "register.c").write_text("void registerSave(void) {\n    sync();\n}\n")
+        return True
+
+    monkeypatch.setattr(propose_mod, "shallow_clone_at_sha", clone)
+    change = _change(diff=_diff("register.c", "@@ -2 +2 @@ void registerSave(void) {\n-    save();\n+    sync();\n"))
+    runner = StubRunner(_bundle(UPDATED))
+    run, result, out = _update(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar, change)
+    assert run.verdict == result["verdict"] == "passed"
+    [prompt] = runner.prompts
+    assert "valkey-fuzzer/formal/register/" in prompt and "register.c:registerSave" in prompt
+    assert "NO-MODEL-CHANGE" in prompt and "status: draft" in prompt
+    assert result["update"] == {"protocol": "register", "touched": ["register.c:registerSave"],
+                                "changed": ["claims.yaml", "model.tla"]}
+    # The gates judged the whole bundle: the update's files and the installed ones it left alone.
+    bundle = out / "bundle" / "register"
+    assert (bundle / "model.tla").read_text() == UPDATED["model.tla"]
+    assert (bundle / "mapping.yaml").read_text() == REGISTER["mapping.yaml"]
+    assert (bundle / "README.md").read_text() == "# register\n"
+    # The record of the bundle's files holds its bundle paths only, as a batch or a pull request takes them.
+    assert set(result["bundle"]["files"]) == set(REGISTER)
+    summary = (out / "summary.md").read_text()
+    assert "TLA+ model update of formal/register" in summary and "`model.tla`" in summary
+    # The protocol's name finds the draft, before the installed bundle.
+    assert all(c["spec_path"].endswith("round-0") for c in _log(fake_fuzzer))
+
+
+def test_an_update_the_model_does_not_need_ends_after_one_session(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar):
+    runner = StubRunner(_result("<<<NO-MODEL-CHANGE>>>\nThe change renames a local; Save is unchanged.\n<<<END>>>\n"))
+    run, result, out = _update(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert (run.verdict, result["verdict"]) == ("no_model_change", "no_model_change")
+    assert result["reason"] == "The change renames a local; Save is unchanged."
+    assert result["update"]["changed"] == [] and _calls(fake_fuzzer) == []
+    assert "the model needs no change" in (out / "summary.md").read_text()
+
+
+@pytest.mark.parametrize("files, error", [
+    # The installed claims are approved; an update is a draft, so it always brings claims.yaml.
+    ({"model.tla": UPDATED["model.tla"]}, "status must be draft"),
+    ({"claims.yaml": REGISTER["claims.yaml"]}, "changes nothing but the claims' approval"),
+    ({**UPDATED, "claims.yaml": UPDATED["claims.yaml"].replace("[ack-before-save]", "[]")},
+     "drops AckedDurable's control ack-before-save"),
+    ({**UPDATED, "claims.yaml": UPDATED["claims.yaml"].replace("protocol: register", "protocol: register-two")},
+     "keeps the protocol name register"),
+])
+def test_an_update_that_is_no_draft_or_drops_a_claim_goes_back(files, error, tmp_path, fuzzer_dir, installed,
+                                                                fake_fuzzer, jar):
+    # The repair answers only with the file it fixes; the rest stay as the failed attempt had them.
+    runner = StubRunner(_bundle(files), _bundle({"claims.yaml": UPDATED["claims.yaml"]}))
+    if "model.tla" not in files:
+        runner.answers[1] = _bundle(UPDATED)
+    run, result, _ = _update(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert result["rounds"][0]["failed_gate"] == "draft" and error in result["rounds"][0]["output"]
+    assert run.verdict == "passed"
+    # The repair saw the whole failed bundle, and was told to send only what it changes.
+    assert set(runner.drafts[1]) == {*REGISTER, "README.md"}
+    assert "Return the files you change from draft/" in runner.prompts[1]
+
+
+def test_a_new_draft_never_replaces_an_installed_bundle(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar):
+    runner = StubRunner(*[_bundle(REGISTER)] * 3)
+    run, result, _ = _draft(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert run.verdict == "rejected" and "update" not in result
+    assert "formal/register is the fuzzer's bundle of register already" in result["rounds"][0]["output"]
+    assert "already models register" in runner.prompts[0]
+
+
+def test_an_update_of_a_bundle_the_fuzzer_does_not_have_is_refused(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    with pytest.raises(ValueError, match="no bundle formal/register/"):
+        _update(StubRunner(), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    with pytest.raises(SystemExit):
+        spec_mod.main(["draft", "--pr", "1", "--update", "register", "--fuzzer-dir", str(fuzzer_dir),
+                       "--fuzzer-bin", fake_fuzzer, "--tla2tools", str(jar), "--dry-run"])
+
+
+# --- The pull request of an update -------------------------------------------------
+
+
+@pytest.fixture
+def fake_github(monkeypatch):
+    """A GitHub repository that records what open_pull_request asks of it."""
+    import github
+
+    repo = MagicMock()
+    repo.get_pulls.return_value = []
+    repo.get_git_ref.side_effect = github.GithubException(404, {"message": "Not Found"}, None)
+    repo.get_branch.return_value.commit.sha = "base-sha"
+    repo.create_pull.return_value.html_url = "https://github.com/me/valkey-fuzzer/pull/7"
+    # Each file the commit writes, as the tree element's fields.
+    monkeypatch.setattr(github, "InputGitTreeElement",
+                        lambda path, mode, type, content: {"path": path, "mode": mode, "type": type, "content": content})
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    return gh, repo
+
+
+def _passed_update(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    _, _, out = _update(StubRunner(_bundle(UPDATED)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    return out
+
+
+def test_an_update_that_passed_is_opened_as_a_pull_request_once(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar,
+                                                                fake_github):
+    gh, repo = fake_github
+    out = _passed_update(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    url = spec_mod.open_pull_request(gh, out, fuzzer_repo="me/valkey-fuzzer", base="generic-fuzzer")
+    assert url == "https://github.com/me/valkey-fuzzer/pull/7"
+    gh.get_repo.assert_called_with("me/valkey-fuzzer")
+    # One commit on the base's head that writes only the files the update changed.
+    elements = repo.create_git_tree.call_args.args[0]
+    assert [e["path"] for e in elements] == ["formal/register/claims.yaml", "formal/register/model.tla"]
+    assert elements[1] == {"path": "formal/register/model.tla", "mode": "100644", "type": "blob",
+                           "content": UPDATED["model.tla"]}
+    repo.get_branch.assert_called_with("generic-fuzzer")
+    branch = f"spec-update/register-{HEAD[:12]}"
+    repo.create_git_ref.assert_called_once_with(f"refs/heads/{branch}", repo.create_git_commit.return_value.sha)
+    kwargs = repo.create_pull.call_args.kwargs
+    assert (kwargs["base"], kwargs["head"]) == ("generic-fuzzer", branch)
+    assert kwargs["title"] == "formal/register: update the model for valkey-io/valkey#123"
+    assert "status: approved" in kwargs["body"] and "TLA+ model update of formal/register" in kwargs["body"]
+    assert json.loads((out / "spec-draft.json").read_text())["pull_request"] == url
+
+    # A rerun finds the branch's pull request, whatever its state, and changes nothing.
+    repo.get_pulls.return_value = [MagicMock(html_url="https://github.com/me/valkey-fuzzer/pull/7")]
+    repo.reset_mock(return_value=False, side_effect=False)
+    assert spec_mod.open_pull_request(gh, out, fuzzer_repo="me/valkey-fuzzer", base="generic-fuzzer") == url
+    repo.get_pulls.assert_called_with(state="all", head=f"me:{branch}")
+    repo.create_git_commit.assert_not_called()
+    repo.create_pull.assert_not_called()
+
+
+def test_an_update_the_model_does_not_need_is_no_pull_request(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar,
+                                                               fake_github):
+    gh, _ = fake_github
+    _, _, out = _update(StubRunner(_result("<<<NO-MODEL-CHANGE>>>\nnothing\n<<<END>>>\n")), tmp_path, fuzzer_dir,
+                        fake_fuzzer, jar)
+    assert spec_mod.open_pull_request(gh, out, fuzzer_repo="me/valkey-fuzzer", base="b") is None
+    gh.get_repo.assert_not_called()
+
+
+def test_a_new_draft_that_passed_is_no_pull_request(tmp_path, fuzzer_dir, fake_fuzzer, jar, fake_github):
+    gh, _ = fake_github
+    run, _, out = _draft(StubRunner(_bundle(REGISTER)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert run.verdict == "passed"
+    assert spec_mod.open_pull_request(gh, out, fuzzer_repo="me/valkey-fuzzer", base="b") is None
+    gh.get_repo.assert_not_called()
+
+
+def test_an_update_file_changed_after_it_passed_is_not_opened(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar,
+                                                              fake_github):
+    gh, repo = fake_github
+    out = _passed_update(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    (out / "bundle" / "register" / "model.tla").write_text("---- MODULE model ----\n====\n")
+    with pytest.raises(ValueError, match="changed since the update passed"):
+        spec_mod.open_pull_request(gh, out, fuzzer_repo="me/valkey-fuzzer", base="b")
+    repo.create_git_tree.assert_not_called()
 
 
 # --- Dispatch ---------------------------------------------------------------------
@@ -938,7 +1214,8 @@ def test_e2e_a_vacuous_register_bundle_is_rejected(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(not _E2E["VALKEY_FUZZER_DIR"], reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
-@pytest.mark.parametrize("prompt", [spec_mod._DRAFT_PROMPT, spec_mod._REPAIR_PROMPT, spec_mod._RULES])
+@pytest.mark.parametrize("prompt", [spec_mod._DRAFT_PROMPT, spec_mod._REPAIR_PROMPT, spec_mod._RULES,
+                                    spec_mod._UPDATE_PROMPT])
 def test_the_prompts_name_only_what_the_fuzzer_has(prompt):
     # Claude reads these in its copy of the fuzzer; a renamed one leaves it looking for nothing.
     fuzzer_dir = Path(_E2E["VALKEY_FUZZER_DIR"])

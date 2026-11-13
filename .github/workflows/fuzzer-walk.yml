@@ -11,8 +11,12 @@ name: Fuzzer Walk
 # repository's state, its proven tests and PROGRESS.md back to walk-state.
 # Runs of one repository never overlap; the repositories run in parallel and
 # their pushes retry from a fresh fetch. A merge whose job left no result is
-# retried by the next run. Dispatched once per repository, by name. See
-# scripts/fuzzer/walk.py.
+# retried by the next run. A new Valkey merge that touches what one of the
+# fuzzer's TLA+ bundles (formal/*/claims.yaml scope) models also gets a model
+# job per bundle: Claude says whether the change alters the model, an update
+# goes through the spec draft's gates, and one that passes them is opened as
+# a pull request on valkey-fuzzer for a person to review. Dispatched once per
+# repository, by name. See scripts/fuzzer/walk.py.
 
 on:
   workflow_dispatch:
@@ -45,6 +49,10 @@ env:
   # The App where it is installed; a fork files with REHEARSAL_PAT.
   HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
   BUILD_PACKAGES: build-essential clang pkg-config libssl-dev libzstd-dev tcl
+  # The model jobs' tla2tools.jar, the same as valkey-fuzzer's TLA+ Model Check workflow (TLC 2.19). Update the
+  # version and the SHA-256 of the release asset together.
+  TLA_TOOLS_VERSION: v1.7.4
+  TLA_TOOLS_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 
 jobs:
   plan:
@@ -58,6 +66,7 @@ jobs:
       merges: ${{ steps.plan.outputs.merges }}
       heads: ${{ steps.plan.outputs.heads }}
       builds: ${{ steps.plan.outputs.builds }}
+      models: ${{ steps.plan.outputs.models }}
     steps:
       - name: Check inputs
         shell: bash
@@ -74,6 +83,17 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
+
+      # Only the bundles: the plan routes new merges by their claims' scope.
+      - name: Check out valkey-fuzzer's bundles
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: ${{ env.FUZZER_REF }}
+          path: valkey-fuzzer
+          sparse-checkout: formal
+          persist-credentials: false
+          fetch-depth: 1
 
       # No walk-state branch means a walk that starts now; any other failure stops the run.
       - name: Read the state
@@ -101,7 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m scripts.fuzzer.walk plan --repo "${NAME}" --state "walk-state/state/${NAME}.json" \
-            --work clones --max "${MAX}" --out plan.json
+            --work clones --max "${MAX}" --fuzzer-dir valkey-fuzzer --out plan.json
           python - <<'PY' >> "${GITHUB_OUTPUT}"
           import json
           plan = json.load(open("plan.json"))
@@ -109,7 +129,7 @@ jobs:
           # Valkey's head, and the module's, which the merges need.
           builds = [{"repo": repo.split("/")[1], "sha": sha, "deps": merges[0]["deps"] if repo == plan["repo"] else ""}
                     for repo, sha in heads.items()] if merges else []
-          for key, value in (("merges", merges), ("heads", heads), ("builds", builds)):
+          for key, value in (("merges", merges), ("heads", heads), ("builds", builds), ("models", plan["models"])):
               print(f"{key}={json.dumps(value, separators=(',', ':'))}")
           PY
 
@@ -339,8 +359,161 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  model:
+    needs: plan
+    # One job per bundle a new Valkey merge touches. It needs no build, so it runs beside the merges' walks.
+    if: needs.plan.outputs.models != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        model: ${{ fromJSON(needs.plan.outputs.models) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      MODEL: ${{ toJSON(matrix.model) }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Check out valkey-fuzzer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: ${{ env.FUZZER_REF }}
+          path: valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install valkey-fuzzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/fuzzer-venv"
+          "${RUNNER_TEMP}/fuzzer-venv/bin/python" -m pip install --quiet "${GITHUB_WORKSPACE}/valkey-fuzzer"
+          echo "FUZZER_BIN=${RUNNER_TEMP}/fuzzer-venv/bin/valkey-fuzzer" >> "${GITHUB_ENV}"
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download tla2tools.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/tla2tools.jar" \
+            "https://github.com/tlaplus/tlaplus/releases/download/${TLA_TOOLS_VERSION}/tla2tools.jar"
+          echo "${TLA_TOOLS_SHA256}  ${RUNNER_TEMP}/tla2tools.jar" | sha256sum -c -
+          echo "TLA2TOOLS_JAR=${RUNNER_TEMP}/tla2tools.jar" >> "${GITHUB_ENV}"
+
+      # Reads the merge's change while Claude runs, nothing else.
+      - name: Generate GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: valkey-fuzzer
+          permission-contents: read
+          permission-metadata: read
+
+      - name: Use the rehearsal PAT
+        id: pat
+        if: env.HAS_APP != 'true'
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-contents: read; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-walk-model-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Shorter than the job, so the uploads below still run when it times out.
+      - name: Update the model
+        id: update
+        timeout-minutes: 270
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.app-token.outputs.token || steps.pat.outputs.token }}
+          CI_AGENT_AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.walk model --model "${MODEL}" --fuzzer-dir valkey-fuzzer \
+            --fuzzer-bin "${FUZZER_BIN}" --tla2tools "${TLA2TOOLS_JAR}" --out walk-model
+          echo "verdict=$(jq -r .verdict walk-model/model.json)" >> "${GITHUB_OUTPUT}"
+
+      # A token of its own, made after Claude has finished, only for an update that passed every gate: it pushes
+      # the update's branch to valkey-fuzzer and opens the pull request, nothing else.
+      - name: Generate pull request token
+        id: pull-token
+        if: steps.update.outputs.verdict == 'passed' && env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: valkey-fuzzer
+          permission-contents: write
+          permission-pull-requests: write
+          permission-metadata: read
+
+      - name: Open the pull request
+        if: steps.update.outputs.verdict == 'passed'
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.pull-token.outputs.token || steps.pat.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${HAS_APP}" != 'true' ]]; then
+            echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-contents: write; permission-pull-requests: write; permission-metadata: read'
+          fi
+          python -m scripts.fuzzer.spec_draft pr --out walk-model --fuzzer-repo "${FUZZER_REPOSITORY}" \
+            --base "${FUZZER_REF}"
+
+      - name: Upload the model update
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-model-${{ matrix.model.sha }}-${{ matrix.model.protocol }}
+          path: walk-model
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-agent-evidence-${{ matrix.model.sha }}-${{ matrix.model.protocol }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+
   record:
-    needs: [plan, walk]
+    needs: [plan, walk, model]
     if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -372,6 +545,15 @@ jobs:
           path: results
           merge-multiple: true
 
+      # Each model job's folder under its artifact's name; a run with none has nothing to download.
+      - name: Download the model updates
+        if: needs.plan.outputs.models != '[]'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: walk-model-*
+          path: models
+
       # Fetches walk-state, updates this repository's state and tests and PROGRESS.md, commits and pushes; a push
       # rejected because another repository's run pushed first starts again from a new fetch. On this fork only.
       - name: Record the run
@@ -382,12 +564,13 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${GITHUB_REPOSITORY}" != valkey-io/* ]] || { echo "::error::the walk's state is written on a fork only"; exit 1; }
-          mkdir -p results
+          mkdir -p results models
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
           export GIT_CONFIG_VALUE_0
           python -m scripts.fuzzer.walk update --remote "https://github.com/${GITHUB_REPOSITORY}.git" \
-            --work "${RUNNER_TEMP}/walk-state" --plan plan/plan.json --results results --run-url "${RUN_URL}"
+            --work "${RUNNER_TEMP}/walk-state" --plan plan/plan.json --results results --models models \
+            --run-url "${RUN_URL}"
 
       # Claude vets what the walk found and fixes the pipeline; the maintenance run skips itself when one ran in
       # the last 3 hours. Its dispatch failing does not fail the walk.

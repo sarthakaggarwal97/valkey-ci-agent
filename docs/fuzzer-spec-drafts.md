@@ -75,12 +75,14 @@ stops the attempt.
 | `validate` | `valkey-fuzzer validate`, with `--experiment-dir` for the bundle's own `experiments/`, accepts every translated scenario, and none sets the build, the provider or the data directories. |
 
 The agent checks only what the fuzzer can't know, that the claims are a
-draft; everything else is the fuzzer's own gates. Each draft is written to
-`<attempt>/<protocol>/`, and the spec tools get it as `./<protocol>`: the
-fuzzer looks a bare name up only on `VALKEY_FUZZER_SPEC_PATH` and in its own
-`formal/`. When it has `experiments/`, the attempt directory goes on
-`VALKEY_FUZZER_SPEC_PATH` for every gate, `validate` too, so the
-experiment's components find the bundle by its protocol name.
+draft and that the fuzzer has no bundle of the protocol yet (a change to one
+it has is an [update](#updating-a-bundle)); everything else is the fuzzer's
+own gates. Each draft is written to `<attempt>/<protocol>/`, and the spec
+tools get it as `./<protocol>`: the fuzzer looks a bare name up only on
+`VALKEY_FUZZER_SPEC_PATH` and in its own `formal/`. The attempt directory
+goes first on `VALKEY_FUZZER_SPEC_PATH` for every gate, `validate` too, so
+every component that names the protocol finds the draft: the draft's own
+`experiments/`, and an installed experiment whose bundle an update changes.
 
 The negative-control gate is what keeps a claim honest. A property that cannot
 fail, such as `Inv == TRUE`, passes every safe config; its negative control
@@ -120,6 +122,65 @@ valkey-fuzzer run scenarios/<control>/spec-<protocol>-<control>.yaml \
 To adopt a draft, copy `bundle/<protocol>/` to `formal/<protocol>/` in valkey-fuzzer,
 review it there, and approve it as described in the spec bridge's
 [Writing a bundle](https://github.com/valkey-io/valkey-fuzzer/blob/main/docs/spec-bridge.md#writing-a-bundle).
+
+## Updating a bundle
+
+A protocol has one model, kept current as Valkey changes, rather than a
+model per change. With `--update <protocol>`, the agent asks Claude about
+the fuzzer's bundle `formal/<protocol>/` instead of drafting a new one:
+
+- **Which change touches which bundle.** Each bundle's `claims.yaml` names
+  the Valkey files and functions it models (`scope`). A change touches a
+  bundle when a changed line is inside one of those functions at the
+  change's head (a deleted line counts at the line before it), or when a
+  changed line of any C file names one (a call added or removed). A scope
+  entry without functions is its whole file, and a scope file the change
+  deletes or renames is touched whole. The bundles are the routing table, so
+  a new bundle is routed as soon as it lands.
+- **Claude** gets the bundle as it is, what of its scope the change
+  touches, the diff and Valkey at the head, and first decides whether the
+  change alters what the model says: a guard, a step, their order, state
+  the model tracks, a fault it handles, or the functions that carry the
+  protocol. If not, it answers `NO-MODEL-CHANGE` with the rule it checked,
+  and the run ends (`no_model_change`). Otherwise it answers with the files
+  it changes, `claims.yaml` always, with `status: draft`: an update is a
+  draft until a maintainer approves it again.
+- **The gates** are a draft's, on the whole bundle: the update's files
+  written over the installed bundle's. The `draft` gate also requires that
+  the update keeps the protocol's name, every property and every property's
+  negative controls, and changes more than the claims' approval. A repair
+  round sees the whole failed bundle in `draft/` and answers with what it
+  changes from it.
+- **The result** has `update` in `spec-draft.json`: the protocol, what the
+  change touched, and the files the update changes. `spec_draft pr` opens
+  an update that passed every gate as a pull request on valkey-fuzzer: one
+  commit on the branch `spec-update/<protocol>-<head sha>` writes those
+  files into `formal/<protocol>/`, and the body is the summary with what to
+  review. A rerun finds the branch's pull request, open or closed, and opens
+  no other. Nothing is ever committed to a fuzzer branch without that
+  review; merging the pull request as it is leaves the bundle a draft until
+  the reviewer sets `status: approved` and `approved_by`.
+
+The [fuzzer walk](../.github/workflows/fuzzer-walk.yml) does this for
+every new Valkey merge. Its plan routes each one to the bundles it touches,
+from a checkout of the fuzzer's `formal/` (a backlog merge is never routed:
+the bundles model the code as it is now, which an old change is long part
+of); a `model` job per bundle runs `walk model`, and for an update that
+passed, a separate step with a token made after Claude has finished, that
+can push a branch and open a pull request on valkey-fuzzer and nothing else,
+runs `spec_draft pr` against the walk's fuzzer branch. The walk's state
+keeps each job's verdict and pull request, and `PROGRESS.md` lists them. On
+Valkey's last 462 merges (to 2026-11-13), 41 touched a bundle: replication
+21, slot migration 13, cluster election 13, persistence 9.
+
+By hand:
+
+```bash
+python -m scripts.fuzzer.spec_draft draft --pr 1234 --update replication \
+  --fuzzer-dir ../valkey-fuzzer --tla2tools tla2tools.jar --out fuzzer-spec-draft
+python -m scripts.fuzzer.spec_draft pr --out fuzzer-spec-draft \
+  --fuzzer-repo OWNER/valkey-fuzzer --base main
+```
 
 ## Running the scenarios as a PR batch
 
@@ -212,11 +273,13 @@ workflow; update both together.
 
 ## Where the code lives
 
-`scripts/fuzzer/spec_draft.py` holds both commands. `draft` resolves the
+`scripts/fuzzer/spec_draft.py` holds the commands. `draft` resolves the
 request, prepares the directory Claude reads, calls Claude with the read-only
 `fuzzer_spec_draft_readonly` profile, runs the gates and the repair rounds,
-and writes the result. `dispatch` reads the result back and starts the
-PR batch. The request and workspace code is shared with
+and writes the result; `--update` makes it an update. `dispatch` reads the
+result back and starts the PR batch, and `pr` opens an update as a pull
+request. `route` is how the walk (`scripts/fuzzer/walk.py`, `plan` and
+`model`) picks the bundles a merge touches. The request and workspace code is shared with
 `scripts/fuzzer/propose.py`, and the PR batch's inputs and results with
 `scripts/fuzzer/pr_batch.py`. The workflow is
 `.github/workflows/fuzzer-spec-draft.yml`.
