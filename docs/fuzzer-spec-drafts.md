@@ -153,7 +153,8 @@ the fuzzer's bundle `formal/<protocol>/` instead of drafting a new one:
   changes from it.
 - **The result** has `update` in `spec-draft.json`: the protocol, what the
   change touched, and the files the update changes. `spec_draft pr` opens
-  an update that passed every gate as a pull request on valkey-fuzzer: one
+  an update that passed every gate as a pull request on the valkey-fuzzer
+  fork that `--fuzzer-repo` names (a `valkey-io` repository is refused): one
   commit on the branch `spec-update/<protocol>-<head sha>` writes those
   files into `formal/<protocol>/`, and the body is the summary with what to
   review. A rerun finds the branch's pull request, open or closed, and opens

@@ -1562,9 +1562,13 @@ def open_pull_request(gh: Any, out_dir: Path, *, fuzzer_repo: str, base: str) ->
 
     One commit on a new branch writes the files the update changes. A
     branch that has a pull request already (a rerun) keeps it, whatever its
-    state: a closed one stays closed.
+    state: a closed one stays closed. The pull request goes to a fork only: a
+    ``valkey-io`` repository is refused before any GitHub call.
     """
     from github import GithubException, InputGitTreeElement
+
+    if fuzzer_repo.lower().startswith("valkey-io/"):
+        raise ValueError(f"model updates are opened on a fork only, not {fuzzer_repo}")
 
     result_path = out_dir / RESULT_FILE
     result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1730,7 +1734,7 @@ def main(argv: list[str] | None = None) -> int:
 
     r = sub.add_parser("pr", help="Open a pull request on the fuzzer with an update that passed every gate")
     r.add_argument("--out", default="fuzzer-spec-draft", help="the draft command's output directory")
-    r.add_argument("--fuzzer-repo", default=FUZZER_REPO)
+    r.add_argument("--fuzzer-repo", required=True, help="the fork (owner/name) the pull request is opened on")
     r.add_argument("--base", default="main", help="the fuzzer branch the pull request is against")
     r.add_argument("--target-token", default=None, help="GitHub token (falls back to TARGET_TOKEN)")
 

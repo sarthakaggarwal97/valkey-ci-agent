@@ -919,6 +919,18 @@ def test_an_update_that_passed_is_opened_as_a_pull_request_once(tmp_path, fuzzer
     repo.create_pull.assert_not_called()
 
 
+def test_an_update_is_never_opened_on_a_valkey_io_repository(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar,
+                                                           fake_github):
+    gh, _ = fake_github
+    out = _passed_update(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    with pytest.raises(ValueError, match="fork only"):
+        spec_mod.open_pull_request(gh, out, fuzzer_repo="valkey-io/valkey-fuzzer", base="main")
+    gh.get_repo.assert_not_called()
+    # The command names its fork: there is no default to fall back on.
+    with pytest.raises(SystemExit):
+        spec_mod.main(["pr", "--out", str(out)])
+
+
 def test_an_update_the_model_does_not_need_is_no_pull_request(tmp_path, fuzzer_dir, installed, fake_fuzzer, jar,
                                                                fake_github):
     gh, _ = fake_github
