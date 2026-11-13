@@ -65,10 +65,14 @@ output, whose failing test is the one it just wrote, and whose test files are
 frozen: a change that touches them is put back and goes back to the session.
 From here the fix is prepared as every CI fix is: a session diagnoses and
 edits, code builds the change and runs the test, once and then forty times,
-and a separate read-only session reviews it, up to three rounds. The session
-is given what the engine gives every fix: merged commits that mention the
-issue or change the files it names, the test file's history, the bot's guide
-and Valkey's `AGENTS.md`, `DEVELOPMENT_GUIDE.md` and test READMEs.
+and a separate read-only session reviews it, up to three rounds. The policy
+differs from a CI fix's in one respect: a CI fix looks for the fault in the
+test first, because flaky tests usually are at fault; here the test is the
+specification, and the fix lives in `src/`. The session is given the bot's
+guide for a fix from an issue (`scripts/factory/guides/valkey-io__valkey.md`),
+followed by Valkey's own `AGENTS.md`, `DEVELOPMENT_GUIDE.md` and test
+READMEs, and what the engine gives every fix: merged commits that mention the
+issue or change the files it names, and the test file's history.
 
 **It checks what a reviewer would otherwise find.** Before the review, code
 checks the change further, in the order of their cost. The change may not
@@ -185,5 +189,6 @@ checks the label, pins the issue, plans the fix and reports the result.
 checks the test, then the CI fix engine (`scripts/ci_fix/engine.py`) prepares
 the fix with `review.py`'s adversarial review and `checks.py`'s further
 checks. `dispatch.py` is the hourly dispatcher, and `replay.py` the replay
-and its score. The engine's own hooks for this are `FixTask.frozen_paths` and
-`prepare_fix`'s `check_func`.
+and its score. `guides/` holds the bot's policy for a fix from an issue, per
+repository. The engine's own hooks for this are `FixTask.frozen_paths` and
+`prepare_fix`'s `check_func`, `budget_s` and `guide`.

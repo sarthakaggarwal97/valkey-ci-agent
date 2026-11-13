@@ -167,6 +167,7 @@ def prepare_fix(
     job: JobCommands | None = None,
     check_func: CheckFunc | None = None,
     budget_s: int = 0,
+    guide: str | None = None,
 ) -> FixCandidate:
     """Build a patch or port candidate from the exact failed job and its log.
 
@@ -177,7 +178,8 @@ def prepare_fix(
     built and tested with that ``job``'s commands; otherwise in a clone.
     ``check_func`` checks a candidate further once its test passes, before
     the review; ``budget_s`` is the time the whole preparation may take, the
-    whole of ``PREPARE_BUDGET_S`` when 0.
+    whole of ``PREPARE_BUDGET_S`` when 0; ``guide`` is the bot's policy for
+    the fix, in place of the repository's CI-fix guide (``guide_for``).
     """
     failure = task.failure
     if failure.in_ci and failure.job_id <= 0:
@@ -193,7 +195,7 @@ def prepare_fix(
         tests = locate_unit_tests(repo_dir, failed_tests(task, job_log))
         context, plan = _establish(
             task, repo_dir, tests, paths_in_log(repo_dir, job_log),
-            runs_tests=runs_tests, job=job, job_log=job_log,
+            runs_tests=runs_tests, job=job, job_log=job_log, guide=guide,
         )
         if runs_tests and not context.reviewed_only:
             refusal = _unverifiable_refusal(context, plan)
@@ -348,6 +350,7 @@ def _establish(
     runs_tests: bool,
     job: JobCommands | None = None,
     job_log: str = "",
+    guide: str | None = None,
 ) -> tuple[FixContext, VerifyPlan | None]:
     """What the agent is told before it starts, and how code will check its patch.
 
@@ -397,7 +400,8 @@ def _establish(
     fixes = found or ()
     if fixes:
         logger.info("Existing-fix candidates: %s", "; ".join(f"{f.sha[:12]} {f.subject}" for f in fixes))
-    guide = guide_for(task.failure.repo_full_name)
+    if guide is None:
+        guide = guide_for(task.failure.repo_full_name)
     if guide:
         guide += repository_guidelines(repo_dir)
     named_paths = tuple(dict.fromkeys([*(test.file for test in tests if test.file), *paths]))

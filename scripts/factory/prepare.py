@@ -23,6 +23,7 @@ import logging
 import time
 from dataclasses import replace
 from functools import partial
+from pathlib import Path
 from typing import Callable
 
 from scripts.ci_fix import engine
@@ -41,6 +42,16 @@ logger = logging.getLogger(__name__)
 EVIDENCE_BUDGET_S = 90 * 60
 # The test commit's subject in the checkout; the published commit is one, test and fix together.
 _TEST_COMMIT = "Test the issue"
+# Where the bot's guide for fixing each repository's issues lives.
+_GUIDES_DIR = Path(__file__).resolve().parent / "guides"
+
+
+def guide_for(repo_full_name: str) -> str:
+    """The bot's policy for a fix made from one of ``repo_full_name``'s issues, or "" when it has none."""
+    try:
+        return (_GUIDES_DIR / f"{repo_full_name.replace('/', '__')}.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 
 def prepare(plan: FixPlan, repo_dir: str = "", job: JobCommands | None = None) -> FixCandidate:
@@ -70,13 +81,13 @@ def prepare_in(
         started = time.monotonic()
         deadline = started + PREPARE_BUDGET_S
         _build_once(repo_dir, run_test, deadline)
-        guide = engine.guide_for(task.failure.repo_full_name)
-        if guide:
-            guide += engine.repository_guidelines(repo_dir)
+        # The repository's own guidelines, for the test; the bot's policy for
+        # a fix from an issue, then the guidelines, for the fix and its review.
+        guidelines = engine.repository_guidelines(repo_dir)
         try:
             evidence = evidence_func(
-                task, brief, repo_dir, head, deadline=min(started + EVIDENCE_BUDGET_S, deadline), guide=guide,
-                run_test=run_test,
+                task, brief, repo_dir, head, deadline=min(started + EVIDENCE_BUDGET_S, deadline),
+                guide=guidelines, run_test=run_test,
             )
         except Stopped as exc:
             logger.warning("Issue #%s: %s", brief.number, exc)
@@ -99,8 +110,8 @@ def prepare_in(
         )
         fixed = fix_func(
             judged, evidence.log, agent_func=fix_agent, review_func=partial(review.review, run_test=run_test),
-            test_func=run_test, repo_dir=repo_dir, job=JOB,
-            check_func=checks.gate(evidence), budget_s=max(60, int(deadline - time.monotonic())),
+            test_func=run_test, repo_dir=repo_dir, job=JOB, check_func=checks.gate(evidence),
+            budget_s=max(60, int(deadline - time.monotonic())), guide=guide_for(task.failure.repo_full_name),
         )
         verification = "\n".join([*evidence.checks, *fixed.verification.splitlines()])
         if fixed.action is not CandidateAction.PATCH:

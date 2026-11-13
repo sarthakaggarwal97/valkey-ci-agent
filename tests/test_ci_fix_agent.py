@@ -508,6 +508,9 @@ def test_a_fix_from_an_issue_is_asked_for_without_a_run_or_a_job(tmp_path, monke
         assert ci_only not in prompt, ci_only
     assert "Investigate the issue, the test and the source it exercises." in prompt
     assert "- Description: Issue #9: stale GET" in prompt
+    # The policy of a fix from an issue: the test is the specification, the bug is in the product.
+    assert "The test is the specification of what the issue asks for" in prompt
+    assert "Prefer a fix in the test or the test harness" not in prompt
     assert "Never commit, push, create a branch, or modify `.git`." in prompt
 
 
@@ -525,8 +528,10 @@ def test_an_adversarial_review_asks_for_a_counterexample_and_reads_the_one_it_ge
     assert seen["profile"] == "ci_fix_review"
     assert seen["prompt"].startswith("You are reviewing a proposed fix for a bug an issue reports")
     assert "The issue, as it was when a committer asked for a fix, and the output of the test the fix is" in seen["prompt"]
-    assert "Your job is to find a case the change still gets wrong." in seen["prompt"]
-    assert "Be skeptical: approve only a\nchange that fixes the root cause" in seen["prompt"]
+    assert "Name a specific counterexample, or explain why none\nexists" in seen["prompt"]
+    assert "code ran it before the fix: it failed every time" in seen["prompt"]
+    # Not the CI-fix stance, whose failure was never reproduced first.
+    assert "a failure that was not\nreproduced first is the normal case" not in seen["prompt"]
     assert '"counterexample": {"name":' in seen["prompt"]
     assert review.approved is False and review.reasoning == "a restart loses the lag"
     assert review.counterexample == Counterexample("lag after restart", tcl)

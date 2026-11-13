@@ -153,6 +153,30 @@ def test_the_test_is_written_first_then_the_fix_judged_by_it_as_one_patch(plain,
     assert any(line.startswith("Review: covers the issue") for line in lines)
 
 
+def test_the_fix_and_its_review_get_the_factorys_guide_not_the_ci_fix_bots(plain, tmp_path, monkeypatch):
+    seen = {}
+
+    def fix_func(task, log, **kwargs):
+        seen.update(kwargs)
+        return FixCandidate(CandidateAction.REFUSE, summary="n")
+
+    # Valkey has a guide, which the engine ends with the repository's own guidelines.
+    assert prepare_mod.guide_for("valkey-io/valkey").startswith("# Fixing a Valkey issue from its test")
+    assert prepare_mod.guide_for("nobody/nothing") == ""
+    source, head = _source(tmp_path)
+    _install_clone(monkeypatch, source)
+    guides = tmp_path / "guides"
+    guides.mkdir()
+    (guides / "o__r.md").write_text("# Fixing an o/r issue from its test\n", encoding="utf-8")
+    monkeypatch.setattr(prepare_mod, "_GUIDES_DIR", guides)
+    prepare_mod.prepare_in(
+        _plan(head), run_test=engine_mod.run_test_command, fix_func=fix_func,
+        evidence_func=lambda *args, **kwargs: evidence_mod.establish_evidence(*args, agent_func=_test_writer, **kwargs),
+    )
+
+    assert seen["guide"] == "# Fixing an o/r issue from its test\n"
+
+
 def test_a_fix_that_changes_the_test_goes_back_and_the_test_stays(plain, tmp_path, monkeypatch):
     fixer = _fixer("touch the test", "right")
 

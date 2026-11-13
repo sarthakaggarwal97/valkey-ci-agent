@@ -52,6 +52,19 @@ _POLICY = {
     ),
 }
 
+# A failure the bot made itself from an issue: the test is the specification,
+# and the bug is in the product, not in the test. The opposite of a CI fix,
+# where the failing test is usually the one at fault.
+_ISSUE_POLICY = (
+    "Fix the cause in product source with the smallest coherent change that makes "
+    "the test pass for the right reason; never a workflow change, never a change "
+    "under deps/. The test is the specification of what the issue asks for: it "
+    "may not be changed, and code rejects a patch that touches its file. You may "
+    "add a test of your own where the fix needs one. Do not hide the defect, "
+    "special-case the test, or weaken any test. A fix that needs a new command is "
+    "a decision for the project, not a fix: refuse and say so."
+)
+
 _UPSTREAM_FIRST = (
     "A change already merged on the default branch comes first. Choose `port`; "
     "or, when the upstream commit does not apply as it is, a `patch` that makes "
@@ -201,6 +214,14 @@ and only that counts: do not claim to have run anything.
 The CI job log is your evidence of what fails and why. When the failing test
 cannot run alone, code runs its own block of the file, then the whole file:
 never change a test so that it can run alone or under a particular selection."""
+
+_ISSUE_VERIFIED_BY_CODE = """Code verifies a candidate with its own command (above),
+and only that counts: do not claim to have run anything.
+The issue and the test's output are your evidence of what is wrong and why:
+the test failed on the working commit every time code ran it, before any
+change. Code runs it again with your change, once and then in a loop, then
+every test file the change touches in full, and the test once more under
+AddressSanitizer."""
 
 
 _CONTEXT = """
@@ -370,11 +391,15 @@ def run_fix_agent(
             hint=task.failure.hint or "(none)",
             other_jobs=other_jobs,
             investigate=investigate,
-            policy=_POLICY[task.policy] + (f"\n{_UPSTREAM_FIRST}" if context.upstream_first else ""),
+            policy=(
+                _ISSUE_POLICY if not task.failure.in_ci
+                else _POLICY[task.policy] + (f"\n{_UPSTREAM_FIRST}" if context.upstream_first else "")
+            ),
             target=capabilities.publication_guidance,
             context=_context_prompt(context, Path(log_dir), allows_port),
             test_guidance=(
-                _VERIFIED_BY_CODE if context.verified_by_code
+                (_ISSUE_VERIFIED_BY_CODE if not task.failure.in_ci else _VERIFIED_BY_CODE)
+                if context.verified_by_code
                 else _REVIEWED_ONLY if context.reviewed_only else _NOT_VERIFIED
             ),
             action_guidance=action_guidance,
@@ -561,22 +586,31 @@ brings changes this failure does not need."""
 
 # The stance of the review of a fix the bot wrote from an issue, with a test
 # of its own (scripts/factory): the reviewer's job is to find the case the
-# change still gets wrong, not to approve against a checklist.
-_REVIEW_ADVERSARIALLY = _REVIEW_A_PATCH + """
-Your job is to find a case the change still gets wrong. The test the fix is
-judged by was written by the fix's author from the issue, and may cover less
-than the issue: read the issue in the log file, and look for what it describes
+# change still gets wrong, not to approve against a checklist. The test ran
+# before the fix, so the CI-fix stance's line about unreproduced failures
+# does not apply.
+_REVIEW_ADVERSARIALLY = """\
+Be skeptical: approve only a
+change that fixes, in product source, the cause the test and the issue show.
+Reject one that special-cases the test, hides the defect, weakens or skips any
+test, or changes more than the cause requires. Reject a handler for a state
+that cannot happen, a new helper where an existing one does the job, a change
+that does not match the surrounding code or would be hard to backport, and
+comments that narrate the fix or its history.
+The test the fix is judged by was written by the fix's author from the issue,
+and code ran it before the fix: it failed every time. It may still cover less
+than the issue. Read the issue in the log file, and look for what it describes
 that the test does not check (a restart, a replica, a persistence round trip,
-a boundary, another encoding, another command path). For a feature, look for
-an acceptance criterion the tests miss. Name a specific counterexample, or
-explain why none exists; "looks fine" is not a verdict. Reject a change larger
-than the cause requires, one that does not match the surrounding code, or one
-that would be hard to backport.
+a boundary, another encoding, another command path), and for what the fix
+changes that the test does not exercise. For a feature, look for an acceptance
+criterion the tests miss. Name a specific counterexample, or explain why none
+exists; "looks fine" is not a verdict.
 When you can write your counterexample as a Tcl test, do: a complete,
 self-contained test file for the main suite (its own `start_server` block with
 the tags and setup it needs, and exactly one `test`), named in
 `counterexample`. Code runs it with the fix applied. A counterexample that
-fails sends the change back with your reasoning; one that passes is noted."""
+fails sends the change back with your reasoning; one that passes is noted.
+When you reject, say what change you would approve."""
 
 _REVIEW_PROMPT = """\
 You are reviewing a proposed fix for {what} in the repository at your
