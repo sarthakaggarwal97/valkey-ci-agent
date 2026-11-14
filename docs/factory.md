@@ -61,13 +61,18 @@ repository, for a committer to look at first.
 
 **It freezes the test and writes the fix.** Code commits the test in the
 checkout and hands the engine a failure whose log is the issue and the test's
-output, whose failing test is the one it just wrote, and whose test files are
-frozen: a change that touches them is put back and goes back to the session.
+output, whose failing test is the one it just wrote, and whose lines are
+frozen: a change that touches the lines the test added is put back and goes
+back to the session. The rest of the file is not frozen. An older test in the
+same file asserts what the server did before the fix, and the session may
+change it only when the issue says that expectation is wrong; the pull
+request and the comment list every existing test the fix changed under
+"Existing expectations changed", one line per test, for a committer to judge.
 From here the fix is prepared as every CI fix is: a session diagnoses and
 edits, code builds the change and runs the test, once and then forty times,
 and a separate read-only session reviews it, up to three rounds. The policy
 differs from a CI fix's in one respect: a CI fix looks for the fault in the
-test first, because flaky tests usually are at fault; here the test is the
+test first, because flaky tests usually are at fault; here the issue is the
 specification, and the fix lives in `src/`. The session is given the bot's
 guide for a fix from an issue (`scripts/factory/guides/valkey-io__valkey.md`),
 followed by Valkey's own `AGENTS.md`, `DEVELOPMENT_GUIDE.md` and test
@@ -82,9 +87,12 @@ test file the test or the fix changed has to pass in full. The C files the fix
 changed have to satisfy `clang-format-18`, as Valkey's CI requires, and a
 changed command definition has to leave `make commands.def` with nothing to
 regenerate. Finally the test runs once with the change built under
-AddressSanitizer. Anything that looks like a credential in the change ends the
-round. A check that fails sends the change back with the output, like a
-failing test.
+AddressSanitizer. Every run of the test selects it with `--only`; when the
+file's code outside any test then fails for want of what a skipped test did,
+the run falls back to the test's own block of the file and then to the whole
+file, in the sanitizer check as in the engine's own runs. Anything that looks
+like a credential in the change ends the round. A check that fails sends the
+change back with the output, like a failing test.
 
 **A second session tries to break it.** The reviewer is told to find the case
 the change still gets wrong: what the issue describes that the test does not
@@ -204,5 +212,5 @@ checks the test, then the CI fix engine (`scripts/ci_fix/engine.py`) prepares
 the fix with `review.py`'s adversarial review and `checks.py`'s further
 checks. `dispatch.py` is the hourly dispatcher, and `replay.py` the replay
 and its score. `guides/` holds the bot's policy for a fix from an issue, per
-repository. The engine's own hooks for this are `FixTask.frozen_paths` and
+repository. The engine's own hooks for this are `FixTask.frozen_hunks` and
 `prepare_fix`'s `check_func`, `budget_s` and `guide`.

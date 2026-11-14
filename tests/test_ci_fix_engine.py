@@ -22,6 +22,7 @@ from scripts.ci_fix.models import (
     FixResult,
     FixTarget,
     FixTask,
+    FrozenHunk,
     ResultKind,
     TargetKind,
 )
@@ -2044,13 +2045,31 @@ def test_a_test_the_patch_adds_that_nothing_here_runs_is_named_in_the_checks(tmp
 
 
 
-# --- a fix judged by a test the bot wrote (scripts/factory): frozen files, more checks, a budget ---
+# --- a fix judged by a test the bot wrote (scripts/factory): frozen lines, more checks, a budget ---
+
+_FROZEN_FILE = "start_server {} {\n    test {older} {\n        assert_equal 1 [r lag]\n    }\n    test {it} {\n        assert_equal 2 [r lag]\n    }\n}\n"
+_FROZEN_HUNK = engine_mod.added_hunks(
+    "diff --git a/tests/frozen.tcl b/tests/frozen.tcl\n--- a/tests/frozen.tcl\n+++ b/tests/frozen.tcl\n"
+    "@@ -3,0 +4,3 @@\n+    test {it} {\n+        assert_equal 2 [r lag]\n+    }\n"
+)
 
 
-def test_a_patch_that_changes_a_frozen_file_goes_back_and_the_file_is_put_back(tmp_path, monkeypatch):
+def test_added_hunks_are_each_files_runs_of_added_lines():
+    patch = (
+        "diff --git a/a.tcl b/a.tcl\n--- a/a.tcl\n+++ b/a.tcl\n@@ -1,2 +1,4 @@\n+one\n+two\n context\n-gone\n+three\n"
+        "diff --git a/b.tcl b/b.tcl\n--- /dev/null\n+++ b/b.tcl\n@@ -0,0 +1,2 @@\n+four\n+five\n"
+        "\\ No newline at end of file\n"
+    )
+    assert engine_mod.added_hunks(patch) == (
+        FrozenHunk("a.tcl", "one\ntwo"), FrozenHunk("a.tcl", "three"), FrozenHunk("b.tcl", "four\nfive"),
+    )
+    assert _FROZEN_HUNK == (FrozenHunk("tests/frozen.tcl", "    test {it} {\n        assert_equal 2 [r lag]\n    }"),)
+
+
+def test_a_patch_that_changes_a_frozen_hunk_goes_back_and_the_file_is_put_back(tmp_path, monkeypatch):
     source, head_sha = _source_repo(tmp_path)
     (source / "tests").mkdir()
-    (source / "tests" / "frozen.tcl").write_text("test {it} {}\n", encoding="utf-8")
+    (source / "tests" / "frozen.tcl").write_text(_FROZEN_FILE, encoding="utf-8")
     git(source, "add", "tests/frozen.tcl")
     git(source, "commit", "-q", "-m", "the test")
     head_sha = git(source, "rev-parse", "HEAD")
@@ -2062,18 +2081,56 @@ def test_a_patch_that_changes_a_frozen_file_goes_back_and_the_file_is_put_back(t
         seen.append(feedback)
         frozen = Path(repo_dir, "tests/frozen.tcl")
         if len(seen) == 1:
-            frozen.write_text("test {weakened} {}\n", encoding="utf-8")
-        assert frozen.read_text(encoding="utf-8") == "test {it} {}\n" or len(seen) == 1
+            # The frozen test weakened: 2 becomes 1. Rejected, and the file put back.
+            frozen.write_text(_FROZEN_FILE.replace("assert_equal 2", "assert_equal 1"), encoding="utf-8")
+        elif len(seen) == 2:
+            # A line added inside the frozen test: rejected too.
+            assert frozen.read_text(encoding="utf-8") == _FROZEN_FILE
+            frozen.write_text(_FROZEN_FILE.replace("    test {it} {\n", "    test {it} {\n        r set lag 2\n"), encoding="utf-8")
         (Path(repo_dir) / "value.txt").write_text("right\n", encoding="utf-8")
         return FixCandidate(action=CandidateAction.PATCH, changed_paths=("value.txt",), root_cause="r", reasoning="w")
 
-    task = replace(_task(head_sha), frozen_paths=("tests/frozen.tcl",))
+    task = replace(_task(head_sha), frozen_hunks=_FROZEN_HUNK)
+    candidate = engine_mod.prepare_fix(task, _LOG, agent_func=agent, review_func=lambda *a, **k: (True, "ok"))
+
+    assert candidate.action is CandidateAction.PATCH and len(seen) == 3
+    for feedback in seen[1:]:
+        assert "The patch changed the test the fix is judged by, in `tests/frozen.tcl`" in feedback
+        assert "code put the file back as it was" in feedback
+        assert "Another test in the file may change only when the issue says its expectation is wrong" in feedback
+    assert "frozen.tcl" not in candidate.patch and candidate.changed_paths == ("value.txt",)
+
+
+def test_a_patch_that_changes_another_test_in_the_frozen_file_is_accepted(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    (source / "tests").mkdir()
+    (source / "tests" / "frozen.tcl").write_text(_FROZEN_FILE, encoding="utf-8")
+    git(source, "add", "tests/frozen.tcl")
+    git(source, "commit", "-q", "-m", "the test")
+    head_sha = git(source, "rev-parse", "HEAD")
+    _install_clone(monkeypatch, source)
+    _with_plan(monkeypatch)
+
+    def agent(task, repo_dir, job_log, *, feedback="", **_kwargs):
+        assert feedback == ""
+        frozen = Path(repo_dir, "tests/frozen.tcl")
+        # The older test's expectation changed, and a line added after the frozen test: the frozen lines stand.
+        frozen.write_text(
+            _FROZEN_FILE.replace("assert_equal 1 [r lag]", "assert_equal 2 [r lag]").replace("    }\n}\n", "    }\n    r del lag\n}\n"),
+            encoding="utf-8",
+        )
+        (Path(repo_dir) / "value.txt").write_text("right\n", encoding="utf-8")
+        return FixCandidate(
+            action=CandidateAction.PATCH, changed_paths=("tests/frozen.tcl", "value.txt"), root_cause="r", reasoning="w",
+        )
+
+    task = replace(_task(head_sha), frozen_hunks=_FROZEN_HUNK)
     candidate = engine_mod.prepare_fix(task, _LOG, agent_func=agent, review_func=lambda *a, **k: (True, "ok"))
 
     assert candidate.action is CandidateAction.PATCH
-    assert "`tests/frozen.tcl`, which holds the test the fix is judged by" in seen[1]
-    assert "code put it\nback as it was" in seen[1] or "code put it back as it was" in seen[1]
-    assert "frozen.tcl" not in candidate.patch and candidate.changed_paths == ("value.txt",)
+    assert candidate.changed_paths == ("tests/frozen.tcl", "value.txt")
+    assert "-        assert_equal 1 [r lag]\n+        assert_equal 2 [r lag]" in candidate.patch
+    assert "+    r del lag" in candidate.patch
 
 
 def test_further_checks_run_after_the_test_passes_and_send_the_fix_back(tmp_path, monkeypatch):

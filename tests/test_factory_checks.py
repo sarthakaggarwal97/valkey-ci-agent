@@ -174,6 +174,45 @@ def test_the_test_runs_once_under_address_sanitizer_last(repo):
     assert run_test.ran[-1].startswith("make all-with-unit-tests SANITIZER=address && ")
 
 
+def test_under_the_sanitizer_a_file_whose_code_outside_the_test_breaks_with_only_runs_whole(repo, monkeypatch):
+    """Code between tests that waits on a skipped test fails after the test passed: the plan's fallbacks run."""
+    whole = VerifyPlan(
+        build="make SANITIZER=address", test=f"./runtest --single unit/value --loops {LOOPS}", tests=(_TEST,),
+        single_run=True, attributed=True,
+    )
+    monkeypatch.setattr(
+        checks_mod, "plan_for",
+        lambda repo_dir, tests, *, scheduled, job=None: VerifyPlan(
+            build="make SANITIZER=address", test=f"./runtest --single unit/value --only 'value check' --loops {LOOPS}",
+            tests=tests, fallback=whole,
+        ) if tests[0].name else VerifyPlan(build="true", test=f"./runtest --single unit/value loops={LOOPS}", tests=tests),
+    )
+    broken_outside = TestRun(
+        passed=False, output="[ok]: value check (1 ms)\n[exception]: Executing test client: I/O error reading reply",
+        report="[ok]: value check (1 ms)",
+    )
+    run_test = _runner({"--only": broken_outside})
+
+    failed, checks = _gate(_evidence(), _candidate(_diff("src/x.c")), repo, run_test)
+
+    assert failed == ""
+    assert run_test.ran[-2:] == [
+        "make SANITIZER=address && ./runtest --single unit/value --only 'value check' --loops 1",
+        "make SANITIZER=address && ./runtest --single unit/value --loops 1",
+    ]
+    assert checks[-1] == (
+        "With the fix built under AddressSanitizer, the test passes: "
+        "`make SANITIZER=address && ./runtest --single unit/value --loops 1`."
+    )
+
+    # The test itself failing is the fix's failure: nothing wider runs.
+    own_failure = TestRun(passed=False, output="[err]: value check in tests/unit/value.tcl", report="[err]: value check in tests/unit/value.tcl")
+    run_test = _runner({"--only": own_failure})
+    failed, _checks = _gate(_evidence(), _candidate(_diff("src/x.c")), repo, run_test)
+    assert failed.startswith("With your change built under AddressSanitizer, the test does not pass")
+    assert "--only 'value check'" in failed and sum("SANITIZER" in command for command in run_test.ran) == 1
+
+
 def test_a_check_that_runs_out_of_time_is_a_failed_attempt(repo):
     timed_out = _runner({"--single": TestRun(passed=False, output="timed out", timed_out=True)})
     with pytest.raises(RuntimeError, match="did not finish in the time left"):

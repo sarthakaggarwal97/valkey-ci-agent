@@ -58,11 +58,14 @@ _POLICY = {
 _ISSUE_POLICY = (
     "Fix the cause in product source with the smallest coherent change that makes "
     "the test pass for the right reason; never a workflow change, never a change "
-    "under deps/. The test is the specification of what the issue asks for: it "
-    "may not be changed, and code rejects a patch that touches its file. You may "
-    "add a test of your own where the fix needs one. Do not hide the defect, "
-    "special-case the test, or weaken any test. A fix that needs a new command is "
-    "a decision for the project, not a fix: refuse and say so."
+    "under deps/. The issue is the specification, and the test written from it "
+    "may not be changed: code rejects a patch that changes its lines. An older "
+    "test in the same file asserts what the server did before, and may be changed "
+    "only when the issue says that expectation is wrong; name every such change, "
+    "test by test, in `validation`. You may add a test of your own where the fix "
+    "needs one. Do not hide the defect, special-case the test, or weaken any "
+    "test. A fix that needs a new command is a decision for the project, not a "
+    "fix: refuse and say so."
 )
 
 _UPSTREAM_FIRST = (

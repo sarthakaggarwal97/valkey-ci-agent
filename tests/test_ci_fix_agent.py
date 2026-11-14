@@ -508,8 +508,9 @@ def test_a_fix_from_an_issue_is_asked_for_without_a_run_or_a_job(tmp_path, monke
         assert ci_only not in prompt, ci_only
     assert "Investigate the issue, the test and the source it exercises." in prompt
     assert "- Description: Issue #9: stale GET" in prompt
-    # The policy of a fix from an issue: the test is the specification, the bug is in the product.
-    assert "The test is the specification of what the issue asks for" in prompt
+    # The policy of a fix from an issue: the issue is the specification, the bug is in the product.
+    assert "The issue is the specification, and the test written from it" in prompt
+    assert "may be changed only when the issue says that expectation is wrong; name every such change" in prompt
     assert "Prefer a fix in the test or the test harness" not in prompt
     assert "Never commit, push, create a branch, or modify `.git`." in prompt
 

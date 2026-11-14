@@ -190,6 +190,15 @@ class OtherIssue:
 
 
 @dataclass(frozen=True)
+class FrozenHunk:
+    """Lines a fix may not change: one run of the lines the test it is judged by added to ``path``."""
+
+    path: str
+    # The added lines, together, as the working commit holds them.
+    text: str
+
+
+@dataclass(frozen=True)
 class FixTask:
     """A validated failure paired with its publication destination."""
 
@@ -199,10 +208,10 @@ class FixTask:
     # Other open detector issues whose test this patch may also fix. Each is
     # verified on its own before the draft PR claims to fix it.
     other_issues: tuple[OtherIssue, ...] = ()
-    # Paths a fix may not change: the files of the test it is judged by, when
-    # the bot wrote that test itself (scripts/factory). A patch that touches
-    # one goes back to the agent.
-    frozen_paths: tuple[str, ...] = ()
+    # Lines a fix may not change: those of the test it is judged by, when the
+    # bot wrote that test itself (scripts/factory). A patch that changes one
+    # goes back to the agent; the rest of the file is the agent's to change.
+    frozen_hunks: tuple[FrozenHunk, ...] = ()
     # The newest commit the clone may show, when the fix is prepared in one:
     # a replay (scripts/factory/replay.py) works on the commit a known fix
     # merged onto, and history past it is that fix. Empty shows everything.
@@ -249,6 +258,10 @@ class FixCandidate:
     # and a replay can run it against the fix a person wrote. Never written
     # by the agent.
     evidence_patch: str = ""
+    # Existing tests whose lines the fix changed, by name, when the bot's own
+    # test is the specification (scripts/factory): a committer decides whether
+    # the issue says their expectation was wrong. Never written by the agent.
+    changed_expectations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
