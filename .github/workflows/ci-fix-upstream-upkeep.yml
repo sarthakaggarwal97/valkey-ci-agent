@@ -1,0 +1,107 @@
+name: CI Fix Upstream Upkeep
+
+# Keeps the bot's pull requests into valkey-io/valkey's default branch going:
+# the fixes of release branch failures that apply there
+# (scripts/ci_fix/upstream.py). Once a day it rebases one that fell behind,
+# tells the sweep PR of each release branch one fixes when it is merged or
+# closed, and has the fix agent address a maintainer's review of one
+# (ci-fix-run.yml, front door "review"), each pull request in a run of its own.
+#
+# The schedule runs unless the CI_FIX_UPSTREAM_UPKEEP repository variable is
+# "false".
+on:
+  schedule:
+    - cron: "40 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would be done without doing it"
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  upkeep:
+    name: "Rebase, announce and list reviews"
+    if: >-
+      github.repository == 'valkey-io/valkey-ci-agent'
+      && (github.event_name == 'workflow_dispatch' || vars.CI_FIX_UPSTREAM_UPKEEP != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: ci-fix-upstream-upkeep
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      review: ${{ steps.upkeep.outputs.review }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate target repository token
+        id: target-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
+          # Rebases the bot's own pull requests, and comments on them and on
+          # the sweep PRs. Reads team membership to know whose review counts.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-members: read
+          permission-metadata: read
+
+      - name: Upkeep
+        id: upkeep
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          # A scheduled run has no inputs and acts for real.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(upkeep --repo valkey-io/valkey)
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python -m scripts.ci_fix.upstream "${args[@]}" > upkeep.json
+          cat upkeep.json
+          { echo '```json'; cat upkeep.json; echo '```'; } >> "${GITHUB_STEP_SUMMARY}"
+
+  review:
+    name: "review/${{ matrix.pr }}"
+    needs: upkeep
+    if: needs.upkeep.outputs.review != '' && needs.upkeep.outputs.review != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        pr: ${{ fromJson(needs.upkeep.outputs.review) }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/ci-fix-run.yml
+    with:
+      front_door: review
+      request: ${{ format('{{"repo":"valkey-io/valkey","pr":{0}}}', matrix.pr) }}
+      key: review-${{ matrix.pr }}
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
