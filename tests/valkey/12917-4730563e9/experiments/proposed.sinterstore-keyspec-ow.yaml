@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.sinterstore-keyspec-ow
+deployment:
+  modes: [standalone]
+metadata:
+  description: SINTERSTORE destination key-spec flag changes from RW to OW in COMMAND
+    introspection replies; command behaviour and ACL write-only semantics stay unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyspec
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SADD, src1, a, b, c], expect: {equals: 3}}
+    - {command: [SADD, src2, b, c, d], expect: {equals: 3}}
+    - {command: [SET, dest, notaset], expect: {equals: OK}}
+    - {command: [SINTERSTORE, dest, src1, src2], expect: {equals: 2}}
+    - {command: [SMEMBERS, dest], compare: unordered, expect: {equals: [b, c]}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, SINTERSTORE, dest, src1, src2], expect_difference: true,
+      expect: {contains: OW}}
+    - {command: [COMMAND, INFO, SINTERSTORE], expect_difference: true, expect: {contains: OW}}
+    - {command: [SADD, disjoint, zzz], expect: {equals: 1}}
+    - {command: [SINTERSTORE, dest, src1, disjoint], expect: {equals: 0}}
+    - {command: [EXISTS, dest], expect: {equals: 0}}
+    - {command: [SINTERSTORE, dest, src1, src2], expect: {equals: 2}}
+    - {command: [ACL, SETUSER, writeonly, on, nopass, "%W~dest", "%R~src1", "%R~src2",
+        +sinterstore, +auth], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, readonly, on, nopass, "%R~dest", "%R~src1", "%R~src2",
+        +sinterstore, +auth], expect: {equals: OK}}
+    - {command: [AUTH, writeonly, x], expect: {equals: OK}}
+    - {command: [SINTERSTORE, dest, src1, src2], expect: {equals: 2}}
+    - {command: [AUTH, readonly, x], expect: {equals: OK}}
+    - {command: [SINTERSTORE, dest, src1, src2], expect: {error: "NOPERM"}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [SMEMBERS, dest], compare: unordered, expect: {equals: [b, c]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyspec.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyspec}

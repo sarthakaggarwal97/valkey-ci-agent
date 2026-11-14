@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.script-sort-by-get-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT BY/GET/STORE patterns inside a script in cluster mode are checked
+    against the sort key's slot instead of the script client's stale slot (#12906)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortscript
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [RPUSH, "mylist{t}", 3, 1, 2]
+      expect: {equals: 3}
+    - command: [MSET, "w_{t}1", 10, "w_{t}2", 20, "w_{t}3", 30]
+      expect: {equals: OK}
+    - command: [MSET, "d_{t}1", a, "d_{t}2", b, "d_{t}3", c]
+      expect: {equals: OK}
+    - command: [SORT, "mylist{t}", BY, "w_{t}*", GET, "#", GET, "d_{t}*"]
+      expect: {equals: [1, a, 2, b, 3, c]}
+    - command: [EVAL, "return redis.call('sort', KEYS[1], 'BY', 'w_{t}*', 'GET', '#',\
+          \ 'GET', 'd_{t}*')", 1, "mylist{t}"]
+      expect_difference: true
+      expect: {equals: [1, a, 2, b, 3, c]}
+    - command: [EVAL, "return redis.call('sort', KEYS[1], 'ALPHA', 'GET', 'd_{t}*')",
+        1, "mylist{t}"]
+      expect_difference: true
+      expect: {equals: [a, b, c]}
+    - command: [EVAL, "return redis.call('sort','mylist{t}','BY','w_{t}*')", 0]
+      expect_difference: true
+      expect: {equals: [1, 2, 3]}
+    - command: [EVAL, "#!lua\nreturn redis.call('sort', KEYS[1], 'BY', 'w_{t}*')",
+        1, "mylist{t}"]
+      expect_difference: true
+      expect: {equals: [1, 2, 3]}
+    - command: [EVAL, "return redis.call('sort', KEYS[1], 'BY', 'w_{t}*', 'STORE',\
+          \ 'dest{t}')", 1, "mylist{t}"]
+      expect_difference: true
+      expect: {equals: 3}
+    - command: [LRANGE, "dest{t}", 0, -1]
+      expect_difference: true
+      expect: {equals: [1, 2, 3]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortscript.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortscript}

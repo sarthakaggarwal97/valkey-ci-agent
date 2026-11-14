@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.script-undeclared-key-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: In cluster mode a script whose accessed keys disagree with its pre-declared
+    keys must store and find keys in the accessed key's slot, not the declared key's
+    slot (#12906)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [EVAL, "redis.call('set','foo','bar')", 1, bar]
+      expect: {error: false}
+    - command: [CLUSTER, COUNTKEYSINSLOT, 12182]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [CLUSTER, COUNTKEYSINSLOT, 5061]
+      expect_difference: true
+      expect: {equals: 0}
+    - command: [GET, foo]
+      expect_difference: true
+      expect: {equals: bar}
+    - command: [CLUSTER, GETKEYSINSLOT, 5061, 10]
+      expect_difference: true
+      expect: {equals: []}
+    - command: [DEL, foo]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [DBSIZE]
+      expect_difference: true
+      expect: {equals: 0}
+    - command: [FLUSHALL]
+      expect: {equals: OK}
+    - command: [MULTI]
+      expect: {equals: OK}
+    - command: [EVAL, "redis.call('set','foo','bar')", 1, bar]
+      expect: {equals: QUEUED}
+    - command: [EXEC]
+      expect: {error: false}
+    - command: [CLUSTER, COUNTKEYSINSLOT, 12182]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [GET, foo]
+      expect_difference: true
+      expect: {equals: bar}
+    - command: [FLUSHALL]
+      expect: {equals: OK}
+    - command: [FUNCTION, LOAD, "#!lua name=slotlib\nredis.register_function{function_name='w',\
+          \ callback=function(keys, args) redis.call('set','foo','fv') redis.call('set','bar','bv')\
+          \ return 1 end, flags={'allow-cross-slot-keys'}}"]
+      expect: {equals: slotlib}
+    - command: [FCALL, w, 1, bar]
+      expect: {equals: 1}
+    - command: [CLUSTER, COUNTKEYSINSLOT, 12182]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [CLUSTER, COUNTKEYSINSLOT, 5061]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [GET, foo]
+      expect_difference: true
+      expect: {equals: fv}
+    - command: [GET, bar]
+      expect: {equals: bv}
+    - command: [EVAL, "#!lua\nredis.call('set','foo','x')\nreturn 'OK'", 1, bar]
+      expect: {error: "do not hash to the same slot"}
+    - command: [EVAL, "#!lua\nredis.call('set', KEYS[1], 'v2')\nreturn redis.call('get',\
+          \ KEYS[1])", 1, foo]
+      expect: {equals: v2}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

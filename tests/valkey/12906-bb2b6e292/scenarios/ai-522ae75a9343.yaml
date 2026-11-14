@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 284ef21ea000..bb2b6e29273c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-522ae75a9343
+seed: 12908
+experiment:
+  id: proposed.script-sort-by-get-slot
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

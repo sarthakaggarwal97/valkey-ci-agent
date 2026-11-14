@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b3aaa0a1362d..964f4a457633.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ec775e287fcf
+seed: 101
+experiment:
+  id: proposed.debug-clusterlink-kill-null
+  inputs:
+    direction: all
+deployment:
+  mode: standalone
+  base_port: 7000

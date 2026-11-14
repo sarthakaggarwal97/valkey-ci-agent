@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "068051e378ceaea85a7fb011f1271587a17bd0e7",
+  "parent": "c3f8b542eecec1a52de88f402e310687c36d03e9",
+  "pr": 12857,
+  "pr_repo": "redis/redis",
+  "subject": "Handle recursive serverAsserts and provide more information for recursive segfaults (#12857)",
+  "date": "2024-01-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.778,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only affects crash-report/diagnostic output in src/debug.c: it labels recursive asserts/panics, avoids a duplicate printCrashReport, and prints a reduced stack trace instead of aborting on a recursive segfault. This code runs only after a crash or assertion has already happened and changes no command reply, stored data, replication/failover/resync, persistence, or memory behavior in any non-crash path. The sole observable difference is the wording and completeness of the crash log, which no installed oracle can judge \u2014 the liveness oracle treats any crash as a failure on both builds"
+}

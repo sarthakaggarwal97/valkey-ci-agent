@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4730563e9315..c452e414a800.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-afe6a4301e68
+seed: 3
+experiment:
+  id: proposed.pubsub-shardnumsub-missing-channel
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

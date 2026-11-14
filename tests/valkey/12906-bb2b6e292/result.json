@@ -1,0 +1,69 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb2b6e29273c3dd2bf5f09ff625b33df1d5536b2",
+  "parent": "284ef21ea000f18d1eaac374679e0d0561f7bef8",
+  "pr": 12906,
+  "pr_repo": "redis/redis",
+  "subject": "fix scripts access wrong slot if they disagree with pre-declared keys (#12906)",
+  "date": "2024-01-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 8,
+    "percent": 72,
+    "uncovered": [
+      "src/pubsub.c:293",
+      "src/pubsub.c:335",
+      "src/script.c:470"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.7255,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6ddb04c37952",
+      "build": "unstable",
+      "seed": 12906,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6ddb04c37952",
+      "build": "unstable",
+      "seed": 12907,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6ddb04c37952",
+      "build": "unstable",
+      "seed": 12908,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0a3b5e5ed6e6",
+      "build": "unstable",
+      "seed": 12907,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0a3b5e5ed6e6",
+      "build": "unstable",
+      "seed": 12908,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0a3b5e5ed6e6",
+      "build": "unstable",
+      "seed": 12909,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

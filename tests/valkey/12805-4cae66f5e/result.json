@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4cae66f5e803c527c4e6141c06b94670162eca2c",
+  "parent": "38f02349462d5aefa9b25386a130ebd67db1a4de",
+  "pr": 12805,
+  "pr_repo": "redis/redis",
+  "subject": "Use shard-id of the master if the replica does not support shard-id (#12805)",
+  "date": "2024-01-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.603,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioral addition fires exclusively when a gossiping peer omits the shard-id ping extension, i.e. a pre-7.2 node that does not support shard-id. Both builds the fuzzer runs (the change at 4cae66f and its parent at 38f0234) emit the shard-id extension unconditionally (cluster_legacy.c:2538-2547, untouched by the diff), so in any homogeneous cluster the harness can build, ext_shardid is never NULL and the new branch at cluster_legacy.c:2615 is unreachable; there is no client command that produces a gossip message without the extension. The other hunk rewrites `while (n->slaveof != NUL"
+}

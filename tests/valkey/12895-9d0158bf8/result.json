@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d0158bf89265daa96e1711478102147117f6b14",
+  "parent": "2c5b51ad26b6129e161c2373fb48571648fc1393",
+  "pr": 12895,
+  "pr_repo": "redis/redis",
+  "subject": "Reorder signalModifiedKey in xaddCommand. (#12895)",
+  "date": "2023-12-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.4482,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7a37b31fc8c3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-a3d41e2bafd0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-3d505021add0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "50b8b997636a334e4a9a0f2e502afefdab36f0a8",
+  "parent": "c452e414a800372a33aa2a112d563cea560600f5",
+  "pr": 12914,
+  "pr_repo": "redis/redis",
+  "subject": "Re-indent code and reduce code being complied on Solaris for anetKeepAlive (#12914)",
+  "date": "2024-01-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2849,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a re-indentation and comment reformat of src/anet.c plus a restructuring of the Solaris-only (#ifdef __sun) section of anetKeepAlive from an '#if ... return' followed by always-compiled fallback code into an #if/#else/#endif. The previously always-compiled fallback was unreachable at runtime when TCP_KEEPIDLE/TCP_KEEPINTVL/TCP_KEEPCNT were defined, so excluding it from compilation changes nothing observable; the socket options set and the control flow are identical on every platform. On Linux, where the fuzzer's builds run, the diff touches only comments and whitespace, so no beh"
+}

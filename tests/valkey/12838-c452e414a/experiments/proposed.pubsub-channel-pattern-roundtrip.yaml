@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-channel-pattern-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: SUBSCRIBE/PSUBSCRIBE/PUBLISH/NUMSUB over the dict-backed subscriber
+    tables, replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pubsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SUBSCRIBE, c1], connection: s1, expect: {exists: true}}
+    - {command: [SUBSCRIBE, c1], connection: s2, expect: {exists: true}}
+    - {command: [SUBSCRIBE, c2], connection: s3, expect: {exists: true}}
+    - {command: [PSUBSCRIBE, "c*"], connection: p1, expect: {exists: true}}
+    - {command: [PUBSUB, NUMSUB, c1, c2, cX], expect: {equals: [c1, 2, c2, 1, cX,
+          0]}}
+    - {command: [PUBSUB, NUMPAT], expect: {equals: 1}}
+    - {command: [PUBLISH, c1, hello], expect: {equals: 3}}
+    - {command: [PUBLISH, c2, world], expect: {equals: 2}}
+    - {command: [UNSUBSCRIBE, c1], connection: s1, expect: {exists: true}}
+    - {command: [PUBSUB, NUMSUB, c1], expect: {equals: [c1, 1]}}
+    - {command: [UNSUBSCRIBE, c1], connection: s2, expect: {exists: true}}
+    - {command: [PUBSUB, NUMSUB, c1], expect: {equals: [c1, 0]}}
+    - {command: [PUNSUBSCRIBE, "c*"], connection: p1, expect: {exists: true}}
+    - {command: [PUBSUB, NUMPAT], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pubsub}

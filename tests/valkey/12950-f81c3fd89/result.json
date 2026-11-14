@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f81c3fd89ed998f211e60e76b8f55a2df27000fe",
+  "parent": "1c7eb0ad373a21a0610ba484cc0d5054e1f1aab0",
+  "pr": 12950,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize dictTypeResizeAllowed to avoid mistaken OOM judgement. (#12950)",
+  "date": "2024-01-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.392,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a memory-management micro-optimization with no observable behavioral change. dictTypeResizeAllowed now receives the resize target as a parameter; the expand call site passes the identical value as before (d->ht_used[0] + 1), and only the shrink call site changes (d->ht_used[0] instead of +1). That value feeds solely the estimated-allocation argument of dictResizeAllowed/overMaxmemoryAfterAlloc, which is a no-op whenever maxmemory is unset. The sole effect, under maxmemory, is to stop over-estimating a shrink's allocation so a memory-freeing shrink is no longer mistakenly blocked. It ch"
+}

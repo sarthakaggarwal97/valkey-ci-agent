@@ -1,0 +1,25 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9d0158bf8926..c3f8b542eece.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-04cfe3d46819
+seed: 105
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    run_before_crash_s: 2
+    run_after_crash_s: 2
+    config_changes: 10
+    config_churn_keys:
+      max-new-connections-per-cycle:
+      - '1'
+      - '500'
+      - '1000'
+      max-new-tls-connections-per-cycle:
+      - '1'
+      - '1000'
+deployment:
+  mode: standalone
+  base_port: 7400
+  server_config:
+    max-new-connections-per-cycle: 1

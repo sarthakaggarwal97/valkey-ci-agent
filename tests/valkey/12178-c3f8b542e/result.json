@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c3f8b542eecec1a52de88f402e310687c36d03e9",
+  "parent": "9d0158bf89265daa96e1711478102147117f6b14",
+  "pr": 12178,
+  "pr_repo": "redis/redis",
+  "subject": "Manage number of new connections per cycle (#12178)",
+  "date": "2024-01-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0942,
+  "findings": [],
+  "recorded": []
+}

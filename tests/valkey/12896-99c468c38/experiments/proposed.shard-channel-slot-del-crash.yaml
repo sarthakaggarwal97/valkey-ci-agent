@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.shard-channel-slot-del-crash
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Deleting a slot that holds shard-channel subscribers must not crash;
+    the parent asserts in pubsubShardUnsubscribeAllChannelsInSlot
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, ch], connection: sub1}
+    - {command: [SSUBSCRIBE, ch], connection: sub2}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 16383], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardsub}

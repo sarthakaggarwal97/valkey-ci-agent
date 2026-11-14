@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b3aaa0a1362d229ba1ecd44629655f76c77304ec",
+  "parent": "b351a04b1ef5aa409b0fbe2b31fcadca07421400",
+  "pr": 12824,
+  "pr_repo": "redis/redis",
+  "subject": "When one shard, sole primary node marks potentially failed replica as FAIL instead of PFAIL (#12824)",
+  "date": "2024-01-11",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 8,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 3,
+    "percent": 75,
+    "uncovered": [
+      "src/cluster_legacy.c:4697"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 34.0243,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-28beb294939b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: chaos"
+    }
+  ]
+}

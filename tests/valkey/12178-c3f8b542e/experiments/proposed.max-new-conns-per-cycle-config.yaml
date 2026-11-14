@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.max-new-conns-per-cycle-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: max-new-connections-per-cycle and max-new-tls-connections-per-cycle
+    exist with defaults 10 and 1, reject values outside 1..1000, survive CONFIG REWRITE
+    and a restart, and a server throttled to 1 accept per cycle still accepts new
+    connections
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: conns
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, max-new-connections-per-cycle], expect_difference: true,
+      expect: {equals: [max-new-connections-per-cycle, "10"]}}
+    - {command: [CONFIG, GET, max-new-tls-connections-per-cycle], expect_difference: true,
+      expect: {equals: [max-new-tls-connections-per-cycle, "1"]}}
+    - {command: [CONFIG, SET, max-new-connections-per-cycle, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], connection: c1, expect: {equals: PONG}}
+    - {command: [PING], connection: c2, expect: {equals: PONG}}
+    - {command: [PING], connection: c3, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, max-new-connections-per-cycle, "0"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, max-new-connections-per-cycle], expect_difference: true,
+      expect: {equals: [max-new-connections-per-cycle, "1"]}}
+    - {command: [CONFIG, SET, max-new-connections-per-cycle, "1001"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, max-new-connections-per-cycle, "1000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, max-new-tls-connections-per-cycle, "1000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, max-new-tls-connections-per-cycle, "4294967296"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, max-new-connections-per-cycle, "37"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, max-new-tls-connections-per-cycle, "999"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, max-new-connections-per-cycle], expect_difference: true,
+      expect: {equals: [max-new-connections-per-cycle, "37"]}}
+    - {command: [CONFIG, GET, max-new-tls-connections-per-cycle], expect_difference: true,
+      expect: {equals: [max-new-tls-connections-per-cycle, "999"]}}
+    - {command: [PING], connection: c4, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [conns.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: conns}

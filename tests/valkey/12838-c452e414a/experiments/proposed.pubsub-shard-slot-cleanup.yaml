@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-shard-slot-cleanup
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Shard SSUBSCRIBE/SPUBLISH/SHARDNUMSUB and slot-deletion cleanup over
+    the dict-backed shard tables, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shard
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SSUBSCRIBE, shardch], connection: s1, node: 0, expect: {exists: true}}
+    - {command: [SSUBSCRIBE, shardch], connection: s2, node: 0, expect: {exists: true}}
+    - {command: [PUBSUB, SHARDNUMSUB, shardch, nope], node: 0, expect: {equals: [
+          shardch, 2, nope, 0]}}
+    - {command: [SPUBLISH, shardch, hi], node: 0, expect: {equals: 2}}
+    - {command: [CLUSTER, DELSLOTSRANGE, "0", "16383"], node: 0, expect: {equals: OK}}
+    - {command: [PUBSUB, SHARDNUMSUB, shardch], node: 0, expect: {equals: [shardch,
+          0]}}
+    - {command: [PUBSUB, SHARDCHANNELS], node: 0, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shard.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shard}

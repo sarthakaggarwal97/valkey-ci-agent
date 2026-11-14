@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9d0158bf8926..c3f8b542eece.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8e33b599d37a
+seed: 102
+experiment:
+  id: proposed.max-new-conns-per-cycle-config
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f7b1d0287d62ec9fac72bf14cf789e350d14e52b",
+  "parent": "8bb9a2895ee344ddea737f4df173c944b9a6cbf0",
+  "pr": 12924,
+  "pr_repo": "redis/redis",
+  "subject": "Fix possible corruption in sdsResize (CVE-2023-41056) (#12924)",
+  "date": "2024-01-09",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.3379,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

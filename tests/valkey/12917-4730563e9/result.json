@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4730563e93152cac9b840d1768b35d8ce14b2f1f",
+  "parent": "5b0c6a8255af2d0e4921fa60d631bb3857724cb6",
+  "pr": 12917,
+  "pr_repo": "redis/redis",
+  "subject": "Change destination key's key-spec flag from RW to OW for SINTERSTORE command (#12917)",
+  "date": "2024-01-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.0459,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "87786342a525ddef1cee37fb156a328d6b2b28ec",
+  "parent": "964f4a457633cecf98d9501d626d6b6b56a8475b",
+  "pr": 12897,
+  "pr_repo": "redis/redis",
+  "subject": "Correct bytes_per_key computing. (#12897)",
+  "date": "2024-01-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.5673,
+  "findings": [],
+  "recorded": []
+}

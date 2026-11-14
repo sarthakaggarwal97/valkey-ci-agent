@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4730563e9315..c452e414a800.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a32afc728fa6
+seed: 1003
+experiment:
+  id: proposed.pubsub-shard-slot-cleanup
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

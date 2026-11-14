@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99c468c38c59..12b611b374ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09d8fdc0556b
+seed: 12627
+experiment:
+  id: proposed.waitaof-blocked-clients-under-fault
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

@@ -1,0 +1,102 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c452e414a800372a33aa2a112d563cea560600f5",
+  "parent": "4730563e93152cac9b840d1768b35d8ce14b2f1f",
+  "pr": 12838,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize performance when many clients [p|s]unsubscribe simultaneously (#12838)",
+  "date": "2024-01-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 40,
+    "executed": 38,
+    "percent": 95,
+    "uncovered": [
+      "src/server.c:366",
+      "src/server.c:368"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.7416,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in pubsubCommand",
+      "scenario": "ai-6205371f8d75",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "cfeb19595cce618cf68c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in pubsubCommand",
+      "scenario": "ai-7727d7d5e899",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "cfeb19595cce618cf68c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in pubsubCommand",
+      "scenario": "ai-afe6a4301e68",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "cfeb19595cce618cf68c",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 9 (PUBSUB NUMSUB c1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"c1\",2]}, not {\"reply\":[\"c1\",1]}",
+      "scenario": "ai-2348475efac8",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "f5a9683a449cf4464a57",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 9 (PUBSUB NUMSUB c1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"c1\",2]}, not {\"reply\":[\"c1\",1]}",
+      "scenario": "ai-7eea6486435d",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12838",
+      "fingerprint": "f5a9683a449cf4464a57",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/160"
+    }
+  ],
+  "recorded": []
+}

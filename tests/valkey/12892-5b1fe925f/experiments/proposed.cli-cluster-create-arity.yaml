@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-create-arity
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster create arity loosened from -2 to -1 - a single
+    host:port now reaches clusterManagerCommandCreate and fails the 3-masters check
+    instead of the generic arity error, and zero addresses still fail the arity gate
+components:
+- use: valkey.action.tools
+  id: create-one-node
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, create], expect: {exit: {equals: 1}, stderr: {
+          contains: "Wrong number of arguments"}}}
+    - {tool: valkey-cli, args: [--cluster, create, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "requires at least 3 master nodes"}}}
+    - {tool: valkey-cli, args: [--cluster, create, "127.0.0.1:$port", --cluster-replicas,
+        1], expect_difference: true, expect: {exit: {equals: 1}, stdout: {contains: "requires\
+            \ at least 3 master nodes"}}}
+    - {tool: valkey-cli, args: [--cluster, create, "127.0.0.1:$port", "127.0.0.1:$port"],
+      expect: {exit: {equals: 1}, stdout: {contains: "requires at least 3 master nodes"}}}
+- use: valkey.action.tools
+  id: create-non-cluster-node
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, create, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "is not configured as a cluster\
+            \ node"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: create-one-node}
+- {evidence_id: valkey.tool.runs, source: create-non-cluster-node}

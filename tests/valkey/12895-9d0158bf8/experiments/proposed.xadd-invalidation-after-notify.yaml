@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.xadd-invalidation-after-notify
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    XADD moved signalModifiedKey after the trim and the xadd/xtrim keyspace notifications:
+    a RESP3 client that cached the stream key (default CLIENT TRACKING) and is subscribed
+    to the key's keyspace channel now receives the invalidation push after the xadd
+    (and xtrim) messages, where the parent sent the invalidation first.
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: xadd-order
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    server_config: {notify-keyspace-events: "Kt"}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [XADD, s, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [CLIENT, TRACKING, "on"], connection: watcher, expect: {equals: OK}}
+    - {command: [XRANGE, s, "-", "+"], connection: watcher, expect: {equals: [["1-1",
+            [f, v]]]}}
+    - {command: [SUBSCRIBE, "__keyspace@0__:s"], connection: watcher}
+    - {command: [XADD, s, "2-2", f, v], expect: {equals: "2-2"}}
+    - {connection: watcher, read: true, expect_difference: true, expect: {equals: [
+          [message, "__keyspace@0__:s", xadd], [invalidate, [s]]]}}
+    - {command: [XRANGE, s, "-", "+"], connection: watcher, expect: {equals: [["1-1",
+            [f, v]], ["2-2", [f, v]]]}}
+    - {command: [XADD, s, MAXLEN, 1, "3-3", f, v], expect: {equals: "3-3"}}
+    - {connection: watcher, read: true, expect_difference: true, expect: {equals: [
+          [message, "__keyspace@0__:s", xadd], [message, "__keyspace@0__:s", xtrim],
+          [invalidate, [s]]]}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["3-3", [f, v]]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [xadd-order.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xadd-order}

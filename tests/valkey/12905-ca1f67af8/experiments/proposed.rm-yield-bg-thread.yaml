@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.rm-yield-bg-thread
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    RM_Yield from a module background thread that holds the GIL (blockedclient.so
+    do_bg_rm_call slow operation) defers event processing to the main thread: clients
+    still get -BUSY during the loop, allow-busy commands execute, the blocked client's
+    reply arrives, and neither build crashes or hangs. Also regression-covers the
+    unchanged main-thread yield path (slow_fg_command).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, minimum: 10, maximum: 500, default: 10}
+    busy_threshold_ms: {type: integer, minimum: 10, maximum: 1000, default: 50}
+    io_threads: {type: integer, minimum: 1, maximum: 8, default: 1}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: yield-seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      busy-reply-threshold: {$ref: inputs.busy_threshold_ms}
+      hz: {$ref: inputs.hz}
+      io-threads: {$ref: inputs.io_threads}
+      appendonly: {$ref: inputs.appendonly}
+    commands:
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [set_slow_bg_operation, 1], expect: {equals: OK}}
+    - {raw: "do_bg_rm_call SET k1 v1\r\n", connection: bg}
+    - {command: [is_in_slow_bg_operation], wait_s: 25, expect: {equals: 1}}
+    - {command: [GET, k0], expect: {error: BUSY}}
+    - {command: [SET, k2, v2], expect: {error: BUSY}}
+    - {command: [INCR, ctr], expect: {error: BUSY}}
+    - {command: [DEL, k0], expect: {error: BUSY}}
+    - {command: [LPUSH, l, a], expect: {error: BUSY}}
+    - {command: [HSET, h, f, v], expect: {error: BUSY}}
+    - {command: [EXISTS, k0], expect: {error: BUSY}}
+    - {command: [TYPE, k0], expect: {error: BUSY}}
+    - {command: [is_in_slow_bg_operation], expect: {equals: 1}}
+    - {command: [set_slow_bg_operation, 0], expect: {equals: OK}}
+    - {connection: bg, read: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [set_slow_bg_operation, 1], expect: {equals: OK}}
+    - {raw: "do_bg_rm_call INCR ctr2\r\n", connection: bg2}
+    - {command: [is_in_slow_bg_operation], wait_s: 25, expect: {equals: 1}}
+    - {command: [GET, k1], expect: {error: BUSY}}
+    - {command: [SET, k3, v3], expect: {error: BUSY}}
+    - {command: [GETRANGE, k1, 0, 2147483648], expect: {error: BUSY}}
+    - {command: [set_slow_bg_operation, 0], expect: {equals: OK}}
+    - {connection: bg2, read: true, expect: {equals: 1}}
+    - {command: [GET, ctr2], expect: {equals: "1"}}
+    - {command: [slow_fg_command, 100000], expect: {equals: 1}}
+    - {raw: "slow_fg_command 0\r\n", connection: fg}
+    - {command: [stop_slow_fg_command], expect: {equals: 1}}
+    - {connection: fg, read: true, expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [GET, k0], expect: {equals: v0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [yield-seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: yield-seq}

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 852795959822..5b1fe925f214.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea0c6812bd2e
+seed: 12892
+experiment:
+  id: proposed.cli-cluster-create-arity
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

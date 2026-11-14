@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4cae66f5e803..ca1f67af8043.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-39f4695e6dc0
+seed: 33
+experiment:
+  id: proposed.rm-yield-bg-thread
+  inputs:
+    resp: 2
+    hz: 500
+    busy_threshold_ms: 10
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

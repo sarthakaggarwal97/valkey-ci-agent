@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "964f4a457633cecf98d9501d626d6b6b56a8475b",
+  "parent": "b3aaa0a1362d229ba1ecd44629655f76c77304ec",
+  "pr": 12930,
+  "pr_repo": "redis/redis",
+  "subject": "Avoid double free of cluster link (#12930)",
+  "date": "2024-01-11",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2323,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in freeClusterLink",
+      "scenario": "ai-ec775e287fcf",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12930",
+      "fingerprint": "9e17f8a81e6ba98c3aa8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in freeClusterLink",
+      "scenario": "ai-21d2d3602429",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12930",
+      "fingerprint": "9e17f8a81e6ba98c3aa8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in freeClusterLink",
+      "scenario": "ai-117760639da3",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12930",
+      "fingerprint": "9e17f8a81e6ba98c3aa8",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

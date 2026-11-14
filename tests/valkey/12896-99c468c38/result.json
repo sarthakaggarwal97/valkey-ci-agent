@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99c468c38c597400f84df2128153e3abebe5e9f0",
+  "parent": "5b1fe925f214bdf7eee8dd4f35380559d8a85c5c",
+  "pr": 12896,
+  "pr_repo": "redis/redis",
+  "subject": "Fix crash caused by pubsubShardUnsubscribeAllChannelsInSlot not deleting the client (#12896)",
+  "date": "2023-12-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5766,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: pubsub.c:383 'retval == DICT_OK' is not true",
+      "scenario": "ai-0756590b295a",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12896",
+      "fingerprint": "c298109cb9c4980b3a40",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: pubsub.c:383 'retval == DICT_OK' is not true",
+      "scenario": "ai-72d1fb3d8b5d",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12896",
+      "fingerprint": "c298109cb9c4980b3a40",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.memory-stats-bytes-per-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: MEMORY STATS keys.bytes-per-key equals dataset bytes per key (not net-usage
+    per key)
+components:
+- use: valkey.action.commands
+  id: bpk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=1,20000 do redis.call('SET','k:'..i,2000000000+i,'EX',100000)\
+          \ end return redis.status_reply('OK')", 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 20000}}
+    - {command: [EVAL, "local t=redis.call('MEMORY','STATS') local b,d,k for i=1,#t,2\
+          \ do local n=t[i] if n=='keys.bytes-per-key' then b=t[i+1] elseif n=='dataset.bytes'\
+          \ then d=t[i+1] elseif n=='keys.count' then k=t[i+1] end end return b-math.floor(d/k)",
+        0], expect_difference: true, expect: {equals: 0}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [EVAL, "local v=string.rep('x',1000) for i=1,2000 do redis.call('SET','k:'..i,v)\
+          \ end return redis.status_reply('OK')", 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2000}}
+    - {command: [EVAL, "local t=redis.call('MEMORY','STATS') local b,d,k for i=1,#t,2\
+          \ do local n=t[i] if n=='keys.bytes-per-key' then b=t[i+1] elseif n=='dataset.bytes'\
+          \ then d=t[i+1] elseif n=='keys.count' then k=t[i+1] end end return b-math.floor(d/k)",
+        0], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bpk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bpk}

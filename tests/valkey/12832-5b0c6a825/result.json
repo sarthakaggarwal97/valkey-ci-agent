@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b0c6a8255af2d0e4921fa60d631bb3857724cb6",
+  "parent": "ca1f67af80434f831e8aa0eaaf8a6573bcb31bcb",
+  "pr": 12832,
+  "pr_repo": "redis/redis",
+  "subject": "Fix CLUSTER SHARDS crash in 7.0/7.2 mixed clusters where shard ids are not sync (#12832)",
+  "date": "2024-01-07",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.6656,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

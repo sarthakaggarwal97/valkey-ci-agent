@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b1fe925f214..99c468c38c59.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0756590b295a
+seed: 7001
+experiment:
+  id: proposed.shard-channel-slot-del-crash
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

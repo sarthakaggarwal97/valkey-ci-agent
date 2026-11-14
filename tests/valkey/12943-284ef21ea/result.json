@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "284ef21ea000f18d1eaac374679e0d0561f7bef8",
+  "parent": "87786342a525ddef1cee37fb156a328d6b2b28ec",
+  "pr": 12943,
+  "pr_repo": "redis/redis",
+  "subject": "Fix fd check in memtest_test_linux_anonymous_maps (#12943)",
+  "date": "2024-01-14",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4089,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes an error-path fd check (-1 vs 0) in memtest_test_linux_anonymous_maps, which runs only inside the crash report handler (doFastMemoryTest after SIGSEGV/SIGBUS) and only when open() on the logfile fails at crash time. No command, replication, persistence or tool path reaches it on a live server; exercising it would require deliberately crashing an instance (which the fuzzer's liveness oracle treats as a failure and whose crash-triggering DEBUG commands are refused) while also making the logfile unopenable, which no installed fault can do. The fix has no behaviour observable by a"
+}

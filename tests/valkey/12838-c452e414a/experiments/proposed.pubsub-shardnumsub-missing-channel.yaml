@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-shardnumsub-missing-channel
+deployment:
+  modes: [standalone]
+metadata:
+  description: PUBSUB SHARDNUMSUB of an unsubscribed shard channel when the slot dict
+    already exists must reply 0, not crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: shardnumsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, "{t}1"], connection: sub, expect: {exists: true}}
+    - {command: [PUBSUB, SHARDNUMSUB, "{t}1"], expect: {equals: ["{t}1", 1]}}
+    - {command: [PUBSUB, SHARDNUMSUB, "{t}2"], expect_difference: true, expect: {
+        equals: ["{t}2", 0]}}
+    - {command: [PUBSUB, SHARDNUMSUB, "{t}1", "{t}2"], expect_difference: true, expect: {
+        equals: ["{t}1", 1, "{t}2", 0]}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardnumsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardnumsub}

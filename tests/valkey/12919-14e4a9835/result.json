@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14e4a9835af2bb7df8c42cfb850bd19708cd73d0",
+  "parent": "50b8b997636a334e4a9a0f2e502afefdab36f0a8",
+  "pr": 12919,
+  "pr_repo": "redis/redis",
+  "subject": "Fix minor fd leak in rdbSaveToSlavesSockets (#12919)",
+  "date": "2024-01-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9068,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds one close(server.rdb_child_exit_pipe) solely in the parent's fork-failure branch of rdbSaveToSlavesSockets (rdb.c:3639, the childpid == -1 cleanup). The successful diskless-replication path already manages that fd correctly (kept open, then closed by backgroundSaveDoneHandlerSocket at rdb.c:3488 or on pipe EOF at replication.c:1551), so the added line never runs on any normal full resync. The only way to reach it is to make redisFork() fail during a diskless RDB-to-slaves-sockets transfer, which requires exhausting process/memory resource limits (root/ulimit control the runs do"
+}

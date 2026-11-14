@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca1f67af80434f831e8aa0eaaf8a6573bcb31bcb",
+  "parent": "4cae66f5e803c527c4e6141c06b94670162eca2c",
+  "pr": 12905,
+  "pr_repo": "redis/redis",
+  "subject": "Make RM_Yield thread-safe (#12905)",
+  "date": "2024-01-07",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 10,
+    "percent": 90,
+    "uncovered": [
+      "src/module.c:2423"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.3365,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-050ad9c7e98c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'yield-seq' returned ERROR: command 4 (GET k0) got no reply: TimeoutError: Timeout reading from /tmp/vfc-321oz_mo/s.sock"
+    },
+    {
+      "scenario": "ai-b81aaeef88da",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'yield-seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (read on connection bg), 23 (read on connection bg2), 28 (read on connection fg)"
+    },
+    {
+      "scenario": "ai-39f4695e6dc0",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'yield-seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (read on connection bg), 23 (read on connection bg2), 28 (read on connection fg)"
+    },
+    {
+      "scenario": "ai-93d05ceb5a5f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'yield-seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (read on connection bg), 23 (read on connection bg2), 28 (read on connection fg)"
+    }
+  ]
+}

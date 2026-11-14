@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b1fe925f214bdf7eee8dd4f35380559d8a85c5c",
+  "parent": "852795959822b60cbed190e88f7821969bc35670",
+  "pr": 12892,
+  "pr_repo": "redis/redis",
+  "subject": "Adjust redis-cli --cluster create arity from -2 to -1 (#12892)",
+  "date": "2023-12-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7444,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

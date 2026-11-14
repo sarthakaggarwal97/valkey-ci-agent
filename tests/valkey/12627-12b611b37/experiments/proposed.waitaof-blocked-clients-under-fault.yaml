@@ -1,0 +1,68 @@
+extends: [valkey.base]
+id: proposed.waitaof-blocked-clients-under-fault
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >
+    Clients blocked in WAITAOF and WAIT on the primary under appendfsync everysec
+    while the key-value workload writes and a replica is killed or stopped and brought
+    back. Exercises the new beforeSleep dont_sleep wakeup for clients_waiting_acks
+    when fsynced_reploff advances: blocked clients must wake correctly, the event
+    loop must not spin (quiet-end), and no acknowledged write may be lost (ledger).
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: waitaof
+  config:
+    instances: primary
+    timeout_s: 60
+    commands:
+    - {command: [SET, 'waitaof:k', r1], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r2], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r3], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [WAIT, 1, 0], expect: {min: 1}}
+    - {command: [SET, 'waitaof:k', r4], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r5], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r6], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r7], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [WAIT, 1, 0], expect: {min: 1}}
+    - {command: [SET, 'waitaof:k', r8], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r9], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:k', r10], expect: {exists: true}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {exists: true}}
+    - {command: [SET, 'waitaof:done', 1], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 1, 500], expect: {equals: [1, 1]}, wait_s: 60}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica, waitaof]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: waitaof}
