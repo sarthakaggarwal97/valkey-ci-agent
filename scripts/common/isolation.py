@@ -142,7 +142,8 @@ def kept_home(root: Path) -> Iterator[str]:
     commands the home is the workflow user's (``handed_to`` hands it back), and
     it is removed at the end.
     """
-    if not isolated_user():
+    if not os.environ.get(USER_ENV, "").strip():
+        # No account (``isolated_user`` is for a command, this runs none).
         yield ""
         return
     home = tempfile.mkdtemp(prefix="ci-fix-home-", dir=root.resolve().parent)
