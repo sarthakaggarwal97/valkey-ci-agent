@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "87eaf119cdcae9647556648a4b4260051ed39613",
+  "parent": "84fd745d65013bfdfc6d5482ebfbb1a1b7d66e05",
+  "pr": 13027,
+  "pr_repo": "redis/redis",
+  "subject": "Minor optimization for expire dict in defragKey (#13027)",
+  "date": "2024-02-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.8174,
+  "findings": [],
+  "recorded": []
+}

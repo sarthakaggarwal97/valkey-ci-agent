@@ -1,0 +1,27 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f20774eced7e..8cd62f82ca7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-856b006cee54
+seed: 7400
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 800
+    value_size: 1024
+    config_changes: 6
+    config_churn_keys:
+      maxmemory-policy:
+      - noeviction
+      - allkeys-lru
+      - volatile-ttl
+      lazyfree-lazy-expire:
+      - 'no'
+      - 'yes'
+      lazyfree-lazy-server-del:
+      - 'no'
+      - 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400

@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "492021db95288be2095ec7f1db2ee043fac3c2d9",
+  "parent": "af7ceeb76587b79fe33d3d8660b4128a34b6093d",
+  "pr": 13004,
+  "pr_repo": "redis/redis",
+  "subject": "Fix blocking commands timeout is reset due to re-processing command (#13004)",
+  "date": "2024-01-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 7,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/blocked.c:373",
+      "src/blocked.c:376",
+      "src/module.c:7805",
+      "src/module.c:7808",
+      "src/module.c:7813",
+      "src/module.c:7829",
+      "src/server.c:3652",
+      "src/server.c:3661"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 15.2722,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8914444ef26c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-df036018d31b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-e6002aace7f3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-bb7964c411ae",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-b4dad4c1bef2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-8663406f358e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-5d43912c6615",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

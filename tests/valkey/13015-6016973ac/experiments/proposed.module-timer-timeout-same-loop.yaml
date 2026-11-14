@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.module-timer-timeout-same-loop
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module-blocked client whose timer period equals its block timeout
+    is unblocked once in the same event loop without an assertion crash
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    period: {type: integer, default: 100}
+    timeout: {type: integer, default: 100}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timer
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [unblock_by_timer, {$ref: inputs.period}, {$ref: inputs.timeout}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timer}

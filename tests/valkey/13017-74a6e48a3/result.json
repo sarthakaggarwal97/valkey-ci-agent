@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74a6e48a3d2a86402cd653eb9e6626fdb78fedd8",
+  "parent": "f469dd8ca6f8aa9831bbdf822a0f16f3870afb8d",
+  "pr": 13017,
+  "pr_repo": "redis/redis",
+  "subject": "Fix module unblock crash due to no timeout_callback (#13017)",
+  "date": "2024-01-31",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/module.c:8441",
+      "src/module.c:8444"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.7752,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6fcdcc0773ab",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blockcrash' returned ERROR: command 0 (FSL.BPOP nokey 100 NO_TO_CB on connection blocker) got no reply: TimeoutError: Timeout reading from /tmp/vfc-kpvn96r6/s.sock"
+    },
+    {
+      "scenario": "ai-556945f707c4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blockcrash' returned ERROR: command 0 (FSL.BPOP nokey 100 NO_TO_CB on connection blocker) got no reply: TimeoutError: Timeout reading from /tmp/vfc-5eylcz0h/s.sock"
+    },
+    {
+      "scenario": "ai-dd036ee540fe",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'block' returned ERROR: command 3 (FSL.BPOP nkey2 100 NO_TO_CB) got no reply: TimeoutError: Timeout reading from /tmp/vfc-nyhzyfsq/s.sock"
+    },
+    {
+      "scenario": "ai-d4f3e71f34d2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'block' returned ERROR: command 3 (FSL.BPOP nkey2 100 NO_TO_CB) got no reply: TimeoutError: Timeout reading from /tmp/vfc-oww7v1nw/s.sock"
+    }
+  ]
+}

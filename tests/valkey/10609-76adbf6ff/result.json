@@ -1,0 +1,76 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "76adbf6ff01c566c01d9c8530a19a83f0f2c059f",
+  "parent": "492021db95288be2095ec7f1db2ee043fac3c2d9",
+  "pr": 10609,
+  "pr_repo": "redis/redis",
+  "subject": "Adds connection timeout option to redis-cli (#10609)",
+  "date": "2024-01-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 22,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cli_common.c:429",
+      "src/cli_common.c:430",
+      "src/cli_common.c:431",
+      "src/cli_common.c:433",
+      "src/cli_common.c:438",
+      "src/cli_common.c:439",
+      "src/cli_common.c:440",
+      "src/cli_common.c:442",
+      "src/redis-cli.c:1652",
+      "src/redis-cli.c:1655",
+      "src/redis-cli.c:2598",
+      "src/redis-cli.c:2654",
+      "src/redis-cli.c:2656",
+      "src/redis-cli.c:2657",
+      "src/redis-cli.c:2658",
+      "src/redis-cli.c:2659",
+      "src/redis-cli.c:2661",
+      "src/redis-cli.c:2662",
+      "src/redis-cli.c:4089",
+      "src/redis-cli.c:7914",
+      "src/redis-cli.c:9849",
+      "src/redis-cli.c:9850"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.6778,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f57c4dc9085c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cli' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-447075219831",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cluster-cli' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-96d4ee150538",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cli' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-5dbae24bc691",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cli' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    }
+  ]
+}

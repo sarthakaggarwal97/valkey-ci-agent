@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.kvstore-module-scan
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module RM_Scan drives dbScan over the kvstore, compared across builds
+    with each build's own module
+components:
+- use: valkey.action.commands
+  id: modscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 30
+    commands:
+    - {command: [SET, onlykey, onlyval], expect: {equals: OK}}
+    - {command: ["scan.scan_strings"]}
+    - {command: [DEBUG, POPULATE, "64"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 65}}
+    - {command: ["scan.scan_strings"], compare: skip}
+    - {command: [LPUSH, l, a], expect: {equals: 1}}
+    - {command: ["scan.scan_strings"], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modscan}

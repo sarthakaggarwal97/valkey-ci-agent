@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c5273cae189f..af7ceeb76587.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c1a78db528d
+seed: 102
+experiment:
+  id: proposed.cron-resize-cluster-cursor
+deployment:
+  mode: standalone
+  base_port: 7100

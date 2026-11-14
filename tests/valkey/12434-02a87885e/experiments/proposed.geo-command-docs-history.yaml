@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.geo-command-docs-history
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS gains history entries for GEORADIUS_RO, GEORADIUSBYMEMBER
+    and GEORADIUSBYMEMBER_RO, and the geo radius commands still dispatch and reply
+    identically
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, DOCS, georadius_ro], expect_difference: true, expect: {
+        contains: "Added support for uppercase unit names."}}
+    - {command: [COMMAND, DOCS, georadiusbymember], expect_difference: true, expect: {
+        contains: "Added the `ANY` option for `COUNT`."}}
+    - {command: [COMMAND, DOCS, georadiusbymember_ro], expect_difference: true, expect: {
+        contains: "Added the `ANY` option for `COUNT`."}}
+    - {command: [COMMAND, DOCS, georadius], expect: {contains: "Added the `ANY` option\
+          \ for `COUNT`."}}
+    - {command: [GEOADD, Sicily, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania], expect: {equals: 2}}
+    - {command: [GEORADIUSBYMEMBER_RO, Sicily, Palermo, 200, KM, COUNT, 10, ANY],
+      compare: unordered, expect: {contains: Catania}}
+    - {command: [GEORADIUS_RO, Sicily, 15, 37, 200, KM], compare: unordered, expect: {
+        contains: Palermo}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, Palermo, 250, km, ASC, COUNT, 2], expect: {
+        exists: true}}
+    - {command: [GEORADIUS, Sicily, 15, 37, 200, KM, ASC, STORE, dst], expect: {equals: 2}}
+    - {command: [ZRANGE, dst, 0, -1], expect: {equals: [Catania, Palermo]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

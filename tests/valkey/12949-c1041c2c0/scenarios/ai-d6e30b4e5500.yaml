@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 62153b3b2fdd..c1041c2c0d7b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d6e30b4e5500
+seed: 101
+experiment:
+  id: proposed.expire-avg-ttl-compare
+  inputs:
+    resp: 2
+    hz: '100'
+    effort: '1'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

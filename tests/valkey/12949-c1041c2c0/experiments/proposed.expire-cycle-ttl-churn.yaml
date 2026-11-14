@@ -1,0 +1,36 @@
+extends: [valkey.base]
+id: proposed.expire-cycle-ttl-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Waves of thousands of short-TTL keys under the concurrent key-value
+    workload drive the rewritten avg_ttl bookkeeping and repeat/time-limit loop of
+    activeExpireCycle on a live deployment; the ledger verifies no acknowledged (non-TTL)
+    write is lost, deployment-state verifies replica links while expire DELs propagate,
+    and liveness catches a crash or hang. DBSIZE thresholds assume the scenario keeps
+    stable_keys+mutable_keys at or below 1200.
+components:
+- use: valkey.action.commands
+  id: ttl-churn
+  depends_on: [writes]
+  config:
+    instances: primaries
+    timeout_s: 120
+    commands:
+    - command: [EVAL, "local n=0 for i=1,8000 do redis.call('SET','stale1:'..i,'x','PX',(i%500)+1)\
+          \ n=n+1 end for i=1,2000 do redis.call('SET','live:'..i,'v','PX',100000000)\
+          \ n=n+1 end return n", "0"]
+      expect: {equals: 10000}
+    - {command: [DBSIZE], wait_s: 120, expect: {max: 4800}}
+    - command: [EVAL, "for i=1,8000 do redis.call('SET','stale2:'..i,'x','PX',(i%450)+1)\
+          \ end return 1", "0"]
+      expect: {equals: 1}
+    - {command: [DBSIZE], wait_s: 120, expect: {max: 4800}}
+    - command: [EVAL, "for i=1,8000 do redis.call('SET','stale3:'..i,'x','PX',(i%350)+1)\
+          \ end return 1", "0"]
+      expect: {equals: 1}
+    - {command: [DBSIZE], wait_s: 120, expect: {max: 4800}}
+    - {command: [GET, "live:1"], expect: {equals: v}}
+required_events: [ttl-churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ttl-churn}

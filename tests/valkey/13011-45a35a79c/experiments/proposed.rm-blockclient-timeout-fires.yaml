@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.rm-blockclient-timeout-fires
+deployment:
+  modes: [standalone]
+metadata:
+  description: RM_BlockClient with no keys now sets bstate.timeout so the module timeout
+    callback fires; on the parent the client is never added to the timeout table and
+    waits for the full background delay
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blockdbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [block.debug, 3000, 200], expect_difference: true, expect: {equals: "Request\
+          \ timedout"}}
+    - {command: [block.debug_no_track, 3000, 200], expect_difference: true, expect: {
+        equals: "Request timedout"}}
+    - {command: [block.debug, 100, 5000], compare: skip, expect: {exists: true}}
+    - {command: [block.debug, 1000, -1], expect_difference: true, expect: {equals: "Request\
+          \ timedout"}}
+    - {command: [block.debug, 100, 9223372036854775807], expect: {error: "timeout\
+          \ is out of range"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [blockdbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blockdbg}

@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f20774eced7e..8cd62f82ca7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3f804c00abb1
+seed: 110
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 1500
+    run_before_crash_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7900
+  server_config:
+    auto-aof-rewrite-percentage: '50'
+    auto-aof-rewrite-min-size: 1kb
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '0'

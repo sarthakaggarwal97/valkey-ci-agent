@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f469dd8ca6f8aa9831bbdf822a0f16f3870afb8d",
+  "parent": "24f6d08b3f2d9de06fabdab980a06d62229a2b2f",
+  "pr": 12765,
+  "pr_repo": "redis/redis",
+  "subject": "Add novalues option to command HSCAN. (#12765)",
+  "date": "2024-01-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6793,
+  "findings": [],
+  "recorded": []
+}

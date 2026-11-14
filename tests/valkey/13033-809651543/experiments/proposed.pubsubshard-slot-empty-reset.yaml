@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.pubsubshard-slot-empty-reset
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER RESET SOFT that unassigns slots holding shard-channel subscriptions
+    must not iterate a freed dict after a slot's channel dict becomes empty
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardchan
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, "{alpha}1"], connection: sub1, expect: {equals: [ssubscribe,
+          "{alpha}1", 1]}}
+    - {command: [SSUBSCRIBE, "{alpha}2"], connection: sub2, expect: {equals: [ssubscribe,
+          "{alpha}2", 1]}}
+    - {command: [SSUBSCRIBE, "{bravo}1"], connection: sub3, expect: {equals: [ssubscribe,
+          "{bravo}1", 1]}}
+    - {command: [CLUSTER, RESET, SOFT], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardchan}

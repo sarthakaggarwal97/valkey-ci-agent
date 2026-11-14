@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey acd960522315..c5273cae189f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6dcbfc56b34b
+seed: 12985
+experiment:
+  id: proposed.module-try-alloc-api
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

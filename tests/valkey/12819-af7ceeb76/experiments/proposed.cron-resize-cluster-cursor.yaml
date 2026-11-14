@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.cron-resize-cluster-cursor
+deployment:
+  modes: [standalone]
+metadata:
+  description: In cluster mode the new resize cursor walks all 16384 slot dicts round-robin,
+    including empty ones, and expands a frozen slot dict; the parent cron walks only
+    non-empty slots and never expands
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {appendonly: 'no', hz: 500, enable-debug-command: 'yes'}
+    resp: 2
+    timeout_s: 240
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, '50000'], expect: {equals: OK}}
+    - {command: [MSET, '{t}a1', v, '{t}a2', v, '{t}a3', v, '{t}a4', v, '{t}a5', v,
+        '{t}a6', v, '{t}a7', v, '{t}a8', v, '{t}a9', v, '{t}a10', v, '{t}a11', v,
+        '{t}a12', v, '{t}a13', v, '{t}a14', v, '{t}a15', v, '{t}a16', v], expect: {
+        equals: OK}}
+    - {command: [BGSAVE], expect: {contains: 'Background saving started'}}
+    - {command: [MSET, '{t}b1', v, '{t}b2', v, '{t}b3', v, '{t}b4', v, '{t}b5', v,
+        '{t}b6', v, '{t}b7', v, '{t}b8', v, '{t}b9', v, '{t}b10', v, '{t}b11', v,
+        '{t}b12', v, '{t}b13', v, '{t}b14', v, '{t}b15', v, '{t}b16', v, '{t}b17',
+        v, '{t}b18', v, '{t}b19', v, '{t}b20', v, '{t}b21', v, '{t}b22', v, '{t}b23',
+        v, '{t}b24', v, '{t}b25', v, '{t}b26', v, '{t}b27', v, '{t}b28', v, '{t}b29',
+        v, '{t}b30', v, '{t}b31', v, '{t}b32', v, '{t}b33', v, '{t}b34', v, '{t}b35',
+        v, '{t}b36', v, '{t}b37', v, '{t}b38', v, '{t}b39', v, '{t}b40', v, '{t}b41',
+        v, '{t}b42', v, '{t}b43', v, '{t}b44', v, '{t}b45', v, '{t}b46', v, '{t}b47',
+        v], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [DEBUG, HTSTATS, '0'], wait_s: 45, expect_difference: true, expect: {
+        contains: 'table size: 64'}}
+    - {command: [DBSIZE], expect: {equals: 63}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

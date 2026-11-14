@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 24f6d08b3f2d..f469dd8ca6f8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-261765497514
+seed: 3
+experiment:
+  id: proposed.hscan-novalues
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

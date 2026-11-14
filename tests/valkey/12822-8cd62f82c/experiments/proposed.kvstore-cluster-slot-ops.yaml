@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.kvstore-cluster-slot-ops
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster-mode KEYS slot paths, DEBUG POPULATE dbExpand slot skipping,
+    CLUSTER FLUSHSLOTS, and delKeysInSlot via a higher-epoch slot takeover with keys
+    left behind
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [KEYS, "{notag}*"], node: 0}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{tag}a", "1"], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{tag}b", "2"], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "100"], node: 0, expect: {equals: OK}}
+    - {command: [KEYS, "{tag}*"], node: 0, compare: unordered}
+    - {command: [KEYS, "*"], node: 0, compare: unordered}
+    - {command: [DEBUG, HTSTATS, "0"], node: 0, compare: skip}
+    - {command: [CLUSTER, FLUSHSLOTS], node: 0, expect: {error: "DB must be empty"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, "12182", IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "12182", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 0, wait_s: 30, expect: {
+        equals: 0}}
+    - {command: [DBSIZE], node: 0}
+    - {command: [CLUSTER, FLUSHSLOTS], node: 1, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

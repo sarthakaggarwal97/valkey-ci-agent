@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.module-timer-eq-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module-blocked client whose timer period equals its block timeout
+    is unblocked by the timer and timed out in the same event loop; the parent asserts
+    and crashes, the change returns OK.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timer
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [unblock_by_timer, 100, 100], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timer}

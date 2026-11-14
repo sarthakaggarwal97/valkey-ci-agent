@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c1041c2c0d7b66e4d11104e64f6c81a34ca3a2f8",
+  "parent": "62153b3b2fdd96086c0eaa1735793b2ef8bb311c",
+  "pr": 12949,
+  "pr_repo": "redis/redis",
+  "subject": "Make db->avg_ttl more precise (#12949)",
+  "date": "2024-02-04",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 22,
+    "executed": 22,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.5488,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d6e30b4e5500",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (EVAL local n=0 for i=1,4000 do redis.call('SET','stale1:'..i,'x','PX',(i%400)+1) n=n+1 end for i=1,1000 do redis.call('SET','live:'..i,'"
+    },
+    {
+      "scenario": "ai-d6e30b4e5500",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d6e30b4e5500",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d6e30b4e5500",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3d25720c568a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (EVAL local n=0 for i=1,4000 do redis.call('SET','stale1:'..i,'x','PX',(i%400)+1) n=n+1 end for i=1,1000 do redis.call('SET','live:'..i,'"
+    },
+    {
+      "scenario": "ai-3d25720c568a",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3d25720c568a",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3d25720c568a",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

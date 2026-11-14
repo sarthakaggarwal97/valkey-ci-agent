@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8cd62f82ca7a..84fd745d6501.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1d6296d3ebad
+seed: 130312
+experiment:
+  id: proposed.kvstore-resize-cursor-null-dict
+  inputs:
+    resp: 3
+    hz: '100'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

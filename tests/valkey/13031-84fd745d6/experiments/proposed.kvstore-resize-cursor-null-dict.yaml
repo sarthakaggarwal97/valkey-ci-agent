@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.kvstore-resize-cursor-null-dict
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cron kvstore resize must push resize_cursor past NULL on-demand dicts. On the
+    parent build the cursor sticks at the first NULL slot dict (slot 0), so a populated
+    slot dict that can only be resized by serverCron keeps its stale table size forever;
+    the fixed build sweeps past NULL dicts and resizes it. The sequence builds one
+    under-expanded dict (inserts under DICT_RESIZE_AVOID while a slow BGSAVE child
+    is alive) and one over-sized dict plus its expires dict (deletes while a tiny
+    maxmemory blocks dictResizeAllowed), lifts the blockers, and polls DEBUG HTSTATS
+    until the cron sweep has shrunk and expanded them on the fixed build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: string, enum: ["100", "500"], default: "500"}
+components:
+- use: valkey.action.commands
+  id: cronresize
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    server_config:
+      hz: {$ref: inputs.hz}
+      enable-debug-command: "yes"
+      save: ""
+    commands:
+    - {command: [MSET, "{bar}:1", v, "{bar}:2", v, "{bar}:3", v], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "1000000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "saving started"}}
+    - {command: [MSET, "{bar}:4", v, "{bar}:5", v, "{bar}:6", v, "{bar}:7", v, "{bar}:8",
+        v, "{bar}:9", v, "{bar}:10", v, "{bar}:11", v, "{bar}:12", v, "{bar}:13",
+        v, "{bar}:14", v, "{bar}:15", v], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "0"], expect: {equals: OK}}
+    - {command: [MSET, "{foo}:1", v, "{foo}:2", v, "{foo}:3", v, "{foo}:4", v, "{foo}:5",
+        v, "{foo}:6", v, "{foo}:7", v, "{foo}:8", v, "{foo}:9", v, "{foo}:10", v,
+        "{foo}:11", v, "{foo}:12", v, "{foo}:13", v, "{foo}:14", v, "{foo}:15", v,
+        "{foo}:16", v, "{foo}:17", v, "{foo}:18", v, "{foo}:19", v, "{foo}:20", v,
+        "{foo}:21", v, "{foo}:22", v, "{foo}:23", v, "{foo}:24", v, "{foo}:25", v,
+        "{foo}:26", v, "{foo}:27", v, "{foo}:28", v, "{foo}:29", v, "{foo}:30", v,
+        "{foo}:31", v, "{foo}:32", v], expect: {equals: OK}}
+    - {command: [EXPIRE, "{foo}:1", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:2", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:3", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:4", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:5", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:6", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:7", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:8", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:9", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:10", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:11", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:12", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:13", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:14", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:15", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:16", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:17", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:18", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:19", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:20", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:21", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:22", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:23", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:24", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:25", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:26", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:27", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:28", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:29", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:30", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:31", "10000000"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{foo}:32", "10000000"], expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory, "100kb"], expect: {equals: OK}}
+    - {command: [DEL, "{foo}:1", "{foo}:2", "{foo}:3", "{foo}:4", "{foo}:5", "{foo}:6",
+        "{foo}:7", "{foo}:8", "{foo}:9", "{foo}:10", "{foo}:11", "{foo}:12", "{foo}:13",
+        "{foo}:14", "{foo}:15", "{foo}:16", "{foo}:17", "{foo}:18", "{foo}:19", "{foo}:20",
+        "{foo}:21", "{foo}:22", "{foo}:23", "{foo}:24", "{foo}:25", "{foo}:26", "{foo}:27",
+        "{foo}:28", "{foo}:29"], expect: {equals: 29}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 60, expect_difference: true, expect: {
+        contains: "table size: 20"}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 30, expect_difference: true, expect: {
+        contains: "table size: 4"}}
+    - {command: [DBSIZE], expect: {equals: 18}}
+    - {command: [GET, "{foo}:30"], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cronresize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cronresize}

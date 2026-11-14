@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "24f6d08b3f2d9de06fabdab980a06d62229a2b2f",
+  "parent": "7c9f41b52b3a664c07581c83f9256fbedb798dfe",
+  "pr": 12299,
+  "pr_repo": "redis/redis",
+  "subject": "Implement `CLIENT KILL MAXAGE <maxage>` (#12299)",
+  "date": "2024-01-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9104,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-668a1647e934",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'maxage' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (CLIENT KILL MAXAGE)"
+    },
+    {
+      "scenario": "ai-20d820b9243a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'maxage' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (CLIENT KILL MAXAGE)"
+    }
+  ]
+}

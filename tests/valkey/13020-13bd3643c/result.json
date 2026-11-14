@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13bd3643c25c708599d49bd2a2081d0b38c467a0",
+  "parent": "87eaf119cdcae9647556648a4b4260051ed39613",
+  "pr": 13020,
+  "pr_repo": "redis/redis",
+  "subject": "Re-compute active_defrag_running after adjusting defrag configurations (#13020)",
+  "date": "2024-02-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.8902,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only affects how promptly the internal active-defrag pacing value (server.active_defrag_running) reacts to CONFIG SET of the defrag cycle/threshold configs. This is unreachable and non-comparable in the fuzzer: it requires a jemalloc build (activedefrag is rejected otherwise), it depends on live allocator fragmentation that a self-contained empty-server command sequence cannot deterministically force to cross the defrag threshold, the two compared builds run on independent servers whose fragmentation and timing vary independently, and the only exposure is the active_defrag_running f"
+}

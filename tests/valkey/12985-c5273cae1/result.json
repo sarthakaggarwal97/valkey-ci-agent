@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c5273cae189f84197cea887419c67eeafce1fb58",
+  "parent": "acd960522315583844669f37dd059f21bd5faaae",
+  "pr": 12985,
+  "pr_repo": "redis/redis",
+  "subject": "Add RM_TryCalloc() and RM_TryRealloc() (#12985)",
+  "date": "2024-01-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4631,
+  "findings": [],
+  "recorded": []
+}

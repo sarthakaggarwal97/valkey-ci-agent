@@ -1,0 +1,85 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "45a35a79c761766d46b3d97169cf62969e2c9ff4",
+  "parent": "76adbf6ff01c566c01d9c8530a19a83f0f2c059f",
+  "pr": 13011,
+  "pr_repo": "redis/redis",
+  "subject": "Fix timeout not being set in module blockClient case (#13011)",
+  "date": "2024-01-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.9508,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in unblockClient(). #blocked.c:257",
+      "scenario": "ai-4b165b78f9ba",
+      "seed": 1301101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#13011",
+      "fingerprint": "33c92fe0489e710b31ed",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in unblockClient(). #blocked.c:257",
+      "scenario": "ai-cf2375de5747",
+      "seed": 1301102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#13011",
+      "fingerprint": "33c92fe0489e710b31ed",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in unblockClient(). #blocked.c:257",
+      "scenario": "ai-ca808456a41e",
+      "seed": 76001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#13011",
+      "fingerprint": "33c92fe0489e710b31ed",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in unblockClient(). #blocked.c:257",
+      "scenario": "ai-73a5b1fb3b73",
+      "seed": 76002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#13011",
+      "fingerprint": "33c92fe0489e710b31ed",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157"
+    }
+  ],
+  "recorded": []
+}

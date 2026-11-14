@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.rm-blockclient-timeout-unblock-callback
+deployment:
+  modes: [standalone]
+metadata:
+  description: BLOCK.BLOCK's timeout callback unblocks the client from the main thread
+    once bstate.timeout is set; on the parent the client stays blocked until BLOCK.RELEASE
+components:
+- use: valkey.action.commands
+  id: blockblk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 90
+    commands:
+    - {command: [block.block, 3000], connection: blocked}
+    - {command: [block.is_blocked], wait_s: 5, expect: {equals: 1}}
+    - {command: [block.is_blocked], wait_s: 15, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [block.release, cleanup], expect_difference: true, expect: {error: "No\
+          \ blocked client"}}
+    - {command: [block.is_blocked], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [blockblk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blockblk}

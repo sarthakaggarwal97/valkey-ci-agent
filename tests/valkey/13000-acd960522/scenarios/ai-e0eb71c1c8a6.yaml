@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5358bd7cdd96..acd960522315.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0eb71c1c8a6
+seed: 1301
+experiment:
+  id: proposed.maxmemory-samples-overflow
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

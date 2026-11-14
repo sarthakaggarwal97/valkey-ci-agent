@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.expire-avg-ttl-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: TTL-heavy churn drives the rewritten avg_ttl accounting in activeExpireCycle
+    on both builds; stale keys must be reclaimed, live keys kept, and INFO keyspace
+    must keep reporting avg_ttl. No deterministic reply changes exist (avg_ttl is
+    timing-dependent), so no command is marked expect_difference; the comparison runs
+    the changed loop under identical stress on both builds and the expects plus liveness
+    judge each side.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: string, enum: ["10", "100", "500"], default: "100"}
+    effort: {type: string, enum: ["1", "5", "10"], default: "1"}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hz: {$ref: inputs.hz}
+      active-expire-effort: {$ref: inputs.effort}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [EVAL, "local n=0 for i=1,4000 do redis.call('SET','stale1:'..i,'x','PX',(i%400)+1)\
+          \ n=n+1 end for i=1,1000 do redis.call('SET','live:'..i,'v','PX',100000000)\
+          \ n=n+1 end return n", "0"]
+      expect: {equals: 5000}
+    - {command: [DBSIZE], wait_s: 90, compare: skip, expect: {max: 1400}}
+    - {command: [GET, "live:1"], expect: {equals: v}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "avg_ttl="}}
+    - command: [EVAL, "for i=1,4000 do redis.call('SET','stale2:'..i,'x','PX',(i%300)+1)\
+          \ end return 1", "0"]
+      expect: {equals: 1}
+    - {command: [DBSIZE], wait_s: 90, compare: skip, expect: {max: 1400}}
+    - {command: [GET, "live:1000"], expect: {equals: v}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - command: [EVAL, "for i=1,3000 do redis.call('SET','gone:'..i,'x','PX',(i%200)+1)\
+          \ end return 1", "0"]
+      expect: {equals: 1}
+    - {command: [DBSIZE], wait_s: 90, compare: skip, expect: {max: 600}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "avg_ttl="}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "62153b3b2fdd96086c0eaa1735793b2ef8bb311c",
+  "parent": "9a7d3118551d505d7e86ed9d9f38f56429320f53",
+  "pr": 12925,
+  "pr_repo": "redis/redis",
+  "subject": "Refine the purpose of rdb saving with accurate flags (#12925)",
+  "date": "2024-02-01",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8849,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only passes more accurate RDBFLAGS values into save functions, but no save-path code consumes RDBFLAGS_REPLICATION on this checkout: rdbSaveInfoAuxFields and rdbSaveDb test only RDBFLAGS_AOF_PREAMBLE, rdbSaveInternal tests only RDBFLAGS_KEEP_CACHE, and startSaving's module-subevent selection tests only RDBFLAGS_AOF_PREAMBLE and the pid (no rdbSave caller passes AOF_PREAMBLE; the AOF rewrite calls rdbSaveRio directly). RDBFLAGS_REPLICATION's only consumer is the loading path, which is untouched. The RDB bytes, aux fields, module events, and page-cache behavior are identical on both b"
+}

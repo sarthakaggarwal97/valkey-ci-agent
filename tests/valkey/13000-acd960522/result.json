@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "acd960522315583844669f37dd059f21bd5faaae",
+  "parent": "5358bd7cdd9655feabfea98032e6de72dbd5aeca",
+  "pr": 13000,
+  "pr_repo": "redis/redis",
+  "subject": "Fix maxmemory-samples stack overflow crash in evictionPoolPopulate, limit its value to [1,64] (#13000)",
+  "date": "2024-01-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.525,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status -11",
+      "scenario": "ai-e0eb71c1c8a6",
+      "seed": 1301,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13000",
+      "fingerprint": "f415d05a46524eb65a36",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status -11",
+      "scenario": "ai-1e55b7e075be",
+      "seed": 1302,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13000",
+      "fingerprint": "f415d05a46524eb65a36",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

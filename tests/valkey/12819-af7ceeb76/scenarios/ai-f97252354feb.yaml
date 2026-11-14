@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c5273cae189f..af7ceeb76587.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f97252354feb
+seed: 103
+experiment:
+  id: proposed.cron-expand-expires-after-fork
+deployment:
+  mode: standalone
+  base_port: 7200

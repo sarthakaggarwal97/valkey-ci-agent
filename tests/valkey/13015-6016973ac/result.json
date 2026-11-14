@@ -1,0 +1,90 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6016973ac01b8b85a0361f885212b83443187304",
+  "parent": "74a6e48a3d2a86402cd653eb9e6626fdb78fedd8",
+  "pr": 13015,
+  "pr_repo": "redis/redis",
+  "subject": "Fix module assertion crash when timer and timeout are unlocked in the same event loop (#13015)",
+  "date": "2024-01-31",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/blocked.c:711",
+      "src/module.c:7702",
+      "src/module.c:7703",
+      "src/module.c:7705"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.0008,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2089 'c->duration == 0' is not true",
+      "scenario": "ai-a3782da9e7a8",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13015",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2089 'c->duration == 0' is not true",
+      "scenario": "ai-a6ccdb98b7e9",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13015",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2089 'c->duration == 0' is not true",
+      "scenario": "ai-f66e5e5b7c80",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13015",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2089 'c->duration == 0' is not true",
+      "scenario": "ai-53b8cad25d39",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13015",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

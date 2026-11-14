@@ -1,0 +1,67 @@
+extends: [valkey.base]
+id: proposed.defrag-expires-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Aggressive active defrag over a fragmented dataset of volatile keys;
+    the expires dict entry must follow each relocated key name, so short-TTL keys
+    still expire, long-TTL keys survive, and nothing crashes
+inputs:
+  properties:
+    churn_s: {type: number, minimum: 5, maximum: 120, default: 25}
+components:
+- use: valkey.action.commands
+  id: seed-volatile
+  config:
+    timeout_s: 60
+    commands:
+    - command:
+      - EVAL
+      - "for i=1,120000 do redis.call('SET','dfrag:'..i,string.rep('x',64),'EX',900)\
+        \ end return 'OK'"
+      - 0
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "for i=1,120000,2 do redis.call('DEL','dfrag:'..i) end return 'OK'"
+      - 0
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "for i=2,30000,2 do redis.call('EXPIRE','dfrag:'..i,15) end return 'OK'"
+      - 0
+      expect: {equals: OK}
+    - command: [DBSIZE]
+      expect: {min: 45000}
+- use: valkey.action.sleep
+  id: churn
+  depends_on: [writes, seed-volatile]
+  config:
+    seconds: {$ref: inputs.churn_s}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [churn]
+  config:
+    timeout_s: 60
+    commands:
+    - command: [GET, "dfrag:2"]
+      expect: {equals: null}
+    - command: [GET, "dfrag:15000"]
+      expect: {equals: null}
+    - command: [GET, "dfrag:60000"]
+      expect: {contains: "xxxx"}
+    - command:
+      - EVAL
+      - "return #redis.call('KEYS','dfrag:*')"
+      - 0
+      expect: {equals: 45000}
+- use: valkey.observer.log
+  id: defrag-log
+  config:
+    instances: primary
+    expect:
+    - {evidence_id: valkey.defrag.started, pattern: "Starting active defrag", required: true}
+required_events: [seed-volatile.completed, churn.completed, verify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-volatile}
+- {evidence_id: valkey.command.sequence, source: verify}

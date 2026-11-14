@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "80965154324a931a6664ad13fcc0f7aa49efc6cd",
+  "parent": "13bd3643c25c708599d49bd2a2081d0b38c467a0",
+  "pr": 13033,
+  "pr_repo": "redis/redis",
+  "subject": "Fix invalid dictNext usage when pubsubshard_channels became empty (#13033)",
+  "date": "2024-02-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.2177,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

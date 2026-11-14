@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7c9f41b52b3a..24f6d08b3f2d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-668a1647e934
+seed: 12299
+experiment:
+  id: proposed.client-kill-maxage
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.cron-expand-after-fork
+deployment:
+  modes: [standalone]
+metadata:
+  description: After a fork child exits, serverCron now expands an under-sized main
+    dict with no write needed; the parent build's cron only shrinks, so the overloaded
+    table stays frozen
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: 'no', hz: 100, enable-debug-command: 'yes'}
+    resp: 2
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, '50000'], expect: {equals: OK}}
+    - {command: [MSET, a1, v, a2, v, a3, v, a4, v, a5, v, a6, v, a7, v, a8, v, a9,
+        v, a10, v, a11, v, a12, v, a13, v, a14, v, a15, v, a16, v], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: 'Background saving started'}}
+    - {command: [MSET, b1, v, b2, v, b3, v, b4, v, b5, v, b6, v, b7, v, b8, v, b9,
+        v, b10, v, b11, v, b12, v, b13, v, b14, v, b15, v, b16, v, b17, v, b18, v,
+        b19, v, b20, v, b21, v, b22, v, b23, v, b24, v, b25, v, b26, v, b27, v, b28,
+        v, b29, v, b30, v, b31, v, b32, v, b33, v, b34, v, b35, v, b36, v, b37, v,
+        b38, v, b39, v, b40, v, b41, v, b42, v, b43, v, b44, v, b45, v, b46, v, b47,
+        v], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [DEBUG, HTSTATS, '0'], wait_s: 30, expect_difference: true, expect: {
+        contains: 'table size: 64'}}
+    - {command: [DBSIZE], expect: {equals: 63}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

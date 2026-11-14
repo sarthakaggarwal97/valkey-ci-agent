@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 13bd3643c25c..80965154324a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b673b5afb2e4
+seed: 103
+experiment:
+  id: proposed.pubsubshard-slot-empty-reset
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

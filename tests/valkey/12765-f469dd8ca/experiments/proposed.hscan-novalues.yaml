@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.hscan-novalues
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSCAN NOVALUES returns fields only, on listpack and hashtable encodings,
+    with MATCH and COUNT; SCAN, SSCAN and ZSCAN reject the token with a new error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2, f3, v3, "", ev, novalues, nv], expect: {
+        equals: 5}}
+    - {command: [HSCAN, h1, 0, NOVALUES], expect_difference: true, expect: {equals: [
+          "0", [f1, f2, f3, "", novalues]]}}
+    - {command: [HSCAN, h1, 0, novalues], expect_difference: true, expect: {equals: [
+          "0", [f1, f2, f3, "", novalues]]}}
+    - {command: [HSCAN, h1, 0, MATCH, "f*", NOVALUES], expect_difference: true, expect: {
+        equals: ["0", [f1, f2, f3]]}}
+    - {command: [HSCAN, h1, 0, NOVALUES, MATCH, "f*"], expect_difference: true, expect: {
+        equals: ["0", [f1, f2, f3]]}}
+    - {command: [HSCAN, h1, 0, COUNT, 100, NOVALUES], expect_difference: true, expect: {
+        equals: ["0", [f1, f2, f3, "", novalues]]}}
+    - {command: [HSCAN, h1, 0], expect: {equals: ["0", [f1, v1, f2, v2, f3, v3, "",
+            ev, novalues, nv]]}}
+    - {command: [HSCAN, h1, 0, MATCH, "f*"], expect: {equals: ["0", [f1, v1, f2, v2,
+            f3, v3]]}}
+    - {command: [HSCAN, nosuchkey, 0, NOVALUES], expect: {equals: ["0", []]}}
+    - {command: [SADD, s1, a, b], expect: {equals: 2}}
+    - {command: [SSCAN, s1, 0, NOVALUES], expect_difference: true, expect: {error: "NOVALUES\
+          \ option can only be used in HSCAN"}}
+    - {command: [ZADD, z1, 1, a], expect: {equals: 1}}
+    - {command: [ZSCAN, z1, 0, NOVALUES], expect_difference: true, expect: {error: "NOVALUES\
+          \ option can only be used in HSCAN"}}
+    - {command: [SCAN, 0, NOVALUES], expect_difference: true, expect: {error: "NOVALUES\
+          \ option can only be used in HSCAN"}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, 0], expect: {equals: OK}}
+    - {command: [HSET, h2, onlyfield, onlyvalue], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h2], compare: skip}
+    - {command: [HSCAN, h2, 0, NOVALUES], expect_difference: true, expect: {equals: [
+          "0", [onlyfield]]}}
+    - {command: [HSCAN, h2, 0, NOVALUES, NOVALUES], expect_difference: true, expect: {
+        equals: ["0", [onlyfield]]}}
+    - {command: [HSCAN, h2, 0, COUNT, 1000, NOVALUES], expect_difference: true, expect: {
+        equals: ["0", [onlyfield]]}}
+    - {command: [HSCAN, h2, 0], expect: {equals: ["0", [onlyfield, onlyvalue]]}}
+    - {command: [HSET, h3, a1, x, a2, x, a3, x, a4, x, a5, x, unique1, u], expect: {
+        equals: 6}}
+    - {command: [HSCAN, h3, 0, COUNT, 1000, MATCH, "unique*", NOVALUES], expect_difference: true,
+      expect: {equals: ["0", [unique1]]}}
+    - {command: [HSCAN, h3, 0, COUNT, 1000, MATCH, "zz*", NOVALUES], expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [HSET, h1, g1, w1], expect: {equals: 1}}
+    - {command: [HSCAN, h1, 0, COUNT, 1000, MATCH, "g*", NOVALUES], expect_difference: true,
+      expect: {equals: ["0", [g1]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hscan}

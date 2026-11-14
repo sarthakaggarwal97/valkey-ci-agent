@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 76adbf6ff01c..45a35a79c761.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ca808456a41e
+seed: 76001
+experiment:
+  id: proposed.rm-blockclient-timeout-fires
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

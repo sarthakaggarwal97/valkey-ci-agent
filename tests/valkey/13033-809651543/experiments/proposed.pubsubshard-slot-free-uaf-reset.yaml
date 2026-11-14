@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.pubsubshard-slot-free-uaf-reset
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER RESET SOFT with shard-channel subscribers empties and frees
+    a slot dict mid-iteration; the parent reads the freed dict (use-after-free)
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: shardchan
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, "ch{t}1"], connection: sub, expect: {exists: true}}
+    - {command: [SSUBSCRIBE, "ch{t}2"], connection: sub, expect: {exists: true}}
+    - {command: [SSUBSCRIBE, "ch{t}3"], connection: sub, expect: {exists: true}}
+    - {command: [PUBSUB, SHARDCHANNELS], compare: unordered, expect: {exists: true}}
+    - {command: [CLUSTER, RESET, SOFT], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardchan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardchan}

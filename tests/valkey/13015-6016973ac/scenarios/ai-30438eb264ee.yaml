@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 74a6e48a3d2a..6016973ac01b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-30438eb264ee
+seed: 1
+experiment:
+  id: proposed.module-timer-eq-timeout
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

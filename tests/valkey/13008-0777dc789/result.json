@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0777dc7896365ff50ac402c8f65cbc826aa34c69",
+  "parent": "80965154324a931a6664ad13fcc0f7aa49efc6cd",
+  "pr": 13008,
+  "pr_repo": "redis/redis",
+  "subject": "Improve error handling in connSocketBlockingConnect for various connction failures (#13008)",
+  "date": "2024-02-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7413,
+  "findings": [],
+  "recorded": []
+}

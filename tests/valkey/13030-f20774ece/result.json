@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f20774eced7eba5dfb9cf9b76ed5d6aa3950177c",
+  "parent": "02a87885e64c4f911aaefc04b2099cfb780ef720",
+  "pr": 13030,
+  "pr_repo": "redis/redis",
+  "subject": "Fix active expire timeout when db done the scanning (#13030)",
+  "date": "2024-02-05",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.0217,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a performance/timeout fix to the local active-expire cron loop. The added db_done flag only changes the repeat heuristic so a fully-scanned expires dictionary is not needlessly re-scanned; it does not change which keys are reclaimed (the full first pass already expires and propagates every sampled key), any command reply, DBSIZE, memory correctness, replication, or persistence, and introduces no crash or hang risk. Its sole observable effect is the internal expired_time_cap_reached_count statistic and reduced CPU/expire-cycle latency, which is driven by active-expire timer firing again"
+}

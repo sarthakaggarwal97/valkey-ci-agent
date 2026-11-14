@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.maxmemory-samples-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: maxmemory-samples above 64 is rejected on the change build; on the
+    parent it is accepted and crashes evictionPoolPopulate with a stack overflow when
+    eviction runs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, maxmemory-samples, '64'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-samples, '65'], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, maxmemory-samples, '2000000000'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, '100000'], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

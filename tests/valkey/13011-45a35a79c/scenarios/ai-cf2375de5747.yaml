@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 76adbf6ff01c..45a35a79c761.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cf2375de5747
+seed: 1301102
+experiment:
+  id: proposed.module-block-timeout
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

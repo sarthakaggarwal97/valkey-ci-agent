@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "02a87885e64c4f911aaefc04b2099cfb780ef720",
+  "parent": "c1041c2c0d7b66e4d11104e64f6c81a34ca3a2f8",
+  "pr": 12434,
+  "pr_repo": "redis/redis",
+  "subject": "Add missing structural API changes to JSON file (#12434)",
+  "date": "2024-02-04",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.0774,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1f49d943d233",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'docs' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (ZRANGE dst 0 -1)"
+    },
+    {
+      "scenario": "ai-bd1b240ba1fe",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'docs' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (ZRANGE dst 0 -1)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

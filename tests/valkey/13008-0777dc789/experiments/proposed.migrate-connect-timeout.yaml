@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.migrate-connect-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: MIGRATE to an unreachable host that times out the TCP connect reports
+    a connect error, not a write/read error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [MIGRATE, "192.0.2.1", "6379", k, "0", "500"], expect_difference: true,
+      expect: {error: "connecting"}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

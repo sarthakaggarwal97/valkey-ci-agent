@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.pubsubshard-slot-empty-delslots
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Unassigning a slot that holds shard-channel subscriptions must not
+    iterate a freed dict after the slot's channel dict becomes empty
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardchan
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, "{tag}a"], connection: sub1, expect: {equals: [ssubscribe,
+          "{tag}a", 1]}}
+    - {command: [SSUBSCRIBE, "{tag}b"], connection: sub2, expect: {equals: [ssubscribe,
+          "{tag}b", 1]}}
+    - {command: [SSUBSCRIBE, "{tag}c"], connection: sub3, expect: {equals: [ssubscribe,
+          "{tag}c", 1]}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 16383], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardchan}

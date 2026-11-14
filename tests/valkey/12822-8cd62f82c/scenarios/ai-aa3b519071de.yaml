@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f20774eced7e..8cd62f82ca7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aa3b519071de
+seed: 7000
+experiment:
+  id: proposed.pubsub-shard-numsub-kvstore
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

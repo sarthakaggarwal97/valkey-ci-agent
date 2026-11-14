@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 62153b3b2fdd..c1041c2c0d7b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c821f8e936f0
+seed: 303
+experiment:
+  id: proposed.expire-cycle-ttl-churn
+  inputs:
+    stable_keys: 1000
+    mutable_keys: 200
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    hz: '500'
+    active-expire-effort: '10'
+    lazyfree-lazy-expire: 'yes'

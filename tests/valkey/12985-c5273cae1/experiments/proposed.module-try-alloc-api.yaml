@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-try-alloc-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: RM_TryCalloc and RM_TryRealloc are registered and allocate usable memory,
+    driven via misc.so's test.malloc_api
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tryalloc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [SET, k2, v2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: OK}}
+    - {command: [GET, k2], expect_difference: true, expect: {equals: v2}}
+    - {command: [test.malloc_api], expect_difference: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [tryalloc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tryalloc}

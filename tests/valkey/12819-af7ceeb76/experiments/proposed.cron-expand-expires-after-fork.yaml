@@ -1,0 +1,107 @@
+extends: [valkey.liveness]
+id: proposed.cron-expand-expires-after-fork
+deployment:
+  modes: [standalone]
+metadata:
+  description: The changed cron loop also handles the DB_EXPIRES sub-dict; an expires
+    table frozen small during a fork is expanded by cron on the change, never on the
+    parent
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: 'no', hz: 100, enable-debug-command: 'yes'}
+    resp: 2
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, '20000'], expect: {equals: OK}}
+    - {command: [MSET, k1, v, k2, v, k3, v, k4, v, k5, v, k6, v, k7, v, k8, v, k9,
+        v, k10, v, k11, v, k12, v, k13, v, k14, v, k15, v, k16, v, k17, v, k18, v,
+        k19, v, k20, v, k21, v, k22, v, k23, v, k24, v, k25, v, k26, v, k27, v, k28,
+        v, k29, v, k30, v, k31, v, k32, v, k33, v, k34, v, k35, v, k36, v, k37, v,
+        k38, v, k39, v, k40, v, k41, v, k42, v, k43, v, k44, v, k45, v, k46, v, k47,
+        v, k48, v, k49, v, k50, v, k51, v, k52, v, k53, v, k54, v, k55, v, k56, v,
+        k57, v, k58, v, k59, v, k60, v, k61, v, k62, v, k63, v, k64, v, k65, v, k66,
+        v, k67, v, k68, v, k69, v, k70, v, k71, v, k72, v, k73, v, k74, v, k75, v,
+        k76, v, k77, v, k78, v, k79, v, k80, v, k81, v, k82, v, k83, v, k84, v, k85,
+        v, k86, v, k87, v, k88, v, k89, v, k90, v, k91, v, k92, v, k93, v, k94, v,
+        k95, v, k96, v, k97, v, k98, v, k99, v, k100, v], expect: {equals: OK}}
+    - {command: [EXPIRE, k1, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k2, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k3, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k4, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k5, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k6, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k7, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k8, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k9, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k10, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k11, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k12, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k13, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k14, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k15, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k16, '100000'], expect: {equals: 1}}
+    - {command: [BGSAVE], expect: {contains: 'Background saving started'}}
+    - {command: [EXPIRE, k17, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k18, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k19, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k20, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k21, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k22, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k23, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k24, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k25, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k26, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k27, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k28, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k29, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k30, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k31, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k32, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k33, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k34, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k35, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k36, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k37, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k38, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k39, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k40, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k41, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k42, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k43, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k44, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k45, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k46, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k47, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k48, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k49, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k50, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k51, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k52, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k53, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k54, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k55, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k56, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k57, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k58, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k59, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k60, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k61, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k62, '100000'], expect: {equals: 1}}
+    - {command: [EXPIRE, k63, '100000'], expect: {equals: 1}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 25, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [DEBUG, HTSTATS, '0'], wait_s: 30, expect_difference: true, expect: {
+        contains: 'table size: 64'}}
+    - {command: [DBSIZE], expect: {equals: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

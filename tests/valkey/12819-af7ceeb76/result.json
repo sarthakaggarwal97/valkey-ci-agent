@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af7ceeb76587b79fe33d3d8660b4128a34b6093d",
+  "parent": "c5273cae189f84197cea887419c67eeafce1fb58",
+  "pr": 12819,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize resizing hash table to resize not only non-empty dicts. (#12819)",
+  "date": "2024-01-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 28,
+    "executed": 26,
+    "percent": 92,
+    "uncovered": [
+      "src/t_zset.c:2027",
+      "src/t_zset.c:2557"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6216,
+  "findings": [],
+  "recorded": []
+}

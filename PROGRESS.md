@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T10:32+00:00.
+Updated 2026-11-14T10:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2324 | 216 | #13008 (2024-02-06) | 305 | 247.9 |
+| valkey-io/valkey | 2346 | 194 | #12899 (2024-01-27) | 327 | 247.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
 | valkey-io/valkey-search | 690 | 0 | f8106e72e984 (2024-11-27) | 9 | 42.4 |
@@ -13,28 +13,28 @@ Updated 2026-11-14T10:32+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-14T08:50:26+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43568547734): 20 merge(s) tested, 5 without a code change.
+[2026-11-14T10:39:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43577709618): 20 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35) ([tests](tests/valkey/35-3782446a4/)): Untrademark json files (#35): 2 of 2 test(s) reached the change
-- [redis/redis#12996](https://github.com/redis/redis/pull/12996) ([tests](tests/valkey/12996-f6785df66/)): Defragger improvements around large bins (#12996): 2 of 5 test(s) reached the change, coverage 94%
-- [redis/redis#13056](https://github.com/redis/redis/pull/13056) ([tests](tests/valkey/13056-ca5cac998/)): xinfo-stream add minimum to seen-time, skip logreqres in fuzzer (#13056): declined: The change edits only metadata and test harness files: it adds a 'minimum: 0' annotation to the seen-time field in src/commands/xinfo-stream.json (documentation/schema metadata, not used by the server at runtime to compute or format replies) and adds a 'logreqres:skip' tag to tests/integra
-- [redis/redis#13062](https://github.com/redis/redis/pull/13062) ([tests](tests/valkey/13062-3c2ea1ea9/)): Fix wathced client test timing issue caused by late close (#13062): declined: The change is test-only: it fixes a flaky assertion in tests/unit/info.tcl by adding a wait_for_watched_clients_count helper (tests/support/util.tcl) and polling instead of asserting watching_clients immediately after a client close. The only change under src/ is a one-line comment fix in 
-- [redis/redis#12973](https://github.com/redis/redis/pull/12973) ([tests](tests/valkey/12973-fc3a68d8f/)): add -fno-omit-frame-pointer to default complication flags (#12973): declined: The change only adds -fno-omit-frame-pointer to the default compiler flags in src/Makefile (a build/CI change). It affects code generation for debuggability and profiling (keeping the frame pointer register) but introduces no behavioral, protocol, replication, persistence, or data-path dif
-- [redis/redis#13063](https://github.com/redis/redis/pull/13063) ([tests](tests/valkey/13063-8876d264a/)): Calculate the incremental rehash time more precisely (#13063): declined: The change only refactors how the ~1ms incremental-rehash CPU budget is measured and split across dicts in kvstoreIncrementallyRehash and databasesCron: work is now done before the time check and each call receives the remaining rather than the full budget. dictRehash/dictRehashMicrosecond
-- [redis/redis#13041](https://github.com/redis/redis/pull/13041) ([tests](tests/valkey/13041-9103ccc39/)): AOF_FSYNC_EVERYSEC higher resolution, change aof_last_fsync and aof_flush_postponed_start to use mstime (#13041): 0 of 5 test(s) reached the change, coverage 100%
-- [redis/redis#13059](https://github.com/redis/redis/pull/13059) ([tests](tests/valkey/13059-dd92dd8fb/)): redis-cli - fix sscanf incorrect return-value check warnings (#13059): declined: The change only tightens two sscanf return-value checks in redis-cli's matchNoTokenArg, which is used solely to compute the interactive linenoise syntax hint text (hintsCallback). That code runs only in interactive raw-TTY mode; with piped stdin (as in the fuzzer's tools runner) linenoise 
-- [redis/redis#12966](https://github.com/redis/redis/pull/12966) ([tests](tests/valkey/12966-50d6fe8c4/)): Add metrics for WATCH (#12966): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13054](https://github.com/redis/redis/pull/13054) ([tests](tests/valkey/13054-c85487374/)): Minor optimization in kvstoreDictAddRaw when dict exists (#13054): declined: The change is a pure refactor with no behaviour change: createDictIfNeeded now returns the dict pointer so kvstoreDictAddRaw avoids one redundant kvstoreGetDict lookup, with identical creation condition, allocated_dicts accounting and cumulativeKeyCountAdd path. The remaining hunks are com
-- [redis/redis#13052](https://github.com/redis/redis/pull/13052) ([tests](tests/valkey/13052-063de675e/)): zunionInterDiffGenericCommand use ztrycalloc to avoid OOM panic (#13052): declined: This is an OOM-hardening change: zcalloc of the transient src table in zunionInterDiffGenericCommand (ZUNION/ZINTER/ZDIFF and *STORE/ZINTERCARD) is replaced by ztrycalloc with a NULL check returning an error instead of aborting. Its only observable difference from the parent is when that s
-- [redis/redis#13046](https://github.com/redis/redis/pull/13046) ([tests](tests/valkey/13046-c1d2ac2a7/)): Do not include gossip about receiver in cluster messages (#13046): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#13050](https://github.com/redis/redis/pull/13050) ([tests](tests/valkey/13050-e9c795e77/)): Fix loading rdb opcode RDB_OPCODE_RESIZEDB (#13050): 1 of 2 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded); crash, fixed by redis/redis#13050 (recorded)
-- [redis/redis#13049](https://github.com/redis/redis/pull/13049) ([tests](tests/valkey/13049-7ca0b84af/)): Fix loading rdb opcode RDB_OPCODE_SLOT_INFO (#13049): 1 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#13013](https://github.com/redis/redis/pull/13013) ([tests](tests/valkey/13013-676f27acb/)): Fix the failure of defrag test under 32-bit (#13013): 0 of 9 test(s) reached the change, coverage 95%
-- [redis/redis#13043](https://github.com/redis/redis/pull/13043) ([tests](tests/valkey/13043-493e31e3a/)): Add new DEBUG dict-resizing command to disable the dict resize (#13043): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13042](https://github.com/redis/redis/pull/13042) ([tests](tests/valkey/13042-813327b23/)): Fix SORT STORE quicklist with the right options (#13042): 3 of 5 test(s) reached the change, coverage 88%
-- [redis/redis#13040](https://github.com/redis/redis/pull/13040) ([tests](tests/valkey/13040-1e8dc1da0/)): Fix crash due to merge of quicklist node introduced by #12955 (#13040): 2 of 2 test(s) reached the change, coverage 87%; crash, fixed by redis/redis#13040 (recorded)
-- [redis/redis#13038](https://github.com/redis/redis/pull/13038) ([tests](tests/valkey/13038-81666a651/)): Fix heap-use-after-free when pubsubshard_channels became NULL (#13038): 0 of 7 test(s) reached the change, coverage 100%
-- [redis/redis#12955](https://github.com/redis/redis/pull/12955) ([tests](tests/valkey/12955-1f00c951c/)): Prevent LSET command from causing quicklist plain node size to exceed 4GB (#12955): 0 of 8 test(s) reached the change, coverage 95%
+- [redis/redis#13008](https://github.com/redis/redis/pull/13008) ([tests](tests/valkey/13008-0777dc789/)): Improve error handling in connSocketBlockingConnect for various connction failures (#13008): 1 of 1 test(s) reached the change, coverage 100%
+- [redis/redis#13033](https://github.com/redis/redis/pull/13033) ([tests](tests/valkey/13033-809651543/)): Fix invalid dictNext usage when pubsubshard_channels became empty (#13033): 0 of 5 test(s) reached the change, coverage 100%
+- [redis/redis#13020](https://github.com/redis/redis/pull/13020) ([tests](tests/valkey/13020-13bd3643c/)): Re-compute active_defrag_running after adjusting defrag configurations (#13020): declined: The change only affects how promptly the internal active-defrag pacing value (server.active_defrag_running) reacts to CONFIG SET of the defrag cycle/threshold configs. This is unreachable and non-comparable in the fuzzer: it requires a jemalloc build (activedefrag is rejected otherwise), i
+- [redis/redis#13027](https://github.com/redis/redis/pull/13027) ([tests](tests/valkey/13027-87eaf119c/)): Minor optimization for expire dict in defragKey (#13027): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#13031](https://github.com/redis/redis/pull/13031) ([tests](tests/valkey/13031-84fd745d6/)): Fix kvstore unable to push resize_cursor for resize when dict is NULL (#13031): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12822](https://github.com/redis/redis/pull/12822) ([tests](tests/valkey/12822-8cd62f82c/)): Refactor the per-slot dict-array db.c into a new kvstore data structure (#12822): 2 of 11 test(s) reached the change, coverage 80%; crash, fixed by redis/redis#12822 (recorded)
+- [redis/redis#13030](https://github.com/redis/redis/pull/13030) ([tests](tests/valkey/13030-f20774ece/)): Fix active expire timeout when db done the scanning (#13030): declined: This is a performance/timeout fix to the local active-expire cron loop. The added db_done flag only changes the repeat heuristic so a fully-scanned expires dictionary is not needlessly re-scanned; it does not change which keys are reclaimed (the full first pass already expires and propagat
+- [redis/redis#12434](https://github.com/redis/redis/pull/12434) ([tests](tests/valkey/12434-02a87885e/)): Add missing structural API changes to JSON file (#12434): 2 of 2 test(s) reached the change
+- [redis/redis#12949](https://github.com/redis/redis/pull/12949) ([tests](tests/valkey/12949-c1041c2c0/)): Make db->avg_ttl more precise (#12949): 0 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#12925](https://github.com/redis/redis/pull/12925) ([tests](tests/valkey/12925-62153b3b2/)): Refine the purpose of rdb saving with accurate flags (#12925): declined: The change only passes more accurate RDBFLAGS values into save functions, but no save-path code consumes RDBFLAGS_REPLICATION on this checkout: rdbSaveInfoAuxFields and rdbSaveDb test only RDBFLAGS_AOF_PREAMBLE, rdbSaveInternal tests only RDBFLAGS_KEEP_CACHE, and startSaving's module-subev
+- [redis/redis#13015](https://github.com/redis/redis/pull/13015) ([tests](tests/valkey/13015-6016973ac/)): Fix module assertion crash when timer and timeout are unlocked in the same event loop (#13015): 2 of 5 test(s) reached the change, coverage 0%; crash, fixed by redis/redis#13015 (recorded)
+- [redis/redis#13017](https://github.com/redis/redis/pull/13017) ([tests](tests/valkey/13017-74a6e48a3/)): Fix module unblock crash due to no timeout_callback (#13017): 0 of 4 test(s) reached the change, coverage 0%
+- [redis/redis#12765](https://github.com/redis/redis/pull/12765) ([tests](tests/valkey/12765-f469dd8ca/)): Add novalues option to command HSCAN. (#12765): 3 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12299](https://github.com/redis/redis/pull/12299) ([tests](tests/valkey/12299-24f6d08b3/)): Implement `CLIENT KILL MAXAGE <maxage>` (#12299): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#13011](https://github.com/redis/redis/pull/13011) ([tests](tests/valkey/13011-45a35a79c/)): Fix timeout not being set in module blockClient case (#13011): 4 of 5 test(s) reached the change, coverage 100%; [crash, predates redis/redis#13011](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157)
+- [redis/redis#10609](https://github.com/redis/redis/pull/10609) ([tests](tests/valkey/10609-76adbf6ff/)): Adds connection timeout option to redis-cli (#10609): 0 of 4 test(s) reached the change, coverage 0%
+- [redis/redis#13004](https://github.com/redis/redis/pull/13004) ([tests](tests/valkey/13004-492021db9/)): Fix blocking commands timeout is reset due to re-processing command (#13004): 0 of 7 test(s) reached the change, coverage 0%
+- [redis/redis#12819](https://github.com/redis/redis/pull/12819) ([tests](tests/valkey/12819-af7ceeb76/)): Optimize resizing hash table to resize not only non-empty dicts. (#12819): 3 of 5 test(s) reached the change, coverage 92%
+- [redis/redis#12985](https://github.com/redis/redis/pull/12985) ([tests](tests/valkey/12985-c5273cae1/)): Add RM_TryCalloc() and RM_TryRealloc() (#12985): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#13000](https://github.com/redis/redis/pull/13000) ([tests](tests/valkey/13000-acd960522/)): Fix maxmemory-samples stack overflow crash in evictionPoolPopulate, limit its value to [1,64] (#13000): 2 of 2 test(s) reached the change; crash, fixed by redis/redis#13000 (recorded)
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-14T10:32+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 921 of 1470 tested (63%)
-- Changed-line coverage: median 100% of 958 merge(s) measured, 70 under 50%
-- Recall: 241 parents flagged of 381 fix merges
-- Claude: $625.88 in the last 24 hours, $6626.76 in the last 7 days, $10810.25 in all
-- Issues filed: 78
+- Merges whose tests reached the change: 932 of 1487 tested (63%)
+- Changed-line coverage: median 100% of 973 merge(s) measured, 74 under 50%
+- Recall: 245 parents flagged of 388 fix merges
+- Claude: $731.59 in the last 24 hours, $6625.46 in the last 7 days, $10915.95 in all
+- Issues filed: 79
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -86,6 +86,7 @@ Updated 2026-11-14T10:32+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/147
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/153
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/156
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42

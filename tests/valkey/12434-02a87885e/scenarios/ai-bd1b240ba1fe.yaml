@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c1041c2c0d7b..02a87885e64c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bd1b240ba1fe
+seed: 12435
+experiment:
+  id: proposed.geo-command-docs-history
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

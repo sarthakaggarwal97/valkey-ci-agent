@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 84fd745d6501..87eaf119cdca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6795c8d6e621
+seed: 11
+experiment:
+  id: proposed.defrag-expires-churn
+  inputs:
+    churn_s: 25
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '0'
+    active-defrag-cycle-min: '50'
+    active-defrag-cycle-max: '90'
+    loglevel: verbose

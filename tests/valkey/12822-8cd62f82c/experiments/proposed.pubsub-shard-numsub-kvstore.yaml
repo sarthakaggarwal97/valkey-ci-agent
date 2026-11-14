@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-shard-numsub-kvstore
+deployment:
+  modes: [standalone]
+metadata:
+  description: PUBSUB SHARDNUMSUB/NUMSUB and channel listing across the kvstore pubsub
+    refactor, including the parent's NULL-deref on an unsubscribed shard channel
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pubsub
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SSUBSCRIBE, chA], connection: sub, expect: {exists: true}}
+    - {command: [PUBSUB, SHARDNUMSUB, chB], expect_difference: true, expect: {equals: [
+          chB, 0]}}
+    - {command: [PUBSUB, SHARDNUMSUB, chA, chB], expect: {equals: [chA, 1, chB, 0]}}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: [chA]}}
+    - {command: [PUBSUB, SHARDNUMSUB], expect: {equals: []}}
+    - {command: [SUBSCRIBE, gc1], connection: sub2, expect: {exists: true}}
+    - {command: [PUBSUB, NUMSUB, gc1, gcMissing], expect: {equals: [gc1, 1, gcMissing,
+          0]}}
+    - {command: [PUBSUB, CHANNELS], expect: {equals: [gc1]}}
+    - {command: [SUNSUBSCRIBE, chA], connection: sub, expect: {exists: true}}
+    - {command: [PUBSUB, SHARDNUMSUB, chA], expect: {equals: [chA, 0]}}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pubsub}
