@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 068a0a845815..fdce3b53b251.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0dfb656aefe9
+seed: 102
+experiment:
+  id: proposed.search-multi-exec-prefork-drain
+  inputs:
+    resp: 3
+    fork_command: BGSAVE
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fdce3b53b25167aa705e289aafa31f468ca055aa",
+  "parent": "068a0a845815040761c1f50b9178a5aa83868934",
+  "pr": 1659,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Apply queued MULTI/EXEC mutations before forking for a snapshot (#1659)",
+  "date": "2026-11-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": "fdce3b53b25167aa705e289aafa31f468ca055aa",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 13.0598,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

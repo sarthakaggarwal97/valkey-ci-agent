@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-14T07:16+00:00.
+Updated 2026-11-14T07:20+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2299 | 241 | #12996 (2024-02-20) | 302 | 247.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
-| valkey-io/valkey-search | 688 | 1 | f8106e72e984 (2024-11-27) | 8 | 45.1 |
+| valkey-io/valkey-search | 690 | 0 | f8106e72e984 (2024-11-27) | 10 | 45.4 |
 
 ## Last runs
 
@@ -48,16 +48,17 @@ Updated 2026-11-14T07:16+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-14T04:40:11+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43553099941): 1 merge(s) tested, 0 without a code change.
+[2026-11-14T07:20:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43557798302): 2 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1700](https://github.com/valkey-io/valkey-search/pull/1700): to retry, the job left no result
+- [valkey-io/valkey-search#1659](https://github.com/valkey-io/valkey-search/pull/1659) ([tests](tests/valkey-search/1659-fdce3b53b/)): Apply queued MULTI/EXEC mutations before forking for a snapshot (#1659): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1700](https://github.com/valkey-io/valkey-search/pull/1700) ([tests](tests/valkey-search/1700-068a0a845/)): test: cover FT.HYBRID LOAD projection on JSON indexes (#1700): 2 of 2 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 911 of 1455 tested (63%)
+- Merges whose tests reached the change: 913 of 1457 tested (63%)
 - Changed-line coverage: median 100% of 946 merge(s) measured, 70 under 50%
 - Recall: 237 parents flagged of 375 fix merges
-- Claude: $629.93 in the last 24 hours, $6678.64 in the last 7 days, $10692.98 in all
+- Claude: $648.77 in the last 24 hours, $6697.48 in the last 7 days, $10711.82 in all
 - Issues filed: 78
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -141,5 +142,4 @@ Updated 2026-11-14T07:16+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#1700](https://github.com/valkey-io/valkey-search/pull/1700): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35): attempt 0 of 3, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed (artifacts.parent acquire: FileNotFoundError)

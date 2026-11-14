@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-loadall-legacy-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Below search.emulate-release 1.3.0 (the default), FT.AGGREGATE LOAD * fetches
+    only the whole record, so named LOADs add nothing and are not checked; at 1.3.0
+    named and stage-read fields are fetched as before. FT.HYBRID is pinned to 1.3.0
+    and must not change in any LOAD state.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: loadall
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, "ON", HASH, PREFIX, "1", "d:", SCHEMA, title, TEXT,
+        price, NUMERIC, q, NUMERIC, tg, AS, t, TAG, v, VECTOR, FLAT, "6", TYPE, FLOAT32,
+        DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "d:1", title, hello world, price, "10.50", q, "2", tg, red,
+        extra, e1, v, !!binary "AAIAPwAAAAA="], expect: {equals: 6}}
+    - {command: [HSET, "d:2", title, hello world, price, "20", q, "3", tg, blue, extra,
+        e2, v, !!binary "AABAQAAAAAA="], expect: {equals: 6}}
+    - {command: [FT.SEARCH, idx, "@title:hello", NOCONTENT, LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100]", NOCONTENT, LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.0.0"], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@__key"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@extra"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@v"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "3", "@price",
+        AS, p], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 15]", LOAD, "*", LOAD, "1", "@price"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@__key",
+        GROUPBY, "1", "@__key", REDUCE, COUNT, "0", AS, c], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", GROUPBY, "0", REDUCE,
+        SUM, "1", "@price", AS, s], expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", SORTBY, "2", "@price",
+        DESC], expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", GROUPBY, "1", "@t", REDUCE,
+        COUNT, "0", AS, n, REDUCE, SUM, "1", "@n", AS, s2, SORTBY, "2", "@t", ASC],
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@__key",
+        WITHCURSOR, COUNT, "1"], compare: skip}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@v", "$qv", KNN, "2",
+        K, "2", LOAD, "1", "@title", LIMIT, "0", "10", PARAMS, "2", qv, !!binary "AAAAAAAAAAA="],
+      expect: {error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@v", "$qv", KNN, "2",
+        K, "2", LIMIT, "0", "10", PARAMS, "2", qv, !!binary "AAAAAAAAAAA="], expect: {
+        error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@v", "$qv", KNN, "2",
+        K, "2", LOAD, "*", GROUPBY, "0", REDUCE, SUM, "1", "@price", AS, s, LIMIT,
+        "0", "10", PARAMS, "2", qv, !!binary "AAAAAAAAAAA="], expect: {error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@v", "$qv", KNN, "2",
+        K, "2", LOAD, "*", SORTBY, "2", "@price", DESC, LIMIT, "0", "10", PARAMS,
+        "2", qv, !!binary "AAAAAAAAAAA="], expect: {error: false}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.3.0"], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 15]", LOAD, "*", LOAD, "1", "@__key",
+        GROUPBY, "1", "@__key", REDUCE, COUNT, "0", AS, c], expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@extra"],
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "@price:[0 100]", LOAD, "*", LOAD, "1", "@v"],
+      expect: {error: true}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@v", "$qv", KNN, "2",
+        K, "2", LOAD, "*", SORTBY, "2", "@price", DESC, LIMIT, "0", "10", PARAMS,
+        "2", qv, !!binary "AAAAAAAAAAA="], expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [loadall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: loadall}

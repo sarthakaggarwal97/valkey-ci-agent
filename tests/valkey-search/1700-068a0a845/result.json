@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "068a0a845815040761c1f50b9178a5aa83868934",
+  "parent": "92b44712de13155b54b6486009521fad98653372",
+  "pr": 1700,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "test: cover FT.HYBRID LOAD projection on JSON indexes (#1700)",
+  "date": "2026-11-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": "fdce3b53b25167aa705e289aafa31f468ca055aa",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.7755,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-fa1e5af5484c",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fa1e5af5484c",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fa1e5af5484c",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ab654ff6ea42",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ab654ff6ea42",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ab654ff6ea42",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

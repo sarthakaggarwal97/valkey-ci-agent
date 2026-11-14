@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.search-multi-exec-prefork-drain
+deployment:
+  modes: [standalone]
+metadata:
+  description: A fork (BGSAVE or BGREWRITEAOF) applies queued MULTI/EXEC index mutations
+    before forking; the parent build leaves them queued until a query
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    fork_command: {type: string, enum: [BGSAVE, BGREWRITEAOF], default: BGSAVE}
+components:
+- use: valkey.action.commands
+  id: drain
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 20], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "k:", SCHEMA, f1, TAG, f2, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "j:", SCHEMA, g1, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idx2], wait_s: 20, expect: {contains: ready}, compare: skip}
+    - {command: [{$ref: inputs.fork_command}], expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"},
+      compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "k:1", f1, a, f2, 1], expect: {equals: QUEUED}}
+    - {command: [HSET, "k:2", f1, b, f2, 2], expect: {equals: QUEUED}}
+    - {command: [HSET, "k:3", f1, c, f2, 3], expect: {equals: QUEUED}}
+    - {command: [HSET, "j:1", g1, x], expect: {equals: QUEUED}}
+    - {command: [HSET, "j:2", g1, y], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 2, 2, 1, 1]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [{$ref: inputs.fork_command}], expect: {error: false}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: "6"}}
+    - {command: [FT.INFO, idx2], expect_difference: true, expect: {contains: "2"}}
+    - {command: [FT.SEARCH, idx, "@f1:{a}", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx2, "@g1:{x}", NOCONTENT], compare: unordered}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"},
+      compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "k:4", f1, d, f2, 4], expect: {equals: QUEUED}}
+    - {command: [HSET, "k:5", f1, e, f2, 5], expect: {equals: QUEUED}}
+    - {command: [HSET, "k:6", f1, f, f2, 6], expect: {equals: QUEUED}}
+    - {command: [DEL, "k:6"], expect: {equals: QUEUED}}
+    - {command: [DEL, "k:1"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 2, 2, 1, 1]}}
+    - {command: [{$ref: inputs.fork_command}], expect: {error: false}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: "8"}}
+    - {command: [FT.SEARCH, idx, "@f1:{d}", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@f1:{f}", NOCONTENT], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [drain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: drain}
