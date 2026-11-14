@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0e5a4a27ea49da6423513ff749093ccf1582171d",
+  "parent": "29e6245a05f414159932f71d971793df34566dfe",
+  "pr": 12510,
+  "pr_repo": "redis/redis",
+  "subject": "Call emptyData when disk-based sync rdbLoad fails (#12510)",
+  "date": "2024-01-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/replication.c:2245"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.9478,
+  "findings": [],
+  "recorded": []
+}

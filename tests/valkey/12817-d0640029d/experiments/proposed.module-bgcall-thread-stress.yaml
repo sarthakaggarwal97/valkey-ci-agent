@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.module-bgcall-thread-stress
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Hammers blockedclient.so paths where module background threads race the main thread:
+    do_bg_rm_call (RM_Call plus HoldString/FreeString of client argv from a thread,
+    racing resetClient's freeClientArgv), acquire_gil, timer-driven unblocks and pub/sub
+    pushes produced while a module fake client executes (the reordered CLIENT_PUSHING
+    check). Replies are deterministic and compared across the change and parent builds;
+    the liveness oracle catches crashes, the new serverAssert(c->conn) guards and
+    sanitizer reports in moduleHandleBlockedClients, unlinkClient and freeClient fake-client
+    handling.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: bgstress
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {connection: sub, command: [SUBSCRIBE, ch]}
+    - {command: [do_bg_rm_call, SET, k1, v1], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, ctr], expect: {equals: 1}}
+    - {command: [do_bg_rm_call, PUBLISH, ch, m1], expect: {equals: 1}}
+    - {command: [acquire_gil], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, GET, k1], expect: {equals: v1}}
+    - {command: [do_bg_rm_call, SET, k2, ""], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, ctr], expect: {equals: 2}}
+    - {command: [do_bg_rm_call, PUBLISH, ch, m2], expect: {equals: 1}}
+    - {command: [do_bg_rm_call, GET, k2], expect: {equals: ""}}
+    - {command: [do_bg_rm_call, INCR, k1], expect: {error: true}}
+    - {command: [acquire_gil], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, SET, k3, v3], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, ctr], expect: {equals: 3}}
+    - {command: [do_bg_rm_call, PUBLISH, ch, m3], expect: {equals: 1}}
+    - {command: [do_fake_bg_true]}
+    - {command: [unblock_by_timer, "50"], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, k1], expect: {error: true}}
+    - {command: [do_bg_rm_call, SET, k4, v4], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, ctr], expect: {equals: 4}}
+    - {command: [do_bg_rm_call, PUBLISH, ch, m4], expect: {equals: 1}}
+    - {command: [acquire_gil], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, GET, k4], expect: {equals: v4}}
+    - {command: [unblock_by_timer, "30"], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, SET, k5, v5], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, INCR, ctr], expect: {equals: 5}}
+    - {command: [do_bg_rm_call, PUBLISH, ch, m5], expect: {equals: 1}}
+    - {command: [do_bg_rm_call, GET, k5], expect: {equals: v5}}
+    - {command: [do_fake_bg_true]}
+    - {command: [do_bg_rm_call, DEL, k1, k2, k3, k4, k5], expect: {equals: 5}}
+    - {command: [GET, ctr], expect: {equals: "5"}}
+    - {command: [DEBUG, SLEEP, "0.2"]}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: sub, read: true}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [bgstress.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bgstress}

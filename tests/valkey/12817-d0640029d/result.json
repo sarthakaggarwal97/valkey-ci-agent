@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d0640029dcf8d9157b9ac78ca0b99fb48f97e380",
+  "parent": "f81c3fd89ed998f211e60e76b8f55a2df27000fe",
+  "pr": 12817,
+  "pr_repo": "redis/redis",
+  "subject": "Fix race condition issues between the main thread and module threads (#12817)",
+  "date": "2024-01-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 6,
+  "hunted": 16,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 15,
+    "percent": 60,
+    "uncovered": [
+      "src/blocked.c:242",
+      "src/module.c:8245",
+      "src/module.c:8408",
+      "src/module.c:8417",
+      "src/module.c:8418",
+      "src/module.c:8419",
+      "src/module.c:8425",
+      "src/module.c:8426",
+      "src/module.c:8431",
+      "src/module.c:8432"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 16.5734,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-aedd4d13200e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'promises' returned ERROR: command 2 (do_rm_call_async blpop l1 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-pgz9bnz0/s.sock"
+    },
+    {
+      "scenario": "ai-585793d8ce2f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'promises' returned ERROR: command 2 (do_rm_call_async blpop l1 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-iftw2xmy/s.sock"
+    },
+    {
+      "scenario": "ai-09c45e34c159",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocktimeout' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (fsl.push k 1), 1 (fsl.push k 2), 2 (fsl.bpop k 0), 3 (fsl.bpop k 0), 4 (fsl.bpop e 100), 5 (blockonkeys.blpopn missing 3 100), 6 "
+    },
+    {
+      "scenario": "ai-ecc611fa4e7c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocktimeout' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (fsl.push k 1), 1 (fsl.push k 2), 2 (fsl.bpop k 0), 3 (fsl.bpop k 0), 4 (fsl.bpop e 100), 5 (blockonkeys.blpopn missing 3 100), 6 "
+    },
+    {
+      "scenario": "ai-2eb37f1be02b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocktimeout' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (fsl.push k 1), 1 (fsl.push k 2), 2 (fsl.bpop k 0), 3 (fsl.bpop k 0), 4 (fsl.bpop e 100), 5 (blockonkeys.blpopn missing 3 100), 6 "
+    },
+    {
+      "scenario": "ai-1885d81030f6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocktimeout' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (fsl.push k 1), 1 (fsl.push k 2), 2 (fsl.bpop k 0), 3 (fsl.bpop k 0), 4 (fsl.bpop e 100), 5 (blockonkeys.blpopn missing 3 100), 6 "
+    }
+  ],
+  "recall_round": {
+    "tests": 6,
+    "recall": true
+  }
+}

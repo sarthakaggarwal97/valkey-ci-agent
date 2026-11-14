@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f9a0eb60f7bde2c2ef561afa36c1004bf7f41b93",
+  "parent": "12fd7524435885b99790e5d945bc9db7f2b2b6fd",
+  "pr": 12969,
+  "pr_repo": "redis/redis",
+  "subject": "update redis-check-rdb types (#12969)",
+  "date": "2024-01-23",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9296,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6776c400d041",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'check-rdb' returned ERROR: the candidate build has no valkey-check-rdb beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-check-rdb"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

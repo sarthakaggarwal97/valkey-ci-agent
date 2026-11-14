@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ecc31bc6973830c8aa9747471943f1bdd46f3257",
+  "parent": "e2b7932b347d475dbbd7b6cc45008a8666015b6c",
+  "pr": 12946,
+  "pr_repo": "redis/redis",
+  "subject": "Updated comments on dictResizeEnable for new dict shrink (#12946)",
+  "date": "2024-01-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2085,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff changes only a code comment in src/dict.c (updating the documentation of dict_can_resize to mention the new dict shrink condition). No executable code, config, or behaviour changes, so no scenario can exercise it."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "85c31e0cff5d670ef4de3ce52c64dc9074f603b4",
+  "parent": "628c0dea1b12ae28ce44a8cfa638dc784fe1bb2b",
+  "pr": 12977,
+  "pr_repo": "redis/redis",
+  "subject": "Allow running WAITAOF in scripts, remove NOSCRIPT flag (#12977)",
+  "date": "2024-01-23",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.5578,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

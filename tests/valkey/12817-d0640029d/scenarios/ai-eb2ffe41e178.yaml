@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f81c3fd89ed9..d0640029dcf8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-eb2ffe41e178
+seed: 9004
+experiment:
+  id: proposed.blockonkeys-served-stats
+  inputs:
+    resp: 3
+    io_threads: 4
+    maxmemory_clients: 30%
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

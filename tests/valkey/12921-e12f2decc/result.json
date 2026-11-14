@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e12f2decc1cf7742878d516d89d38af178119b17",
+  "parent": "8d0156eb186e60a32be3f0210d79f7289fcc6e66",
+  "pr": 12921,
+  "pr_repo": "redis/redis",
+  "subject": "Prevent nodes with invalid IDs from being propagated through gossip (#12921)",
+  "date": "2024-01-22",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 22,
+    "executed": 8,
+    "percent": 36,
+    "uncovered": [
+      "src/cluster_legacy.c:2048",
+      "src/cluster_legacy.c:2049",
+      "src/cluster_legacy.c:2051",
+      "src/cluster_legacy.c:2052",
+      "src/cluster_legacy.c:2055",
+      "src/cluster_legacy.c:2057",
+      "src/cluster_legacy.c:2058",
+      "src/cluster_legacy.c:2060",
+      "src/cluster_legacy.c:2069",
+      "src/cluster_legacy.c:2070",
+      "src/cluster_legacy.c:2071",
+      "src/cluster_legacy.c:2075",
+      "src/cluster_legacy.c:2094",
+      "src/cluster_legacy.c:2095"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.2113,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

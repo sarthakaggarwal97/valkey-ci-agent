@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.module-fake-client-memtracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Pushes large RM_Call replies (~600KB LRANGE) through blockedclient.so module temp
+    clients while maxmemory-clients is configured. On the parent, fake clients are
+    counted in stat_clients_type_memory and may enter client eviction buckets, so
+    evictClients can free a live module temp client (use-after-free); the change excludes
+    !c->conn clients from accounting and eviction and asserts on the old path. Deterministic
+    replies compared across builds, liveness catching crashes and the new asserts.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    maxmemory_clients: {type: string, enum: ["0", "1mb", "4mb"], default: "4mb"}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: memstress
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      maxmemory-clients: {$ref: inputs.maxmemory_clients}
+      io-threads: {$ref: inputs.io_threads}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=1,3000 do redis.call('rpush', KEYS[1], string.rep('x',192)\
+          \ .. i) end return redis.call('llen', KEYS[1])", "1", big], expect: {equals: 3000}}
+    - {connection: c1, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c2, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c3, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {command: [do_bg_rm_call, SET, r1, v1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"]}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: c1, read: true}
+    - {connection: c2, read: true}
+    - {connection: c3, read: true}
+    - {command: [do_bg_rm_call, GET, r1], expect: {equals: v1}}
+    - {connection: c1, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c2, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c3, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {command: [do_bg_rm_call, SET, r2, v2], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"]}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: c1, read: true}
+    - {connection: c2, read: true}
+    - {connection: c3, read: true}
+    - {command: [do_bg_rm_call, GET, r2], expect: {equals: v2}}
+    - {connection: c1, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c2, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {connection: c3, command: [do_bg_rm_call, LRANGE, big, "0", "-1"]}
+    - {command: [do_bg_rm_call, SET, r3, v3], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"]}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: c1, read: true}
+    - {connection: c2, read: true}
+    - {connection: c3, read: true}
+    - {command: [do_bg_rm_call, GET, r3], expect: {equals: v3}}
+    - {command: [LLEN, big], expect: {equals: 3000}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [memstress.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memstress}

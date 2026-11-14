@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-shard-slot-cleanup
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Deleting slots that carry shard-channel subscribers unsubscribes them
+    without crashing, identical on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shard
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {connection: s1, command: [SSUBSCRIBE, ch1], expect: {exists: true}}
+    - {connection: s2, command: [SSUBSCRIBE, ch2], expect: {exists: true}}
+    - {connection: s3, command: [SSUBSCRIBE, ch3], expect: {exists: true}}
+    - {command: [SPUBLISH, ch1, hi], expect: {equals: 1}}
+    - {connection: s1, read: true, expect: {exists: true}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 16383], expect: {equals: OK}}
+    - {connection: s1, read: true, expect: {exists: true}}
+    - {connection: s2, read: true, expect: {exists: true}}
+    - {connection: s3, read: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shard}

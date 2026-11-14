@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14b1edfd994991d22c2b766031f77c045b95c995",
+  "parent": "131d95f203351b19f307072e6582fda91e149580",
+  "pr": 12952,
+  "pr_repo": "redis/redis",
+  "subject": "Fix dict resize ratio checks, avoid precision loss from integer division (#12952)",
+  "date": "2024-01-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 6,
+    "percent": 85,
+    "uncovered": [
+      "src/dict.c:337"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9759,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7a6b5cbda479",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    }
+  ]
+}

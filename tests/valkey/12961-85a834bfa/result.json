@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "85a834bfa2a31cd7c5754fe1611cf059657c0fb4",
+  "parent": "07b292af5e86459e435da5986f87bc4f7415d437",
+  "pr": 12961,
+  "pr_repo": "redis/redis",
+  "subject": "Revert multi OOM limit and add multi buffer limit (#12961)",
+  "date": "2024-01-25",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5495,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d0640029dcf8..b07174afc2aa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-12b98ee9f9f6
+seed: 101
+experiment:
+  id: proposed.dict-resize-thresholds
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "85a239b363591a7f35f66eb8370cabead8545ffa",
+  "parent": "b07174afc2aa8519dae68ac89eb66b8104f918e5",
+  "pr": 12931,
+  "pr_repo": "redis/redis",
+  "subject": "Change dictGetSafeIterator to dictGetIterator in pubsub (#12931)",
+  "date": "2024-01-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9237,
+  "findings": [],
+  "recorded": []
+}

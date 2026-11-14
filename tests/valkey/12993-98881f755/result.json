@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98881f755885271fe6a55b3479c5496674571b0e",
+  "parent": "4cb5ad85a5e9669f878f4493e5a08eac4f0e0142",
+  "pr": 12993,
+  "pr_repo": "redis/redis",
+  "subject": "fix the wrong path in mkreleasehdr.sh (#12993)",
+  "date": "2024-01-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2156,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes a path in src/mkreleasehdr.sh, the build script that computes the GIT_DIRTY flag embedded in release.h at compile time. It is a build/CI-only change with no effect on server runtime behavior, command replies, replication, persistence, or the bundled tools, so no fuzzer scenario can reach or validate it."
+}

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb2b6e29273c..e2b7932b347d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b54612ec7b85
+seed: 202
+experiment:
+  id: proposed.dict-shrink-under-faults
+  inputs:
+    mutation_rate: 600
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    rdb-key-save-delay: 30
+    hz: 100

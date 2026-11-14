@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.dict-shrink-on-delete
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deleting entries now shrinks dicts eagerly (main db, expires, and HT-encoded
+    hash/set/zset), even below 2% fill while a fork child runs where the parent never
+    shrank; mass-create then mass-delete under a slow BGSAVE child and observe the
+    shrink rehash with DEBUG HTSTATS
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    checks: {type: object, default: {}}
+components:
+- use: valkey.action.commands
+  id: shrink
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    checks: {$ref: inputs.checks}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i=1,500 do redis.call('set','k'..i,'v') end return 500",
+        0], expect: {equals: 500}}
+    - {command: [EVAL, "for i=1,600 do redis.call('hset','h','f'..i,'v'..i) end return\
+          \ redis.call('hlen','h')", 0], expect: {equals: 600}}
+    - {command: [EVAL, "for i=1,600 do redis.call('sadd','s','m'..i) end return redis.call('scard','s')",
+        0], expect: {equals: 600}}
+    - {command: [EVAL, "for i=1,600 do redis.call('zadd','z',i,'m'..i) end return\
+          \ redis.call('zcard','z')", 0], expect: {equals: 600}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, s], compare: skip, expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: skiplist}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 20000], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [EVAL, "for i=1,500 do redis.call('del','k'..i) end return redis.call('dbsize')",
+        0], expect: {equals: 3}}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [EVAL, "for i=21,600 do redis.call('hdel','h','f'..i) end return redis.call('hlen','h')",
+        0], expect: {equals: 20}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [EVAL, "for i=21,600 do redis.call('srem','s','m'..i) end return redis.call('scard','s')",
+        0], expect: {equals: 20}}
+    - {command: [DEBUG, HTSTATS-KEY, s], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [EVAL, "for i=21,600 do redis.call('zrem','z','m'..i) end return redis.call('zcard','z')",
+        0], expect: {equals: 20}}
+    - {command: [DEBUG, HTSTATS-KEY, z], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 10], expect: {equals: 11}}
+    - {command: [EVAL, "for i=1,400 do redis.call('exists','h') end return 1", 0],
+      expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "table\
+          \ size: 16"}}
+    - {command: [EVAL, "for i=1,300 do redis.call('zadd','zd1',i,'m'..i) end return\
+          \ redis.call('zcard','zd1')", 0], expect: {equals: 300}}
+    - {command: [EVAL, "for i=6,300 do redis.call('zadd','zd2',i,'m'..i) end return\
+          \ redis.call('zcard','zd2')", 0], expect: {equals: 295}}
+    - {command: [ZDIFFSTORE, zout, 2, zd1, zd2], expect: {equals: 5}}
+    - {command: [ZRANGE, zout, 0, -1, WITHSCORES]}
+    - {command: [EVAL, "for i=1,500 do redis.call('set','e'..i,'v','EX',900) end return\
+          \ 500", 0], expect: {equals: 500}}
+    - {command: [EVAL, "local n=0 for i=6,500 do n=n+redis.call('persist','e'..i)\
+          \ end return n", 0], expect: {equals: 495}}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [GET, e1], expect: {equals: v}}
+    - {command: [GET, e6], expect: {equals: v}}
+    - {command: [DBSIZE], expect: {equals: 506}}
+required_events: [shrink.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink}

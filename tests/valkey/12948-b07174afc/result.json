@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b07174afc2aa8519dae68ac89eb66b8104f918e5",
+  "parent": "d0640029dcf8d9157b9ac78ca0b99fb48f97e380",
+  "pr": 12948,
+  "pr_repo": "redis/redis",
+  "subject": "Change the threshold of dict expand, shrink and rehash (#12948)",
+  "date": "2024-01-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.0642,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-4341e1789516",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    }
+  ]
+}

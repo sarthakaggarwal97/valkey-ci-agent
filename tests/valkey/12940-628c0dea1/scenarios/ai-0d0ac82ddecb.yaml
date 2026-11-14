@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f9a0eb60f7bd..628c0dea1b12.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0d0ac82ddecb
+seed: 946202
+experiment:
+  id: proposed.function-flush-async-bio
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

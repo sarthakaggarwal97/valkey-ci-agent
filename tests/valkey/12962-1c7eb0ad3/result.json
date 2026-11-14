@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c7eb0ad373a21a0610ba484cc0d5054e1f1aab0",
+  "parent": "0e5a4a27ea49da6423513ff749093ccf1582171d",
+  "pr": 12962,
+  "pr_repo": "redis/redis",
+  "subject": "Fix minor memory leaks in dictTest (#12962)",
+  "date": "2024-01-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2215,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only dictTest() in src/dict.c, the internal unit-test harness code run via the test runner, not any server runtime path. It frees temporary strings allocated by stringFromLongLong inside the test to silence test-only memory leaks; no command, reply, data structure, replication or persistence behaviour changes, so no fuzzer scenario can reach or exercise it."
+}

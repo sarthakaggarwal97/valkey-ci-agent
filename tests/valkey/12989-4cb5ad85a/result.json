@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4cb5ad85a5e9669f878f4493e5a08eac4f0e0142",
+  "parent": "85a834bfa2a31cd7c5754fe1611cf059657c0fb4",
+  "pr": 12989,
+  "pr_repo": "redis/redis",
+  "subject": "Fix unauthenticated client query buffer 1MB limit (#12989)",
+  "date": "2024-01-25",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4275,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only lowers a dead constant. The fixed branch (networking.c:2729) that caps an unauthenticated client's query buffer applies solely when authRequired(c) is true, but that same gate already enforces strictly tighter parser limits present in both builds: unauthenticated multibulk count <= 10 (line 2307), unauthenticated bulk length <= 16 KB (line 2359), and inline line <= 64 KB (PROTO_INLINE_MAX_SIZE). Each read pulls at most PROTO_IOBUF_LEN (16 KB) and processInputBuffer trims querybuf to qb_pos after every cycle, while the big-arg no-copy path needs bulklen >= 32 KB (PROTO_MBULK_BIG"
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 98881f755885..5358bd7cdd96.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-729b90221001
+seed: 982201
+experiment:
+  id: proposed.dict-rehash-consistency
+  inputs:
+    resp: 2
+    activerehashing: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 628c0dea1b12..85c31e0cff5d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d436c563c258
+seed: 1103
+experiment:
+  id: proposed.waitaof-in-scripts
+  inputs:
+    resp: 2
+    appendfsync: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

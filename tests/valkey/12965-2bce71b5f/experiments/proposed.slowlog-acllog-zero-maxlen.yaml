@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.slowlog-acllog-zero-maxlen
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Setting slowlog-max-len or acllog-max-len to 0 makes the push paths exit early.
+    On the parent, slowlogPushEntryIfNeeded trims pre-existing entries on every command
+    once max-len is 0, and addACLLogEntry's match path keeps stale ACL log entries
+    forever; the change preserves old slowlog entries and trims the ACL log to empty.
+    LATENCY DOCTOR now advises enabling the slowlog when slowlog-max-len is 0.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slowlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {slowlog-log-slower-than: 100000, slowlog-max-len: 128, latency-monitor-threshold: 200}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 2}}
+    - {command: [CONFIG, SET, slowlog-max-len, "0"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect_difference: true, expect: {equals: 2}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect_difference: true, expect: {equals: 2}}
+    - {command: [LATENCY, DOCTOR], expect_difference: true, expect: {contains: "If\
+          \ the Slow log is disabled"}}
+    - {command: [CONFIG, SET, slowlog-max-len, "128"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect_difference: true, expect: {equals: 2}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect_difference: true, expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: acllog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {acllog-max-len: 128}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, psuser, on, ">secret"], expect: {equals: OK}}
+    - {command: [AUTH, psuser, wrongpass], expect: {error: "WRONGPASS"}}
+    - {command: [CONFIG, SET, acllog-max-len, "0"], expect: {equals: OK}}
+    - {command: [AUTH, psuser, wrongpass], expect: {error: "WRONGPASS"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {equals: []}}
+    - {command: [AUTH, psuser, wrongpass], expect: {error: "WRONGPASS"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {equals: []}}
+    - {command: [CONFIG, SET, acllog-max-len, "128"], expect: {equals: OK}}
+    - {command: [ACL, LOG, "0"], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slowlog.completed, acllog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slowlog}
+- {evidence_id: valkey.command.sequence, source: acllog}

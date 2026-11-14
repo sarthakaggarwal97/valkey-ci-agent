@@ -1,0 +1,115 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "628c0dea1b12ae28ce44a8cfa638dc784fe1bb2b",
+  "parent": "f9a0eb60f7bde2c2ef561afa36c1004bf7f41b93",
+  "pr": 12940,
+  "pr_repo": "redis/redis",
+  "subject": "Some cleanups around function (#12940)",
+  "date": "2024-01-23",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 8,
+    "percent": 88,
+    "uncovered": [
+      "src/server.c:2883"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.7337,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-d2aefbca1230",
+      "seed": 12940,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: script_lua.c:181 'lua_islightuserdata(lua, -1)' is not true",
+      "scenario": "ai-d2aefbca1230",
+      "seed": 12940,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12940",
+      "fingerprint": "bf3463511acff8519029",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-b13dd4159b89",
+      "seed": 12941,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-80840b66ff8f",
+      "seed": 946201,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 21065:M 14 Nov 2026 11:01:32.940 # ==> script_lua.c:181 'lua_islightuserdata(lua, -1)' is not true",
+      "scenario": "ai-80840b66ff8f",
+      "seed": 946201,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12940",
+      "fingerprint": "598b6e3938a52fbebc07",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: function_lua.c:122 'lua_isfunction(lua, -1)' is not true",
+      "scenario": "ai-0d0ac82ddecb",
+      "seed": 946202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "b1dbcabd0214d5324957",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

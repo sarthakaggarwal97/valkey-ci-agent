@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.multi-oom-queue
+deployment:
+  modes: [standalone]
+metadata:
+  description: Under maxmemory OOM a non-denyoom read queued in MULTI is accepted
+    and EXEC runs, after the multi OOM limit was reverted
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multioom
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [bar]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [multioom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multioom}

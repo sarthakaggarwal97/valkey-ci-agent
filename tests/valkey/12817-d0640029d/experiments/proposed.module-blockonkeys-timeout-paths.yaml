@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.module-blockonkeys-timeout-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive both moduleBlockedClientTimedOut entry paths with blockonkeys.so
+    - the main-thread client timeout (from_module=0, simple-string and error replies
+    from the timeout callback) and RM_UnblockClient on a blocked-on-keys client (from_module=1,
+    the thread-safe context path) - compared across the two builds, optionally replayed
+    on concurrent connections
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 0}
+components:
+- use: valkey.action.commands
+  id: blocktimeout
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [fsl.push, k, 1], expect: {equals: OK}}
+    - {command: [fsl.push, k, 2], expect: {equals: OK}}
+    - {command: [fsl.bpop, k, 0], expect: {equals: 2}}
+    - {command: [fsl.bpop, k, 0], expect: {equals: 1}}
+    - {command: [fsl.bpop, e, 100], expect: {equals: Request timedout}}
+    - {command: [blockonkeys.blpopn, missing, 3, 100], expect: {error: Timeout}}
+    - {command: [fsl.push, g, 5], expect: {equals: OK}}
+    - {command: [fsl.bpopgt, g, 100, 100], expect: {equals: Request timedout}}
+    - {command: [SET, x, y], expect: {equals: OK}}
+    - {command: [GET, x], expect: {equals: y}}
+    - {raw: "blockonkeys.blpopn_or_unblock u 5 0\r\n", connection: blocker, expect: {
+        exists: false}}
+    - {command: [LPUSH, u, a], expect: {equals: 1}}
+    - {read: true, connection: blocker, expect: {equals: [Action aborted]}}
+    - {raw: "blockonkeys.blpopn w 5 2000\r\n", connection: blocker2, expect: {exists: false}}
+    - {command: [LPUSH, w, a], expect: {equals: 1}}
+    - {command: [LPUSH, w, b], expect: {equals: 2}}
+    - {command: [fsl.bpop, zz, 1500], expect: {equals: Request timedout}}
+    - {read: true, connection: blocker2}
+    - {command: [LRANGE, u, 0, -1], expect: {equals: [a]}}
+    - {command: [fsl.getall, g], expect: {equals: [5]}}
+required_events: [blocktimeout.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocktimeout}

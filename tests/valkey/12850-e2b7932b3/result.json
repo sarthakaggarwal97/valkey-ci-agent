@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e2b7932b347d475dbbd7b6cc45008a8666015b6c",
+  "parent": "bb2b6e29273c3dd2bf5f09ff625b33df1d5536b2",
+  "pr": 12850,
+  "pr_repo": "redis/redis",
+  "subject": "Shrink dict when deleting dictEntry (#12850)",
+  "date": "2024-01-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 51,
+    "executed": 44,
+    "percent": 86,
+    "uncovered": [
+      "src/dict.c:304",
+      "src/dict.c:314",
+      "src/dict.c:1455",
+      "src/dict.c:1480",
+      "src/t_zset.c:2539",
+      "src/t_zset.c:2544",
+      "src/t_zset.c:2557"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.6947,
+  "findings": [],
+  "recorded": []
+}

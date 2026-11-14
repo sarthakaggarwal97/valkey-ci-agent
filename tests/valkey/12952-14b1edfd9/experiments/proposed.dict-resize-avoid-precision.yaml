@@ -1,0 +1,142 @@
+extends: [valkey.liveness]
+id: proposed.dict-resize-avoid-precision
+deployment:
+  modes: [standalone]
+metadata:
+  description: Under DICT_RESIZE_AVOID (live BGSAVE child) a dict must expand at used
+    >= 5*size; the parent's integer division delays it to 6*size. A 16-bucket hash
+    dict filled to 95 fields during a slow BGSAVE expands on the fixed build (DEBUG
+    HTSTATS-KEY shows table size 128) and stays at 16 buckets on the parent.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: resize
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: 0
+      save: ""
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, "500000"], expect: {equals: OK}}
+    - {command: [MSET, k0, x, k1, x, k2, x, k3, x, k4, x, k5, x, k6, x, k7, x, k8,
+        x, k9, x, k10, x, k11, x, k12, x, k13, x, k14, x, k15, x, k16, x, k17, x,
+        k18, x, k19, x, k20, x, k21, x, k22, x, k23, x, k24, x, k25, x, k26, x, k27,
+        x, k28, x, k29, x, k30, x, k31, x, k32, x, k33, x, k34, x, k35, x, k36, x,
+        k37, x, k38, x, k39, x], expect: {equals: OK}}
+    - {command: [HSET, h, f0, v], expect: {equals: 1}}
+    - {command: [HSET, h, f1, v], expect: {equals: 1}}
+    - {command: [HSET, h, f2, v], expect: {equals: 1}}
+    - {command: [HSET, h, f3, v], expect: {equals: 1}}
+    - {command: [HSET, h, f4, v], expect: {equals: 1}}
+    - {command: [HSET, h, f5, v], expect: {equals: 1}}
+    - {command: [HSET, h, f6, v], expect: {equals: 1}}
+    - {command: [HSET, h, f7, v], expect: {equals: 1}}
+    - {command: [HSET, h, f8, v], expect: {equals: 1}}
+    - {command: [HSET, h, f9, v], expect: {equals: 1}}
+    - {command: [HSET, h, f10, v], expect: {equals: 1}}
+    - {command: [HSET, h, f11, v], expect: {equals: 1}}
+    - {command: [HSET, h, f12, v], expect: {equals: 1}}
+    - {command: [HSET, h, f13, v], expect: {equals: 1}}
+    - {command: [HSET, h, f14, v], expect: {equals: 1}}
+    - {command: [HSET, h, f15, v], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS-KEY, h], compare: skip, expect: {contains: "table\
+          \ size: 16"}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - {command: [HSET, h, f16, v], expect: {equals: 1}}
+    - {command: [HSET, h, f17, v], expect: {equals: 1}}
+    - {command: [HSET, h, f18, v], expect: {equals: 1}}
+    - {command: [HSET, h, f19, v], expect: {equals: 1}}
+    - {command: [HSET, h, f20, v], expect: {equals: 1}}
+    - {command: [HSET, h, f21, v], expect: {equals: 1}}
+    - {command: [HSET, h, f22, v], expect: {equals: 1}}
+    - {command: [HSET, h, f23, v], expect: {equals: 1}}
+    - {command: [HSET, h, f24, v], expect: {equals: 1}}
+    - {command: [HSET, h, f25, v], expect: {equals: 1}}
+    - {command: [HSET, h, f26, v], expect: {equals: 1}}
+    - {command: [HSET, h, f27, v], expect: {equals: 1}}
+    - {command: [HSET, h, f28, v], expect: {equals: 1}}
+    - {command: [HSET, h, f29, v], expect: {equals: 1}}
+    - {command: [HSET, h, f30, v], expect: {equals: 1}}
+    - {command: [HSET, h, f31, v], expect: {equals: 1}}
+    - {command: [HSET, h, f32, v], expect: {equals: 1}}
+    - {command: [HSET, h, f33, v], expect: {equals: 1}}
+    - {command: [HSET, h, f34, v], expect: {equals: 1}}
+    - {command: [HSET, h, f35, v], expect: {equals: 1}}
+    - {command: [HSET, h, f36, v], expect: {equals: 1}}
+    - {command: [HSET, h, f37, v], expect: {equals: 1}}
+    - {command: [HSET, h, f38, v], expect: {equals: 1}}
+    - {command: [HSET, h, f39, v], expect: {equals: 1}}
+    - {command: [HSET, h, f40, v], expect: {equals: 1}}
+    - {command: [HSET, h, f41, v], expect: {equals: 1}}
+    - {command: [HSET, h, f42, v], expect: {equals: 1}}
+    - {command: [HSET, h, f43, v], expect: {equals: 1}}
+    - {command: [HSET, h, f44, v], expect: {equals: 1}}
+    - {command: [HSET, h, f45, v], expect: {equals: 1}}
+    - {command: [HSET, h, f46, v], expect: {equals: 1}}
+    - {command: [HSET, h, f47, v], expect: {equals: 1}}
+    - {command: [HSET, h, f48, v], expect: {equals: 1}}
+    - {command: [HSET, h, f49, v], expect: {equals: 1}}
+    - {command: [HSET, h, f50, v], expect: {equals: 1}}
+    - {command: [HSET, h, f51, v], expect: {equals: 1}}
+    - {command: [HSET, h, f52, v], expect: {equals: 1}}
+    - {command: [HSET, h, f53, v], expect: {equals: 1}}
+    - {command: [HSET, h, f54, v], expect: {equals: 1}}
+    - {command: [HSET, h, f55, v], expect: {equals: 1}}
+    - {command: [HSET, h, f56, v], expect: {equals: 1}}
+    - {command: [HSET, h, f57, v], expect: {equals: 1}}
+    - {command: [HSET, h, f58, v], expect: {equals: 1}}
+    - {command: [HSET, h, f59, v], expect: {equals: 1}}
+    - {command: [HSET, h, f60, v], expect: {equals: 1}}
+    - {command: [HSET, h, f61, v], expect: {equals: 1}}
+    - {command: [HSET, h, f62, v], expect: {equals: 1}}
+    - {command: [HSET, h, f63, v], expect: {equals: 1}}
+    - {command: [HSET, h, f64, v], expect: {equals: 1}}
+    - {command: [HSET, h, f65, v], expect: {equals: 1}}
+    - {command: [HSET, h, f66, v], expect: {equals: 1}}
+    - {command: [HSET, h, f67, v], expect: {equals: 1}}
+    - {command: [HSET, h, f68, v], expect: {equals: 1}}
+    - {command: [HSET, h, f69, v], expect: {equals: 1}}
+    - {command: [HSET, h, f70, v], expect: {equals: 1}}
+    - {command: [HSET, h, f71, v], expect: {equals: 1}}
+    - {command: [HSET, h, f72, v], expect: {equals: 1}}
+    - {command: [HSET, h, f73, v], expect: {equals: 1}}
+    - {command: [HSET, h, f74, v], expect: {equals: 1}}
+    - {command: [HSET, h, f75, v], expect: {equals: 1}}
+    - {command: [HSET, h, f76, v], expect: {equals: 1}}
+    - {command: [HSET, h, f77, v], expect: {equals: 1}}
+    - {command: [HSET, h, f78, v], expect: {equals: 1}}
+    - {command: [HSET, h, f79, v], expect: {equals: 1}}
+    - {command: [HSET, h, f80, v], expect: {equals: 1}}
+    - {command: [HSET, h, f81, v], expect: {equals: 1}}
+    - {command: [HSET, h, f82, v], expect: {equals: 1}}
+    - {command: [HSET, h, f83, v], expect: {equals: 1}}
+    - {command: [HSET, h, f84, v], expect: {equals: 1}}
+    - {command: [HSET, h, f85, v], expect: {equals: 1}}
+    - {command: [HSET, h, f86, v], expect: {equals: 1}}
+    - {command: [HSET, h, f87, v], expect: {equals: 1}}
+    - {command: [HSET, h, f88, v], expect: {equals: 1}}
+    - {command: [HSET, h, f89, v], expect: {equals: 1}}
+    - {command: [HSET, h, f90, v], expect: {equals: 1}}
+    - {command: [HSET, h, f91, v], expect: {equals: 1}}
+    - {command: [HSET, h, f92, v], expect: {equals: 1}}
+    - {command: [HSET, h, f93, v], expect: {equals: 1}}
+    - {command: [HSET, h, f94, v], expect: {equals: 1}}
+    - {command: [HLEN, h], expect: {equals: 95}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect_difference: true, expect: {contains: "table\
+          \ size: 128"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

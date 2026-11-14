@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 131d95f20335..14b1edfd9949.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a5f8647496e5
+seed: 102
+experiment:
+  id: proposed.dict-resize-avoid-precision
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

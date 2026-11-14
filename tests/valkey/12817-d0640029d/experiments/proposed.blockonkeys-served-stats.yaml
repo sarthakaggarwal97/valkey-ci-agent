@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.blockonkeys-served-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The race-condition fix removed the !bc->blocked_on_keys guard in moduleHandleBlockedClients,
+    so a module client blocked on keys that is served by a key signal now gets updateStatsOnUnblock
+    a second time there (first in moduleUnblockClientOnKey). INFO commandstats calls
+    for the blocking module command therefore differ between the merge and the parent.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 2, 4], default: 1}
+    maxmemory_clients: {type: string, default: "0"}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: bokstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      maxmemory-clients: {$ref: inputs.maxmemory_clients}
+    timeout_s: 180
+    commands:
+    - {connection: b1, command: [fsl.bpop, k1, 0]}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:1"}}
+    - {command: [fsl.push, k1, 5], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:0"}}
+    - {connection: b1, read: true, expect: {equals: 5}}
+    - {command: [fsl.getall, k1], expect: {equals: []}}
+    - {connection: b2, command: [blockonkeys.blpopn, k2, 2, 30000]}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:1"}}
+    - {command: [blockonkeys.lpush_unblock, k2, a], expect: {equals: OK}}
+    - {command: [blockonkeys.lpush_unblock, k2, b], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:0"}}
+    - {connection: b2, read: true, expect: {equals: [b, a]}}
+    - {command: [LRANGE, k2, 0, -1], expect: {equals: []}}
+    - {connection: b3, command: [blockonkeys.blpopn, k3, 3, 30000]}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:1"}}
+    - {command: [LPUSH, k3, x, y, z], expect: {equals: 3}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:0"}}
+    - {connection: b3, read: true, expect: {equals: [z, y, x]}}
+    - {command: [LRANGE, k3, 0, -1], expect: {equals: []}}
+    - {connection: b4, command: [fsl.bpop, dst, 0]}
+    - {connection: b5, command: [fsl.bpoppush, src, dst, 0]}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:2"}}
+    - {command: [fsl.push, src, 7], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:0"}}
+    - {connection: b5, read: true, expect: {equals: 7}}
+    - {connection: b4, read: true, expect: {equals: 7}}
+    - {command: [fsl.getall, dst], expect: {equals: []}}
+    - {command: [INFO, commandstats], wait_s: 15, expect_difference: true, expect: {
+        contains: "cmdstat_fsl.bpop:calls=4"}}
+    - {command: [INFO, commandstats], expect_difference: true, expect: {contains: "cmdstat_blockonkeys.blpopn:calls=4"}}
+    - {command: [INFO, commandstats], expect_difference: true, expect: {contains: "cmdstat_fsl.bpoppush:calls=2"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [bokstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bokstats}

@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.dict-rehash-consistency
+deployment:
+  modes: [standalone]
+metadata:
+  description: Finds, deletes and inserts during in-flight grow and shrink dict rehashing
+    (set no_value dicts and the keyspace dict), with and without a live RDB child,
+    stay consistent with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    activerehashing: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: rehash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      set-max-listpack-entries: 0
+      hash-max-listpack-entries: 0
+      activerehashing: {$ref: inputs.activerehashing}
+    commands:
+    - command: [EVAL, "for i=0,4999 do redis.call('sadd', KEYS[1], 'm'..i) end return\
+          \ redis.call('scard', KEYS[1])", "1", s]
+      expect: {equals: 5000}
+    - command: [SCARD, s]
+      expect: {equals: 5000}
+    - command: [EVAL, "local c=0 for i=0,4999 do c=c+redis.call('sismember', KEYS[1],\
+          \ 'm'..i) end return c", "1", s]
+      expect: {equals: 5000}
+    - command: [EVAL, "local c=0 for i=0,4969 do c=c+redis.call('srem', KEYS[1], 'm'..i)\
+          \ end return c", "1", s]
+      expect: {equals: 4970}
+    - command: [SCARD, s]
+      expect: {equals: 30}
+    - command: [EVAL, "local c=0 for i=4970,4999 do c=c+redis.call('sismember', KEYS[1],\
+          \ 'm'..i) end return c", "1", s]
+      expect: {equals: 30}
+    - command: [SMEMBERS, s]
+      compare: unordered
+    - command: [DEBUG, HTSTATS-KEY, s]
+      compare: skip
+    - command: [DEBUG, POPULATE, "10000"]
+      expect: {equals: OK}
+    - command: [EVAL, "local c=0 for i=0,9999 do if redis.call('get', 'key:'..i) ==\
+          \ 'value:'..i then c=c+1 end end return c", "0"]
+      expect: {equals: 10000}
+    - command: [EVAL, "local c=0 for i=0,9949 do c=c+redis.call('del', 'key:'..i)\
+          \ end return c", "0"]
+      expect: {equals: 9950}
+    - command: [DBSIZE]
+      expect: {equals: 51}
+    - command: [CONFIG, SET, rdb-key-save-delay, "100000"]
+      expect: {equals: OK}
+    - command: [BGSAVE]
+      expect: {contains: "Background saving started"}
+    - command: [EVAL, "for i=0,2999 do redis.call('sadd', KEYS[1], 'n'..i) end return\
+          \ redis.call('scard', KEYS[1])", "1", s2]
+      expect: {equals: 3000}
+    - command: [EVAL, "local c=0 for i=0,2999 do c=c+redis.call('sismember', KEYS[1],\
+          \ 'n'..i) end return c", "1", s2]
+      expect: {equals: 3000}
+    - command: [EVAL, "local c=0 for i=0,2969 do c=c+redis.call('srem', KEYS[1], 'n'..i)\
+          \ end return c", "1", s2]
+      expect: {equals: 2970}
+    - command: [SCARD, s2]
+      expect: {equals: 30}
+    - command: [EVAL, "local c=0 for i=2970,2999 do c=c+redis.call('sismember', KEYS[1],\
+          \ 'n'..i) end return c", "1", s2]
+      expect: {equals: 30}
+    - command: [DEBUG, HTSTATS-KEY, s2]
+      compare: skip
+    - command: [CONFIG, SET, rdb-key-save-delay, "0"]
+      expect: {equals: OK}
+    - command: [INFO, persistence]
+      wait_s: 60
+      compare: skip
+      expect: {contains: "rdb_bgsave_in_progress:0"}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rehash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rehash}

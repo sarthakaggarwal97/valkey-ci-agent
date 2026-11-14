@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "07b292af5e86459e435da5986f87bc4f7415d437",
+  "parent": "685409139b755e4ba8686b21a71ac11e060ddbaa",
+  "pr": 12980,
+  "pr_repo": "redis/redis",
+  "subject": "Add sender NULL check in clusterProcessGossipSection invalid_ids case (#12980)",
+  "date": "2024-01-23",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4551,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix guards a NULL-pointer dereference in clusterProcessGossipSection that occurs only inside the invalid_ids branch: when a node receives a cluster-bus gossip section containing invalid (non-[a-z0-9]) node IDs from a sender it does not yet know (link->node NULL and clusterLookupNode(hdr->sender) NULL). Invalid gossip node IDs never arise from healthy nodes (IDs are hex, always valid) and, as the code comment notes, only indicate memory corruption on the sender; producing them requires injecting a crafted/corrupted cluster-bus packet. The fuzzer reaches servers only via RESP commands/tools "
+}

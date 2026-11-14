@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-fanout-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: PUBLISH fan-out to many channel and pattern subscribers stays crash-free
+    and replies identically on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fanout
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {io-threads: 2, io-threads-do-reads: "yes"}
+    commands:
+    - {connection: s1, command: [SUBSCRIBE, news], expect: {exists: true}}
+    - {connection: s2, command: [SUBSCRIBE, news], expect: {exists: true}}
+    - {connection: s3, command: [SUBSCRIBE, news], expect: {exists: true}}
+    - {connection: p1, command: [PSUBSCRIBE, "ne*"], expect: {exists: true}}
+    - {connection: p2, command: [PSUBSCRIBE, "n?ws"], expect: {exists: true}}
+    - {command: [PUBLISH, news, hello], expect: {equals: 5}}
+    - {connection: s1, read: true, expect: {exists: true}}
+    - {connection: s2, read: true, expect: {exists: true}}
+    - {connection: s3, read: true, expect: {exists: true}}
+    - {connection: p1, read: true, expect: {exists: true}}
+    - {connection: p2, read: true, expect: {exists: true}}
+    - {connection: s2, command: [UNSUBSCRIBE, news], expect: {exists: true}}
+    - {command: [PUBLISH, news, world], expect: {equals: 4}}
+    - {connection: s1, read: true, expect: {exists: true}}
+    - {connection: p1, read: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fanout}

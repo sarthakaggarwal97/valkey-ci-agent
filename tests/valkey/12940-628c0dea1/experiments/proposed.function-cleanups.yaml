@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.function-cleanups
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION HELP drops the Library description line; FUNCTION LOAD metadata
+    error paths and async flush of a large library behave the same on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, HELP], expect_difference: true, expect: {exists: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) return 'hello1' end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: hello1}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=mylib\nerror"], expect: {error: "Error\
+          \ compiling function"}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: hello1}}
+    - {command: [FUNCTION, LOAD, "no shebang"], expect: {error: "Missing library metadata"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bad-name\nredis.register_function('x',\
+          \ function() return 1 end)"], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!notanengine name=xx\nwhatever"], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=\nredis.register_function('x', function()\
+          \ return 1 end)"], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,100 do redis.register_function('f'\
+          \ .. i, function(keys, args) return i end) end"], expect: {equals: biglib}}
+    - {command: [FCALL, f50, 0], expect: {equals: 50}}
+    - {command: [FUNCTION, STATS], compare: skip}
+    - {command: [FUNCTION, DUMP], compare: skip}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib2\nredis.register_function('again',\
+          \ function() return 'ok2' end)"], expect: {equals: mylib2}}
+    - {command: [FCALL, again, 0], expect: {equals: ok2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fn}

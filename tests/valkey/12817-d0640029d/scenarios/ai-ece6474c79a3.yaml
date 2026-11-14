@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f81c3fd89ed9..d0640029dcf8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ece6474c79a3
+seed: 17
+experiment:
+  id: proposed.module-fake-client-memtracking
+  inputs:
+    resp: 2
+    maxmemory_clients: 1mb
+    io_threads: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7600

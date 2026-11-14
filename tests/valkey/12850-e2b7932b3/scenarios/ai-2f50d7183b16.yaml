@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb2b6e29273c..e2b7932b347d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2f50d7183b16
+seed: 102
+experiment:
+  id: proposed.dict-shrink-on-delete
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

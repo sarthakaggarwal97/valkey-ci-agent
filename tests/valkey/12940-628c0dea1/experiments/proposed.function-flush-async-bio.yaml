@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.function-flush-async-bio
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Flushing a 100-function library with FUNCTION FLUSH ASYNC, a plain FUNCTION FLUSH
+    under lazyfree-lazy-user-flush yes, and FUNCTION FLUSH SYNC exercises the renamed
+    functionsLibCtxFunctionsLen in freeFunctionsAsync (>64 functions takes the bio
+    lazyFreeFunctionsCtx path, <=64 the inline free), compared against the parent
+    build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fflush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {lazyfree-lazy-user-flush: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command:
+      - FUNCTION
+      - LOAD
+      - |
+        #!lua name=biglib
+        for i=1,100 do
+          redis.register_function{function_name='f' .. i, callback=function(keys, args) return i end, flags={'no-writes'}}
+        end
+      expect: {equals: biglib}
+    - {command: [FCALL, f1, "0"], expect: {equals: 1}}
+    - {command: [FCALL_RO, f100, "0"], expect: {equals: 100}}
+    - {command: [FUNCTION, FLUSH, BOTH], expect: {error: "SYNC|ASYNC"}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FCALL, f1, "0"], expect: {error: "Function not found"}}
+    - {command: [INFO, memory], compare: skip, wait_s: 20, expect: {contains: "lazyfree_pending_objects:0"}}
+    - command:
+      - FUNCTION
+      - LOAD
+      - |
+        #!lua name=biglib
+        for i=1,100 do
+          redis.register_function{function_name='f' .. i, callback=function(keys, args) return i end, flags={'no-writes'}}
+        end
+      expect: {equals: biglib}
+    - {command: [FCALL, f50, "0"], expect: {equals: 50}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [FCALL, f50, "0"], expect: {error: "Function not found"}}
+    - {command: [INFO, memory], compare: skip, wait_s: 20, expect: {contains: "lazyfree_pending_objects:0"}}
+    - command:
+      - FUNCTION
+      - LOAD
+      - |
+        #!lua name=smalllib
+        for i=1,3 do
+          redis.register_function{function_name='g' .. i, callback=function(keys, args) return i end}
+        end
+      expect: {equals: smalllib}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FCALL, g1, "0"], expect: {error: "Function not found"}}
+    - command:
+      - FUNCTION
+      - LOAD
+      - |
+        #!lua name=biglib
+        for i=1,100 do
+          redis.register_function{function_name='f' .. i, callback=function(keys, args) return i end, flags={'no-writes'}}
+        end
+      expect: {equals: biglib}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [FCALL, f1, "0"], expect: {equals: 1}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FCALL, f1, "0"], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, STATS]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fflush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fflush}

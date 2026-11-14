@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5358bd7cdd9655feabfea98032e6de72dbd5aeca",
+  "parent": "98881f755885271fe6a55b3479c5496674571b0e",
+  "pr": 12899,
+  "pr_repo": "redis/redis",
+  "subject": "Reduce performance impact of dict rehashing and make it shorter. (#12899)",
+  "date": "2024-01-27",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 67,
+    "executed": 66,
+    "percent": 98,
+    "uncovered": [
+      "src/dict.c:476"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6475,
+  "findings": [],
+  "recorded": []
+}

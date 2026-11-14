@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T13:10+00:00.
+Updated 2026-11-14T13:20+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2346 | 194 | #12899 (2024-01-27) | 300 | 244.0 |
+| valkey-io/valkey | 2369 | 171 | #12906 (2024-01-15) | 323 | 247.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
 | valkey-io/valkey-search | 690 | 0 | f8106e72e984 (2024-11-27) | 9 | 39.3 |
@@ -13,28 +13,28 @@ Updated 2026-11-14T13:10+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-14T10:39:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43577709618): 20 merge(s) tested, 2 without a code change.
+[2026-11-14T13:20:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43586358252): 20 merge(s) tested, 4 without a code change.
 
-- [redis/redis#13008](https://github.com/redis/redis/pull/13008) ([tests](tests/valkey/13008-0777dc789/)): Improve error handling in connSocketBlockingConnect for various connction failures (#13008): 1 of 1 test(s) reached the change, coverage 100%
-- [redis/redis#13033](https://github.com/redis/redis/pull/13033) ([tests](tests/valkey/13033-809651543/)): Fix invalid dictNext usage when pubsubshard_channels became empty (#13033): 0 of 5 test(s) reached the change, coverage 100%
-- [redis/redis#13020](https://github.com/redis/redis/pull/13020) ([tests](tests/valkey/13020-13bd3643c/)): Re-compute active_defrag_running after adjusting defrag configurations (#13020): declined: The change only affects how promptly the internal active-defrag pacing value (server.active_defrag_running) reacts to CONFIG SET of the defrag cycle/threshold configs. This is unreachable and non-comparable in the fuzzer: it requires a jemalloc build (activedefrag is rejected otherwise), i
-- [redis/redis#13027](https://github.com/redis/redis/pull/13027) ([tests](tests/valkey/13027-87eaf119c/)): Minor optimization for expire dict in defragKey (#13027): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#13031](https://github.com/redis/redis/pull/13031) ([tests](tests/valkey/13031-84fd745d6/)): Fix kvstore unable to push resize_cursor for resize when dict is NULL (#13031): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#12822](https://github.com/redis/redis/pull/12822) ([tests](tests/valkey/12822-8cd62f82c/)): Refactor the per-slot dict-array db.c into a new kvstore data structure (#12822): 2 of 11 test(s) reached the change, coverage 80%; crash, fixed by redis/redis#12822 (recorded)
-- [redis/redis#13030](https://github.com/redis/redis/pull/13030) ([tests](tests/valkey/13030-f20774ece/)): Fix active expire timeout when db done the scanning (#13030): declined: This is a performance/timeout fix to the local active-expire cron loop. The added db_done flag only changes the repeat heuristic so a fully-scanned expires dictionary is not needlessly re-scanned; it does not change which keys are reclaimed (the full first pass already expires and propagat
-- [redis/redis#12434](https://github.com/redis/redis/pull/12434) ([tests](tests/valkey/12434-02a87885e/)): Add missing structural API changes to JSON file (#12434): 2 of 2 test(s) reached the change
-- [redis/redis#12949](https://github.com/redis/redis/pull/12949) ([tests](tests/valkey/12949-c1041c2c0/)): Make db->avg_ttl more precise (#12949): 0 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#12925](https://github.com/redis/redis/pull/12925) ([tests](tests/valkey/12925-62153b3b2/)): Refine the purpose of rdb saving with accurate flags (#12925): declined: The change only passes more accurate RDBFLAGS values into save functions, but no save-path code consumes RDBFLAGS_REPLICATION on this checkout: rdbSaveInfoAuxFields and rdbSaveDb test only RDBFLAGS_AOF_PREAMBLE, rdbSaveInternal tests only RDBFLAGS_KEEP_CACHE, and startSaving's module-subev
-- [redis/redis#13015](https://github.com/redis/redis/pull/13015) ([tests](tests/valkey/13015-6016973ac/)): Fix module assertion crash when timer and timeout are unlocked in the same event loop (#13015): 2 of 5 test(s) reached the change, coverage 0%; crash, fixed by redis/redis#13015 (recorded)
-- [redis/redis#13017](https://github.com/redis/redis/pull/13017) ([tests](tests/valkey/13017-74a6e48a3/)): Fix module unblock crash due to no timeout_callback (#13017): 0 of 4 test(s) reached the change, coverage 0%
-- [redis/redis#12765](https://github.com/redis/redis/pull/12765) ([tests](tests/valkey/12765-f469dd8ca/)): Add novalues option to command HSCAN. (#12765): 3 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12299](https://github.com/redis/redis/pull/12299) ([tests](tests/valkey/12299-24f6d08b3/)): Implement `CLIENT KILL MAXAGE <maxage>` (#12299): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13011](https://github.com/redis/redis/pull/13011) ([tests](tests/valkey/13011-45a35a79c/)): Fix timeout not being set in module blockClient case (#13011): 4 of 5 test(s) reached the change, coverage 100%; [crash, predates redis/redis#13011](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157)
-- [redis/redis#10609](https://github.com/redis/redis/pull/10609) ([tests](tests/valkey/10609-76adbf6ff/)): Adds connection timeout option to redis-cli (#10609): 0 of 4 test(s) reached the change, coverage 0%
-- [redis/redis#13004](https://github.com/redis/redis/pull/13004) ([tests](tests/valkey/13004-492021db9/)): Fix blocking commands timeout is reset due to re-processing command (#13004): 0 of 7 test(s) reached the change, coverage 0%
-- [redis/redis#12819](https://github.com/redis/redis/pull/12819) ([tests](tests/valkey/12819-af7ceeb76/)): Optimize resizing hash table to resize not only non-empty dicts. (#12819): 3 of 5 test(s) reached the change, coverage 92%
-- [redis/redis#12985](https://github.com/redis/redis/pull/12985) ([tests](tests/valkey/12985-c5273cae1/)): Add RM_TryCalloc() and RM_TryRealloc() (#12985): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13000](https://github.com/redis/redis/pull/13000) ([tests](tests/valkey/13000-acd960522/)): Fix maxmemory-samples stack overflow crash in evictionPoolPopulate, limit its value to [1,64] (#13000): 2 of 2 test(s) reached the change; crash, fixed by redis/redis#13000 (recorded)
+- [redis/redis#12899](https://github.com/redis/redis/pull/12899) ([tests](tests/valkey/12899-5358bd7cd/)): Reduce performance impact of dict rehashing and make it shorter. (#12899): 0 of 5 test(s) reached the change, coverage 98%
+- [redis/redis#12993](https://github.com/redis/redis/pull/12993) ([tests](tests/valkey/12993-98881f755/)): fix the wrong path in mkreleasehdr.sh (#12993): declined: The change fixes a path in src/mkreleasehdr.sh, the build script that computes the GIT_DIRTY flag embedded in release.h at compile time. It is a build/CI-only change with no effect on server runtime behavior, command replies, replication, persistence, or the bundled tools, so no fuzzer sce
+- [redis/redis#12989](https://github.com/redis/redis/pull/12989) ([tests](tests/valkey/12989-4cb5ad85a/)): Fix unauthenticated client query buffer 1MB limit (#12989): declined: The change only lowers a dead constant. The fixed branch (networking.c:2729) that caps an unauthenticated client's query buffer applies solely when authRequired(c) is true, but that same gate already enforces strictly tighter parser limits present in both builds: unauthenticated multibulk 
+- [redis/redis#12961](https://github.com/redis/redis/pull/12961) ([tests](tests/valkey/12961-85a834bfa/)): Revert multi OOM limit and add multi buffer limit (#12961): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12980](https://github.com/redis/redis/pull/12980) ([tests](tests/valkey/12980-07b292af5/)): Add sender NULL check in clusterProcessGossipSection invalid_ids case (#12980): declined: The fix guards a NULL-pointer dereference in clusterProcessGossipSection that occurs only inside the invalid_ids branch: when a node receives a cluster-bus gossip section containing invalid (non-[a-z0-9]) node IDs from a sender it does not yet know (link->node NULL and clusterLookupNode(hd
+- [redis/redis#12977](https://github.com/redis/redis/pull/12977) ([tests](tests/valkey/12977-85c31e0cf/)): Allow running WAITAOF in scripts, remove NOSCRIPT flag (#12977): 3 of 3 test(s) reached the change
+- [redis/redis#12940](https://github.com/redis/redis/pull/12940) ([tests](tests/valkey/12940-628c0dea1/)): Some cleanups around function (#12940): 2 of 5 test(s) reached the change, coverage 88%; crash, introduced and since fixed (recorded); crash, fixed by redis/redis#12940 (recorded); crash, introduced and since fixed (recorded); crash, fixed by redis/redis#12940 (recorded); crash, introduced and since fixed (recorded)
+- [redis/redis#12969](https://github.com/redis/redis/pull/12969) ([tests](tests/valkey/12969-f9a0eb60f/)): update redis-check-rdb types (#12969): 0 of 1 test(s) reached the change
+- [redis/redis#12965](https://github.com/redis/redis/pull/12965) ([tests](tests/valkey/12965-2bce71b5f/)): Exit early if slowlog/acllog max len set to zero (#12965): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12921](https://github.com/redis/redis/pull/12921) ([tests](tests/valkey/12921-e12f2decc/)): Prevent nodes with invalid IDs from being propagated through gossip (#12921): 0 of 2 test(s) reached the change, coverage 36%
+- [redis/redis#12947](https://github.com/redis/redis/pull/12947) ([tests](tests/valkey/12947-8d0156eb1/)): Set the correct id for tempDb (#12947): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12931](https://github.com/redis/redis/pull/12931) ([tests](tests/valkey/12931-85a239b36/)): Change dictGetSafeIterator to dictGetIterator in pubsub (#12931): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12948](https://github.com/redis/redis/pull/12948) ([tests](tests/valkey/12948-b07174afc/)): Change the threshold of dict expand, shrink and rehash (#12948): 1 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#12817](https://github.com/redis/redis/pull/12817) ([tests](tests/valkey/12817-d0640029d/)): Fix race condition issues between the main thread and module threads (#12817): 6 of 18 test(s) reached the change, coverage 60%
+- [redis/redis#12950](https://github.com/redis/redis/pull/12950): to retry, Claude Code failed (rc=1): timeout after 600s
+- [redis/redis#12962](https://github.com/redis/redis/pull/12962) ([tests](tests/valkey/12962-1c7eb0ad3/)): Fix minor memory leaks in dictTest (#12962): declined: The change touches only dictTest() in src/dict.c, the internal unit-test harness code run via the test runner, not any server runtime path. It frees temporary strings allocated by stringFromLongLong inside the test to silence test-only memory leaks; no command, reply, data structure, repli
+- [redis/redis#12510](https://github.com/redis/redis/pull/12510) ([tests](tests/valkey/12510-0e5a4a27e/)): Call emptyData when disk-based sync rdbLoad fails (#12510): 0 of 4 test(s) reached the change, coverage 0%
+- [redis/redis#12952](https://github.com/redis/redis/pull/12952) ([tests](tests/valkey/12952-14b1edfd9/)): Fix dict resize ratio checks, avoid precision loss from integer division (#12952): 2 of 4 test(s) reached the change, coverage 85%
+- [redis/redis#12946](https://github.com/redis/redis/pull/12946) ([tests](tests/valkey/12946-ecc31bc69/)): Updated comments on dictResizeEnable for new dict shrink (#12946): declined: The diff changes only a code comment in src/dict.c (updating the documentation of dict_can_resize to mention the new dict shrink condition). No executable code, config, or behaviour changes, so no scenario can exercise it.
+- [redis/redis#12850](https://github.com/redis/redis/pull/12850) ([tests](tests/valkey/12850-e2b7932b3/)): Shrink dict when deleting dictEntry (#12850): 3 of 6 test(s) reached the change, coverage 86%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-14T13:10+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 932 of 1487 tested (63%)
-- Changed-line coverage: median 100% of 973 merge(s) measured, 74 under 50%
-- Recall: 245 parents flagged of 388 fix merges
-- Claude: $652.16 in the last 24 hours, $6429.38 in the last 7 days, $10915.95 in all
+- Merges whose tests reached the change: 940 of 1501 tested (63%)
+- Changed-line coverage: median 100% of 985 merge(s) measured, 76 under 50%
+- Recall: 247 parents flagged of 390 fix merges
+- Claude: $738.52 in the last 24 hours, $6515.74 in the last 7 days, $11002.32 in all
 - Issues filed: 79
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -141,4 +141,4 @@ Updated 2026-11-14T13:10+00:00.
 
 ## Retries
 
-None.
+- [redis/redis#12950](https://github.com/redis/redis/pull/12950): attempt 1 of 3, Claude Code failed (rc=1): timeout after 600s
