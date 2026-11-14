@@ -425,9 +425,16 @@ def build_valkey(src: Path, *, asan: bool = False, coverage: bool = False) -> Pa
     gcov_flags = "-fprofile-arcs -ftest-coverage"
     env = {"CFLAGS": gcov_flags, "LDFLAGS": gcov_flags} if coverage else None
     _sh(f"make -j{nproc} BUILD_ZSTD=yes{flags}", src, src.parent / f"{src.name}-build.log", env)
-    # A commit from before the rename builds redis-server.
-    server = src / "src" / "valkey-server"
-    return server if server.exists() else src / "src" / "redis-server"
+    return built_server(src)
+
+
+def built_server(src: Path) -> Path:
+    """The server a build of Valkey in ``src`` made, by whichever name its commit used: redis-server before the
+    fork's first commit (38632278f), placeholderkv-server until #62 (57789d4d0) named it valkey-server."""
+    for name in ("valkey-server", "placeholderkv-server"):
+        if (src / "src" / name).exists():
+            return src / "src" / name
+    return src / "src" / "redis-server"
 
 
 def build_test_modules(src: Path) -> None:
@@ -1316,8 +1323,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             try:
                 if not (tree / "src").is_dir():
                     build_valkey(fetch(repo, merge["sha"], tree), coverage=True)
-                server = tree / "src" / "valkey-server"
-                server = server if server.exists() else tree / "src" / "redis-server"
+                server = built_server(tree)
                 done = [fuzz(fuzzer_bin, doc, int(doc["seed"]), candidate={**sides["merge"], "server": server},
                              compare=sides["parent"], core=core, experiment_dir=plain_dir,
                              run_dir=work / "runs" / f"{test}-coverage") for test, doc in tests]

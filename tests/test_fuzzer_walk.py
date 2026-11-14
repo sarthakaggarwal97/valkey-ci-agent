@@ -1378,6 +1378,17 @@ def test_the_coverage_build_carries_the_gcov_flags_to_sub_makes(monkeypatch, tmp
     assert calls[1][1] is None and calls[2][1] is None
 
 
+def test_the_built_server_is_found_by_each_name_valkey_gave_it(tmp_path):
+    # The walk's #35 (3782446a): from the fork's first commit until #62 the build made placeholderkv-server, and a
+    # path to valkey-server or redis-server failed every run's artifacts.parent acquire with FileNotFoundError.
+    (tmp_path / "src").mkdir()
+    assert walk.built_server(tmp_path) == tmp_path / "src" / "redis-server"
+    (tmp_path / "src" / "placeholderkv-server").touch()
+    assert walk.built_server(tmp_path) == tmp_path / "src" / "placeholderkv-server"
+    (tmp_path / "src" / "valkey-server").touch()
+    assert walk.built_server(tmp_path) == tmp_path / "src" / "valkey-server"
+
+
 def test_a_failed_walks_error_keeps_the_head_and_the_tail(monkeypatch, tmp_path):
     # The valkey-search builds of 2026-11-08: _sh raises with the build log's last 30 lines, over 1000
     # characters of ninja progress, and a plain [:1000] cut off the compiler's error at the end.
