@@ -7,7 +7,8 @@ any agent runs so that each phase verifies against an incremental build.
 1. **Evidence** (:mod:`scripts.factory.evidence`): a test that fails on the
    working commit, ``EVIDENCE_RUNS`` times, on its own assertion. Code commits
    it in the checkout, so the working commit the fix is prepared on holds it,
-   and freezes its files: the fix may not change them.
+   and freezes the lines it added: the fix may not change them. Other tests
+   in the same file it may, and the candidate names those it changed.
 2. **The fix**: the CI fix engine (:func:`scripts.ci_fix.engine.prepare_fix`),
    as for any failure, with the test's output as the failure's log, the test
    as the failing test, the adversarial review (:mod:`scripts.factory.review`)
@@ -20,6 +21,7 @@ the branch tip, for one commit, and the test alone as its evidence.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import replace
 from functools import partial
@@ -29,7 +31,17 @@ from typing import Callable
 from scripts.ci_fix import engine
 from scripts.ci_fix.agent import run_fix_agent
 from scripts.ci_fix.ci_job import JobCommands
-from scripts.ci_fix.engine import PREPARE_BUDGET_S, AgentFunc, TestFunc, checkout, keep_existing, run_test_command
+from scripts.ci_fix.engine import (
+    PREPARE_BUDGET_S,
+    AgentFunc,
+    TestFunc,
+    added_hunks,
+    added_tests,
+    changed_lines,
+    checkout,
+    keep_existing,
+    run_test_command,
+)
 from scripts.ci_fix.models import CandidateAction, FixCandidate, FixPlan
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, git_paths, run_git
 from scripts.factory import checks, review
@@ -106,7 +118,7 @@ def prepare_in(
                 ),
             ),
             target=replace(task.target, expected_sha=test_sha),
-            frozen_paths=evidence.paths,
+            frozen_hunks=added_hunks(evidence.patch),
         )
         fixed = fix_func(
             judged, evidence.log, agent_func=fix_agent,
@@ -122,12 +134,41 @@ def prepare_in(
         paths = tuple(sorted({*evidence.paths, *fixed.changed_paths}))
         return replace(
             fixed, patch=_combined_patch(repo_dir, head, paths), changed_paths=paths, evidence_patch=evidence.patch,
-            verification=verification,
+            verification=verification, changed_expectations=_changed_expectations(repo_dir, fixed, evidence),
         )
 
 
 def _named(evidence: Evidence) -> str:
     return ", ".join(f"`{test.name}` in `{test.file}`" if test.name else f"`{test.file}`" for test in evidence.tests)
+
+
+# A Tcl test's start with its name as written: ``test {name} {`` or ``test "name" {``.
+_TEST_NAME_RE = re.compile(r'^\s*test\s+(?:"([^"]*)"|\{([^}]*)\})')
+
+
+def _changed_expectations(repo_dir: str, fixed: FixCandidate, evidence: Evidence) -> tuple[str, ...]:
+    """The existing tests whose lines the fix changed, by name, for a committer to see.
+
+    A test runs from the line that names it to the next test's. The bot's own
+    test (which the fix may not change) and the tests the fix adds are not
+    existing expectations.
+    """
+    own = {test.name for test in evidence.tests} | {test.name for test in added_tests(fixed.patch)}
+    names: list[str] = []
+    for path, lines in changed_lines(fixed.patch).items():
+        if not (path.startswith("tests/") and path.endswith(".tcl")):
+            continue
+        try:
+            source = Path(repo_dir, path).read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        starts = [(number, match.group(1) or match.group(2) or "")
+                  for number, text in enumerate(source, 1) if (match := _TEST_NAME_RE.match(text))]
+        for index, (start, name) in enumerate(starts):
+            end = starts[index + 1][0] if index + 1 < len(starts) else len(source) + 1
+            if name not in own and any(start <= line < end for line in lines):
+                names.append(name)
+    return tuple(dict.fromkeys(names))
 
 
 def _build_once(repo_dir: str, run_test: TestFunc, deadline: float) -> None:

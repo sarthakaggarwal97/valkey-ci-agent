@@ -224,25 +224,35 @@ def _sanitizer(
     evidence: Evidence, candidate: FixCandidate, repo_dir: str, run_test: TestFunc, deadline: float,
     checks: list[str],
 ) -> str:
-    """The test once with the fix built under AddressSanitizer, as Valkey's CI builds it."""
+    """The test once with the fix built under AddressSanitizer, as Valkey's CI builds it.
+
+    As the engine runs the test, a plan whose run does not pass is followed by
+    its fallbacks: with ``--only``, code in the file outside any test can fail
+    for want of what a skipped test did, so the test's own block and then the
+    whole file run instead. A run the test itself fails is the fix's failure.
+    """
     unit = any(test.is_unit_test for test in evidence.tests)
     job = JobCommands(build=_ASAN_UNIT_BUILD if unit else _ASAN_BUILD, runtest=JOB.runtest, moduleapi=JOB.moduleapi)
     plan = plan_for(repo_dir, evidence.tests, scheduled=False, job=job)
     if plan is None:
         checks.append("The test could not be planned under AddressSanitizer.")
         return ""
-    plan = replace(plan, single_run=True)
-    command = plan.command(1)
-    result = run_test(repo_dir, command, _timeout(deadline))
-    if result.timed_out:
-        raise RuntimeError(f"`{command}` did not finish in the time left ({result.output}).")
-    if not (result.passed and plan.ran(result)):
-        return (
-            f"With your change built under AddressSanitizer, the test does not pass: `{plan.quoted(1)}`. "
-            "A sanitizer report is a defect in the change or one it uncovers; read it before you change "
-            f"anything.\n\nIts output:\n{result.output}"
-        )
-    checks.append(f"With the fix built under AddressSanitizer, the test passes: `{plan.quoted(1)}`.")
+    while True:
+        current = replace(plan, single_run=True)
+        command = current.command(1)
+        result = run_test(repo_dir, command, _timeout(deadline))
+        if result.timed_out:
+            raise RuntimeError(f"`{command}` did not finish in the time left ({result.output}).")
+        if result.passed and current.ran(result):
+            break
+        if plan.fallback is None or current.failed(result):
+            return (
+                f"With your change built under AddressSanitizer, the test does not pass: `{current.quoted(1)}`. "
+                "A sanitizer report is a defect in the change or one it uncovers; read it before you change "
+                f"anything.\n\nIts output:\n{result.output}"
+            )
+        plan = plan.fallback
+    checks.append(f"With the fix built under AddressSanitizer, the test passes: `{current.quoted(1)}`.")
     return ""
 
 

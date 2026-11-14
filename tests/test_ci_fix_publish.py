@@ -876,6 +876,7 @@ def test_a_draft_for_a_fix_from_an_issue_is_titled_by_its_change_and_keeps_the_m
     candidate = replace(
         _candidate(), title="Return the new value from GET", summary="GET read a stale entry after SET.",
         root_cause="the lookup skipped the new entry", verification="The test fails 3 of 3.\nWith the fix, it passes.",
+        changed_expectations=("XINFO GROUPS lag - entries read", "XINFO GROUPS lag after XDEL"),
     )
 
     assert publish_mod._draft_title(task, candidate) == "Return the new value from GET"
@@ -883,6 +884,9 @@ def test_a_draft_for_a_fix_from_an_issue_is_titled_by_its_change_and_keeps_the_m
     assert body.startswith("Fixes #9\n\nGET read a stale entry after SET.\n\n## AI generated details\n\n**Root cause:**")
     assert "See the run" not in body and "actions/runs" not in body
     assert "- The test fails 3 of 3." in body
+    # Existing tests the fix changed, one line each, before what the bot checked.
+    assert "**Existing expectations changed**\n\n- `XINFO GROUPS lag - entries read`\n- `XINFO GROUPS lag after XDEL`\n" in body
+    assert body.index("Existing expectations changed") < body.index("**What the bot checked**")
     assert "Its commit has no DCO sign-off" in body
     # A CI failure's draft keeps its own title and run link.
     ci = _task(TargetKind.DRAFT_PR, issue=9)

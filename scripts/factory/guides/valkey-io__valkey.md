@@ -8,14 +8,21 @@ conventions.
 What follows first is the bot's own policy for a fix made from an issue, not
 a summary of those files.
 
-## The test is the specification
+## The issue is the specification
 
 A test written from the issue fails on the working commit, every time code
 ran it. The fix is judged by it: it must pass with the fix, for the right
-reason, and the test itself may not be changed. The fix lives in `src/`: the
-test is not the thing at fault here. Read the test and the issue together
-before you read the code: the issue says what the server should do, the test
-says how that is checked.
+reason, and the test itself may not be changed; code rejects a patch that
+changes its lines. The fix lives in `src/`: the test is not the thing at
+fault here. Read the test and the issue together before you read the code:
+the issue says what the server should do, the test says how that is checked.
+
+An older test in the same file asserts what the server did before the fix.
+Such an assertion may be changed only when the issue says that expectation
+is wrong, and then as little as the issue requires. Name every such change,
+test by test, in `validation`: the pull request lists them for a committer.
+A fix that changes an old assertion the issue says nothing about is a fix
+that hides what it broke.
 
 A test can cover less than the issue. Fix what the issue describes, not only
 the line the test asserts: a fix that satisfies the assertion and leaves the

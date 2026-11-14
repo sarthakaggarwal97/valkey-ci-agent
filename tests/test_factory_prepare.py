@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from scripts.ci_fix import engine as engine_mod
 from scripts.ci_fix.agent import Review
 from scripts.ci_fix.ci_job import JobCommands
+from scripts.ci_fix.comment import candidate_context
 from scripts.ci_fix.models import (
     CandidateAction,
     FailedTest,
@@ -20,9 +22,11 @@ from scripts.ci_fix.models import (
     FixTarget,
     FixTask,
     FrontDoor,
+    FrozenHunk,
     IssueBrief,
     TargetKind,
 )
+from scripts.ci_fix.state import decode, encode
 from scripts.ci_fix.verification import LOOPS, VerifyPlan
 from scripts.factory import checks as checks_mod
 from scripts.factory import evidence as evidence_mod
@@ -46,7 +50,9 @@ def _source(tmp_path: Path) -> tuple[Path, str]:
     git(repo, "config", "user.email", "test@example.com")
     (repo / "value.txt").write_text("before\n", encoding="utf-8")
     (repo / "tests" / "unit").mkdir(parents=True)
-    (repo / "tests" / "unit" / "value.tcl").write_text("start_server {} {\n}\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "value.tcl").write_text(
+        "start_server {} {\n    test {older check} {\n        assert_equal before [r get k]\n    }\n}\n", encoding="utf-8",
+    )
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "initial")
     return repo, git(repo, "rev-parse", "HEAD")
@@ -104,14 +110,20 @@ def _fixer(*values):
         seen["tasks"].append(task)
         seen["log"] = job_log
         value = next(rounds)
+        path = Path(repo_dir, "tests/unit/value.tcl")
         if value == "touch the test":
-            path = Path(repo_dir, "tests/unit/value.tcl")
             path.write_text(path.read_text().replace("right", "before"), encoding="utf-8")
+            changed = ("tests/unit/value.tcl",)
+        elif value == "change the older test":
+            path.write_text(path.read_text().replace("assert_equal before", "assert_equal right"), encoding="utf-8")
+            Path(repo_dir, "value.txt").write_text("right\n", encoding="utf-8")
+            changed = ("tests/unit/value.tcl", "value.txt")
         else:
             Path(repo_dir, "value.txt").write_text(f"{value}\n", encoding="utf-8")
+            changed = ("value.txt",)
         return FixCandidate(
             action=CandidateAction.PATCH, title="Return the new value from GET", root_cause="stale value",
-            reasoning="set it", changed_paths=("value.txt",) if value != "touch the test" else ("tests/unit/value.tcl",),
+            reasoning="set it", changed_paths=changed,
         )
 
     agent.seen = seen
@@ -139,9 +151,13 @@ def test_the_test_is_written_first_then_the_fix_judged_by_it_as_one_patch(plain,
     assert candidate.changed_paths == ("tests/unit/value.tcl", "value.txt")
     assert "+test {value check}" in candidate.patch and "+right" in candidate.patch and "-before" in candidate.patch
     assert "+test {value check}" in candidate.evidence_patch and "value.txt" not in candidate.evidence_patch
-    # The engine was given the test as the failure, frozen, on a working commit that holds it.
+    # The engine was given the test as the failure, its lines frozen, on a working commit that holds it.
     judged = seen["tasks"][0]
-    assert judged.failure.failed_tests == (_TEST,) and judged.frozen_paths == ("tests/unit/value.tcl",)
+    assert judged.failure.failed_tests == (_TEST,)
+    assert judged.frozen_hunks == (
+        FrozenHunk("tests/unit/value.tcl", "test {value check} {\n    assert_equal right [r get k]\n}"),
+    )
+    assert candidate.changed_expectations == ()
     assert judged.target.expected_sha != head and judged.failure.head_sha == head
     assert "fails on the working commit; the fix must make it pass" in judged.failure.description
     assert seen["log"].startswith("# Evidence\nThe test `value check` in `tests/unit/value.tcl`, written from issue #9")
@@ -183,8 +199,28 @@ def test_a_fix_that_changes_the_test_goes_back_and_the_test_stays(plain, tmp_pat
     candidate, _head, seen = _prepare(tmp_path, monkeypatch, fixer)
 
     assert candidate.action is CandidateAction.PATCH
-    assert "holds the test the fix is judged by" in seen["feedback"][1]
-    assert "assert_equal right" in candidate.patch and "assert_equal before" not in candidate.patch
+    assert "The patch changed the test the fix is judged by, in `tests/unit/value.tcl`" in seen["feedback"][1]
+    assert "+    assert_equal right [r get k]" in candidate.patch and "-        assert_equal before" not in candidate.patch
+    assert candidate.changed_expectations == ()
+
+
+def test_a_fix_that_changes_an_older_test_in_the_same_file_is_accepted_and_the_test_is_named(
+    plain, tmp_path, monkeypatch,
+):
+    fixer = _fixer("change the older test")
+
+    candidate, _head, seen = _prepare(tmp_path, monkeypatch, fixer)
+
+    assert candidate.action is CandidateAction.PATCH and seen["feedback"] == [""]
+    assert candidate.changed_paths == ("tests/unit/value.tcl", "value.txt")
+    # The older test's assertion changed, the bot's own test as it was written.
+    assert "-        assert_equal before [r get k]\n+        assert_equal right [r get k]" in candidate.patch
+    assert "+test {value check} {\n+    assert_equal right [r get k]" in candidate.patch
+    assert candidate.changed_expectations == ("older check",)
+    # The draft PR body and the comment both name it.
+    body = "\n".join(candidate_context(candidate, include_reasoning=True))
+    assert "**Existing expectations changed**\n\n- `older check`\n" in body
+    assert body.index("Existing expectations changed") < body.index("**What the bot checked**")
 
 
 def test_without_evidence_there_is_no_fix_and_the_fixer_never_runs(plain, tmp_path, monkeypatch):
@@ -229,3 +265,12 @@ def test_a_working_commit_that_does_not_build_is_a_failed_attempt(plain, tmp_pat
 
     with pytest.raises(RuntimeError, match="does not build"):
         prepare_mod.prepare_in(_plan(head), run_test=engine_mod.run_test_command)
+
+
+def test_the_frozen_lines_and_the_changed_expectations_survive_the_jobs_json(tmp_path):
+    """The plan, fix and publish jobs hand the task and the candidate on as JSON."""
+    task = replace(_plan("a" * 40).task, frozen_hunks=(FrozenHunk("tests/unit/value.tcl", "test {it} {\n}"),))
+    candidate = FixCandidate(CandidateAction.PATCH, patch="p", changed_expectations=("older check", "other"))
+
+    assert decode(FixTask, encode(task)) == task
+    assert decode(FixCandidate, encode(candidate)) == candidate

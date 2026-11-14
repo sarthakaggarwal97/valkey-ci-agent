@@ -56,6 +56,7 @@ from scripts.ci_fix.models import (
     FixContext,
     FixPolicy,
     FixTask,
+    FrozenHunk,
     TargetKind,
 )
 from scripts.ci_fix.policy import target_capabilities
@@ -954,6 +955,32 @@ def changed_lines(patch: str) -> dict[str, set[int]]:
     return changed
 
 
+def added_hunks(patch: str) -> tuple[FrozenHunk, ...]:
+    """Each run of lines ``patch`` adds together, with its file: what a later patch may not change."""
+    hunks: list[FrozenHunk] = []
+    path = ""
+    run: list[str] = []
+    for text in [*patch.splitlines(), ""]:
+        if text.startswith("+") and not text.startswith("+++ ") and path:
+            run.append(text[1:])
+            continue
+        if run:
+            hunks.append(FrozenHunk(path, "\n".join(run)))
+            run = []
+        if text.startswith("+++ "):
+            path = text[6:] if text.startswith("+++ b/") else text[4:]
+    return tuple(hunks)
+
+
+def _holds(repo_dir: str, hunk: FrozenHunk) -> bool:
+    """Whether the tree's file still holds ``hunk``'s lines, together and unchanged."""
+    try:
+        content = Path(repo_dir, hunk.path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return f"\n{hunk.text}\n" in f"\n{content}\n"
+
+
 _HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 # A Tcl test's start: ``test {name} {`` or ``test "name" {``.
 _TEST_START_RE = re.compile(r"^\s*test\s+[{\"]")
@@ -1200,14 +1227,15 @@ def _checked_candidate(
 
     if not changed_paths:
         raise _Rejected("You chose `patch` but changed no files.")
-    frozen = sorted(set(changed_paths) & set(task.frozen_paths))
+    frozen = sorted({hunk.path for hunk in task.frozen_hunks if hunk.path in changed_paths and not _holds(repo_dir, hunk)})
     if frozen:
         # Never the agent's to change: put back as the working commit has it.
         run_git(repo_dir, "checkout", "--", *frozen)
         raise _Rejected(
-            "The patch changed " + ", ".join(f"`{path}`" for path in frozen)
-            + ", which holds the test the fix is judged by. That test may not be changed, and code put it "
-            "back as it was: leave it, and fix what makes it fail."
+            "The patch changed the test the fix is judged by, in " + ", ".join(f"`{path}`" for path in frozen)
+            + ". That test may not be changed, and code put the file back as it was: leave it, and fix what "
+            "makes it fail. Another test in the file may change only when the issue says its expectation is "
+            "wrong; name every such change in `validation`."
         )
     try:
         patch = build_approved_patch(repo_dir, changed_paths, strict=True)

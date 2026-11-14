@@ -349,7 +349,8 @@ def evidence_log(
         "# Evidence",
         f"The test {_named(tests)}, written from issue #{brief.number} below, fails on the working commit "
         f"{head[:12]} in {len(outputs)} of {len(outputs)} runs. The fix is judged by this test: it must pass with "
-        "the fix, and the test itself may not be changed.",
+        "the fix, and the test itself may not be changed. An older test in the same file may be changed only when "
+        "the issue says its expectation is wrong.",
     ]
     if expects:
         lines += ["", f"What the test asserts, and what the server does instead: {expects}"]

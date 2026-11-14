@@ -146,6 +146,12 @@ def candidate_context(
         lines += [f"**The fix:** {prose(candidate.reasoning, 3_000)}", ""]
     if include_reasoning and candidate.adapts:
         lines += [f"**Adapts upstream:** `{candidate.adapts[:12]}`", ""]
+    if candidate.changed_expectations:
+        # Existing tests the fix changed: the issue, not the fix, has to say their expectation was wrong.
+        lines += [
+            "**Existing expectations changed**", "",
+            *[f"- `{compact_text(name, 300).replace('`', '')}`" for name in candidate.changed_expectations], "",
+        ]
     checks = check_items(candidate.verification)
     if checks:
         lines += ["**What the bot checked**", "", *checks, ""]
