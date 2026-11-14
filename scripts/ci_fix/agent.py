@@ -10,9 +10,9 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
-from scripts.ai.runtime import AgentProfileName, run_agent
+from scripts.ai.runtime import AgentProfileName, AgentRunResult, run_agent
 from scripts.ci_fix.models import (
     CandidateAction,
     FailedTest,
@@ -24,6 +24,7 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.policy import target_capabilities
 from scripts.common.ai_output import extract_json_object
+from scripts.common.isolation import kept_home
 from scripts.common.proc import git_output
 from scripts.common.text_utils import compact_text
 
@@ -63,9 +64,10 @@ _ISSUE_POLICY = (
     "test in the same file asserts what the server did before, and may be changed "
     "only when the issue says that expectation is wrong; name every such change, "
     "test by test, in `validation`. You may add a test of your own where the fix "
-    "needs one. Do not hide the defect, special-case the test, or weaken any "
-    "test. A fix that needs a new command is a decision for the project, not a "
-    "fix: refuse and say so."
+    "needs one: a Tcl test under tests/, since code builds with plain `make` and "
+    "runs Tcl tests only, so a test under src/unit/ is never built or run. Do not "
+    "hide the defect, special-case the test, or weaken any test. A fix that needs "
+    "a new command is a decision for the project, not a fix: refuse and say so."
 )
 
 _UPSTREAM_FIRST = (
@@ -337,12 +339,22 @@ class AgentTimeout(RuntimeError):
 
 
 class ModelUnavailable(RuntimeError):
-    """A session ended on a model API error, after the CLI's own retries: it judged nothing."""
+    """A session ended on a model API error, after the CLI's own retries: it judged nothing.
+
+    ``session_id`` names the session, so that it can be resumed (``resumed``).
+    """
+
+    def __init__(self, message: str, session_id: str = "") -> None:
+        super().__init__(message)
+        self.session_id = session_id
 
 
-# Before a session that died on a model API error is run again.
+# Before a session that died on a model API error is resumed.
 API_ERROR_PAUSE_S = 60
+# How many times one session is resumed after a model API error.
+MAX_RESUMES = 2
 _API_ERROR_RE = re.compile(r"API Error(?:: (\d{3}))?")
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
 def api_error(stdout: str) -> str:
@@ -368,6 +380,59 @@ def api_error(stdout: str) -> str:
     return ""
 
 
+def session_id(stdout: str) -> str:
+    """The id of the session whose event stream ``stdout`` is, from its first event that names one; else ""."""
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and isinstance(event.get("session_id"), str):
+            found = event["session_id"]
+            return found if _SESSION_ID_RE.fullmatch(found) else ""
+    return ""
+
+
+T = TypeVar("T")
+
+
+def resumed(run: Callable[[str, str, int | None], T], repo_dir: str, timeout: int | None, deadline: float | None) -> T:
+    """``run(home, resume, timeout)``, its session resumed after a model API error, at most ``MAX_RESUMES`` times.
+
+    The first call starts a session in ``home``; one after a ``ModelUnavailable``
+    resumes that session, which keeps what it read and edited, in the same home.
+    The resumed call gets at least the time the failed one used, else what was
+    left of ``timeout``, within ``deadline`` (None: ``timeout`` is the whole
+    budget): a session that died 39 minutes in needs about that long again, not
+    what the first budget left over.
+    """
+    with kept_home(Path(repo_dir)) as home:
+        resume = ""
+        for resumes in range(MAX_RESUMES + 1):
+            started = time.monotonic()
+            try:
+                return run(home, resume, timeout)
+            except ModelUnavailable as exc:
+                used = int(time.monotonic() - started)
+                if resumes == MAX_RESUMES or not exc.session_id:
+                    raise
+                if timeout is not None:
+                    whole = int(deadline - time.monotonic()) if deadline is not None else timeout - used
+                    timeout = max(60, min(max(used, timeout - used), whole - API_ERROR_PAUSE_S))
+                logger.warning("%s; resuming the session in %ds with %ss", exc, API_ERROR_PAUSE_S, timeout)
+                time.sleep(API_ERROR_PAUSE_S)
+                resume = exc.session_id
+    raise AssertionError("unreachable")
+
+
+RESUMED = """\
+Your session ended on a model API error before you finished. Continue where you
+left off: what you read and edited stands, and the working tree holds your
+edits. The task again, with its files written anew (their paths may differ):
+
+{prompt}"""
+
+
 def run_fix_agent(
     task: FixTask,
     repo_dir: str,
@@ -375,8 +440,13 @@ def run_fix_agent(
     feedback: str = "",
     timeout: int | None = None,
     context: FixContext | None = None,
+    resume: str = "",
+    home: str = "",
 ) -> FixCandidate:
-    """Diagnose and edit in one session, returning structured candidate metadata."""
+    """Diagnose and edit in one session, returning structured candidate metadata.
+
+    ``resume`` continues that session after a model API error (``resumed``).
+    """
     capabilities = target_capabilities(task.target.kind)
     profile: AgentProfileName = capabilities.agent_profile
     allows_port = CandidateAction.PORT in capabilities.allowed_actions
@@ -410,17 +480,23 @@ def run_fix_agent(
             port_instruction=port_instruction,
             feedback=_FEEDBACK.format(feedback=feedback.strip()) if feedback.strip() else "",
         )
+        if resume:
+            prompt = RESUMED.format(prompt=prompt)
         result = run_agent(
             profile,
             prompt,
             cwd=repo_dir,
             extra_dirs=(log_dir,),
             timeout=timeout,
+            resume=resume,
+            home=home,
         )
     if result.returncode != 0:
         unavailable = api_error(result.stdout)
         if unavailable:
-            raise ModelUnavailable(f"the fix agent's session ended on a model API error ({unavailable})")
+            raise ModelUnavailable(
+                f"the fix agent's session ended on a model API error ({unavailable})", session_id(result.stdout),
+            )
         error = AgentTimeout if result.stderr.startswith("timeout") else RuntimeError
         raise error(
             f"CI-fix agent failed with exit code {result.returncode}: "
@@ -774,14 +850,15 @@ def _review(
             counterexample=_COUNTEREXAMPLE_FIELD if adversarial else "",
         )
         started = time.monotonic()
-        result = run_agent("ci_fix_review", prompt, cwd=repo_dir, timeout=timeout, extra_dirs=(log_dir,))
-        unavailable = api_error(result.stdout) if result.returncode != 0 else ""
-        if unavailable:
-            # The review changes nothing, and the candidate it was judging has already passed its test.
-            logger.warning("The review ended on a model API error (%s): running it once more", unavailable)
-            time.sleep(API_ERROR_PAUSE_S)
-            left = None if timeout is None else max(60, timeout - int(time.monotonic() - started))
-            result = run_agent("ci_fix_review", prompt, cwd=repo_dir, timeout=left, extra_dirs=(log_dir,))
+        try:
+            result = resumed(
+                lambda home, resume, left: _review_session(
+                    RESUMED.format(prompt=prompt) if resume else prompt, repo_dir, log_dir, left, resume, home,
+                ),
+                repo_dir, timeout, None if timeout is None else started + timeout,
+            )
+        except ModelUnavailable as exc:
+            raise RuntimeError(f"the review agent failed: {exc}") from exc
     # A review that crashed, timed out, or gave no verdict judged nothing: the
     # attempt failed, and is retried, rather than the patch being rejected.
     if result.returncode != 0:
@@ -794,6 +871,19 @@ def _review(
         reasoning=_text(payload.get("reasoning"), 2_000),
         counterexample=_counterexample(payload.get("counterexample")) if adversarial else None,
     )
+
+
+def _review_session(
+    prompt: str, repo_dir: str, log_dir: str, timeout: int | None, resume: str, home: str,
+) -> AgentRunResult:
+    """One review session; a model API error is ``ModelUnavailable`` (the review changes nothing, and is resumed)."""
+    result = run_agent(
+        "ci_fix_review", prompt, cwd=repo_dir, timeout=timeout, extra_dirs=(log_dir,), resume=resume, home=home,
+    )
+    unavailable = api_error(result.stdout) if result.returncode != 0 else ""
+    if unavailable:
+        raise ModelUnavailable(f"the review ended on a model API error ({unavailable})", session_id(result.stdout))
+    return result
 
 
 # A counterexample test file at most this long: a test, not a suite.

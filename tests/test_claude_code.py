@@ -4,6 +4,8 @@ import io
 import logging
 import subprocess
 import time
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 from scripts.ai import claude_code
 
@@ -369,6 +371,27 @@ def test_unconfined_runs_keep_their_existing_flags(monkeypatch):
     cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,Bash")
     assert "--dangerously-skip-permissions" in cmd
     assert "--permission-mode" not in cmd
+    assert "--resume" not in cmd
+
+
+def test_a_resumed_run_continues_the_session_by_id_in_the_home_it_was_given(monkeypatch):
+    """A session that died on a model API error is resumed, not started again."""
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Grep", confined=True, resume="0b7e-session")
+    assert cmd[cmd.index("--resume") + 1] == "0b7e-session"
+
+    homes = []
+
+    @contextmanager
+    def handed_to(user, root, readable=(), home=""):
+        homes.append(home)
+        yield home or "/w/fresh"
+
+    monkeypatch.setattr(claude_code, "handed_to", handed_to)
+    monkeypatch.setattr(claude_code, "as_user", lambda user, env, cmd, *, home, cwd: SimpleNamespace(argv=cmd, env=env))
+    monkeypatch.setattr(claude_code, "_run_streaming", lambda *_args, **_kwargs: ("", "", 0))
+    claude_code.run_claude_code("p", cwd="/repo", run_as="ci-fix-agent", resume="0b7e-session", home="/w/kept")
+    claude_code.run_claude_code("p", cwd="/repo", run_as="ci-fix-agent")
+    assert homes == ["/w/kept", ""]
 
 
 def test_an_uncapped_run_passes_no_turn_limit(monkeypatch):

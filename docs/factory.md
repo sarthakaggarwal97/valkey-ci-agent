@@ -43,8 +43,10 @@ steer the model; the bot treats everything in it as data, and the checks
 below do not depend on what the model concluded.
 
 **It writes the evidence first.** One Claude session writes a test from the
-issue, in the main Tcl suite or as a C unit test, in the existing file for the
-area, following Valkey's own test guidelines. It changes nothing but test
+issue, in the main Tcl suite, in the existing file for the area, following
+Valkey's own test guidelines. It is told that code builds with plain `make`
+and runs Tcl tests only, so a C unit test under `src/unit/` would never be
+built or run. It changes nothing but test
 files. Code then builds the current `unstable` tip and runs the test three
 times. The test counts only when it fails every time, on its own assertion
 (`[err]`) rather than on a missing command or a broken build. A test that
@@ -54,6 +56,11 @@ short list of acceptance criteria, from the issue and the committers' comments
 alone; if it cannot without guessing, the run stops and the bot posts the
 questions a committer has to answer. Otherwise the tests encode the criteria
 and fail because the feature does not exist yet.
+
+A session that ends on a model API error (a 503, throttling, a dropped
+connection) is resumed where it stopped, with what it had read and edited, at
+most twice; the resumed session gets at least the time the failed one used,
+within the run's budget. The same holds for the fix and review sessions below.
 
 A crash nobody expected stops the run. The bot posts only that it stopped and
 why on the issue; the test and the crash stay in the run's artifact in this
@@ -73,7 +80,9 @@ edits, code builds the change and runs the test, once and then forty times,
 and a separate read-only session reviews it, up to three rounds. The policy
 differs from a CI fix's in one respect: a CI fix looks for the fault in the
 test first, because flaky tests usually are at fault; here the issue is the
-specification, and the fix lives in `src/`. The session is given the bot's
+specification, and the fix lives in `src/`. The session may add a Tcl test of
+its own, and is told that one under `src/unit/` is never built or run. The
+session is given the bot's
 guide for a fix from an issue (`scripts/factory/guides/valkey-io__valkey.md`),
 followed by Valkey's own `AGENTS.md`, `DEVELOPMENT_GUIDE.md` and test
 READMEs, and what the engine gives every fix: merged commits that mention the
@@ -83,8 +92,10 @@ issue or change the files it names, and the test file's history.
 checks the change further, in the order of their cost. The change may not
 touch `.github/` or `deps/`, may not add a command (a new command is a
 decision for the TSC), and may not add and remove more than 400 lines. Every
-test file the test or the fix changed has to pass in full. The C files the fix
-changed have to satisfy `clang-format-18`, as Valkey's CI requires, and a
+test file the test or the fix changed has to pass in full. The lines the fix
+changed in C files have to satisfy `clang-format-18`, as Valkey's CI requires;
+only those lines, since the working commit can carry older lines the current
+rules would format differently. A
 changed command definition has to leave `make commands.def` with nothing to
 regenerate. Finally the test runs once with the change built under
 AddressSanitizer. Every run of the test selects it with `--only`; when the

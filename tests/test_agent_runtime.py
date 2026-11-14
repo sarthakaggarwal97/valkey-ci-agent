@@ -113,6 +113,11 @@ def test_a_caller_cannot_extend_an_agent_profiles_timeout(monkeypatch) -> None:
     assert captured["timeout"] == 9999
     assert captured["max_turns"] is None
     assert captured["effort"] == "xhigh"
+    assert captured["resume"] == "" and captured["home"] == ""
+
+    # A resumed session: the id and the home its transcript is in reach the CLI.
+    agent_runtime.run_agent("ci_fix_edit", "go on", timeout=600, resume="0b7e-session", home="/w/kept")
+    assert captured["resume"] == "0b7e-session" and captured["home"] == "/w/kept"
 
 
 def test_release_notes_review_profile_is_edit_only() -> None:

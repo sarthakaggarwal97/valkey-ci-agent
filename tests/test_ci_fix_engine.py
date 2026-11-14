@@ -1339,41 +1339,44 @@ def test_a_port_not_merged_on_the_default_branch_goes_back_before_testing(tmp_pa
     assert "reset to the working commit" in agent.feedback[1]
 
 
-def test_a_session_that_died_on_a_model_api_error_is_run_once_more_on_a_clean_tree(tmp_path, monkeypatch):
-    """The CLI gave up on the API mid-session: that is no verdict, and whatever it had edited is not the fix."""
+def test_a_session_that_died_on_a_model_api_error_is_resumed_with_its_edits_in_place(tmp_path, monkeypatch):
+    """The CLI gave up on the API mid-session: the session is resumed, with what it had read and edited."""
+    from scripts.ci_fix import agent as agent_mod
     from scripts.ci_fix.agent import ModelUnavailable
 
-    seen = []
+    seen, resumes = [], []
     # Not time.sleep itself: the test command's own polling sleeps too.
-    monkeypatch.setattr(engine_mod, "API_ERROR_PAUSE_S", 0)
+    monkeypatch.setattr(agent_mod, "API_ERROR_PAUSE_S", 0)
 
-    def agent(task, repo_dir, job_log, **_kwargs):  # noqa: ARG001
+    def agent(task, repo_dir, job_log, *, resume="", **_kwargs):  # noqa: ARG001
         value = Path(repo_dir) / "value.txt"
         seen.append(value.read_text(encoding="utf-8"))
+        resumes.append(resume)
         if len(seen) == 1:
             value.write_text("half an edit\n", encoding="utf-8")
-            raise ModelUnavailable("the fix agent's session ended on a model API error (API Error: 503)")
+            raise ModelUnavailable("the fix agent's session ended on a model API error (API Error: 503)", "s-1")
         value.write_text("right\n", encoding="utf-8")
         return FixCandidate(action=CandidateAction.PATCH, failing_check="value check", root_cause="stale value",
                             reasoning="set the right value", changed_paths=("value.txt",))
 
     candidate = _prepare(tmp_path, monkeypatch, agent)
 
-    assert seen == ["before\n", "before\n"]
+    assert seen == ["before\n", "half an edit\n"] and resumes == ["", "s-1"]
     assert candidate.action is CandidateAction.PATCH and "+right" in candidate.patch
-    assert "half an edit" not in candidate.patch
 
 
-def test_a_session_that_dies_on_a_model_api_error_twice_is_a_failed_attempt(tmp_path, monkeypatch):
-    from scripts.ci_fix.agent import ModelUnavailable
+def test_a_session_that_dies_on_a_model_api_error_past_the_resumes_is_a_failed_attempt(tmp_path, monkeypatch):
+    from scripts.ci_fix import agent as agent_mod
+    from scripts.ci_fix.agent import MAX_RESUMES, ModelUnavailable
 
-    monkeypatch.setattr(engine_mod, "API_ERROR_PAUSE_S", 0)
-    agent = MagicMock(side_effect=ModelUnavailable("API Error: 503"))
+    monkeypatch.setattr(agent_mod, "API_ERROR_PAUSE_S", 0)
+    agent = MagicMock(side_effect=ModelUnavailable("API Error: 503", "s-1"))
 
     with pytest.raises(ModelUnavailable):
         _prepare(tmp_path, monkeypatch, agent)
 
-    assert agent.call_count == 2
+    assert agent.call_count == 1 + MAX_RESUMES
+    assert [call.kwargs["resume"] for call in agent.call_args_list] == ["", "s-1", "s-1"]
 
 
 def _valgrind_repo(tmp_path):

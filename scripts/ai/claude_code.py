@@ -66,6 +66,8 @@ def run_claude_code(
     confined: bool = False,
     extra_dirs: tuple[str, ...] = (),
     run_as: str = "",
+    resume: str = "",
+    home: str = "",
 ) -> tuple[str, str, int]:
     """Run claude CLI and return (stdout, stderr, exit_code).
 
@@ -79,6 +81,10 @@ def run_claude_code(
     refused. Use it whenever the prompt or the files carry untrusted content.
     A confined profile cannot use Bash, which would stall on an approval, or
     Glob, whose absolute patterns are not boundary-checked.
+
+    ``resume`` continues the session with that id instead of starting one;
+    ``prompt`` is then its next message. An isolated run keeps its transcript
+    in its home, so a resumed one needs the same ``home`` (``kept_home``).
     """
     if timeout is None:
         timeout = _DEFAULT_TIMEOUT_SECONDS
@@ -127,6 +133,8 @@ def run_claude_code(
         cmd.extend(["--model", resolved_model])
     if effort:
         cmd.extend(["--effort", effort])
+    if resume:
+        cmd.extend(["--resume", resume])
 
     logger.info("Running Claude Code in %s (timeout %ds)", cwd or ".", timeout)
     started = time.monotonic()
@@ -139,7 +147,7 @@ def run_claude_code(
             # environment, where the job's credentials live.
             if not cwd:
                 raise ValueError("an isolated run needs a working directory")
-            with handed_to(run_as, Path(cwd), readable=tuple(Path(d) for d in extra_dirs)) as home:
+            with handed_to(run_as, Path(cwd), readable=tuple(Path(d) for d in extra_dirs), home=home) as home:
                 invocation = as_user(run_as, env, cmd, home=home, cwd=cwd)
                 stdout, stderr, returncode = _run_streaming(
                     list(invocation.argv), prompt, cwd=None, env=invocation.env, timeout=timeout,

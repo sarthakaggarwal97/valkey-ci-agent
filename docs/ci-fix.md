@@ -202,8 +202,10 @@ tested is no longer the fix in the tree, so that also goes back for another
 round.
 
 A fix that doesn't pass within three rounds is declined. A Claude session
-that ends on a model API error judged nothing, so it is run once more, on a
-clean tree. If the bot runs out
+that ends on a model API error (a 503, throttling, a dropped connection)
+judged nothing, so it is resumed, with what it had read and edited, at most
+twice; the resumed session gets at least the time the failed one used, within
+the run's budget. If the bot runs out
 of time or crashes, that isn't treated as declining: the CI follow-up and
 detector issues get one more attempt at the same failure, and nothing is
 posted about the failed attempt.

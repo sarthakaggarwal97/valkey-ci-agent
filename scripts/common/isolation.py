@@ -61,12 +61,17 @@ def isolated_user() -> str:
 
 
 @contextmanager
-def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterator[str]:
-    """Give ``root``'s files (not ``.git``) to ``user``; yield a fresh home directory.
+def handed_to(user: str, root: Path, readable: tuple[Path, ...] = (), home: str = "") -> Iterator[str]:
+    """Give ``root``'s files (not ``.git``) to ``user``; yield a fresh home directory, or ``home``.
 
     ``readable`` directories are made readable to ``user`` for the command.
     ``chown -h -P`` changes symbolic links themselves and never follows them,
     so a link in the checkout cannot redirect the privileged chown.
+    A ``home`` given (``kept_home``) is for several commands in a row, such
+    as a CLI session resumed after a model API error, which needs the home
+    its transcript was written in: afterwards it is handed back to the
+    workflow user like the checkout, instead of removed, so the sweep of the
+    account's files leaves it alone.
     """
     root = root.resolve()
     for path in (root, *(directory.resolve() for directory in readable)):
@@ -79,7 +84,9 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
         _as_root("chmod", "-R", "--", "a+rX", str(directory))
     runner = f"{os.getuid()}:{os.getgid()}"
     account = pwd.getpwnam(user)
-    home = tempfile.mkdtemp(prefix="ci-fix-home-", dir=root.parent)
+    kept = bool(home)
+    if not kept:
+        home = tempfile.mkdtemp(prefix="ci-fix-home-", dir=root.parent)
     git_dir = root / ".git"
     git_identity = _identity(git_dir)
     # ``-P`` does not help against a hard link: the chown would reach the
@@ -94,7 +101,13 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
         yield home
     finally:
         kill_all(user)
-        _as_root("rm", "-rf", "--", home)
+        if kept:
+            # Like the checkout below: a hard link the account made in it
+            # would hand the file it names to the workflow user.
+            _remove_hard_links(Path(home))
+            _as_root("chown", "-R", "-h", "-P", "--", runner, home)
+        else:
+            _as_root("rm", "-rf", "--", home)
         # Where hard links are not protected (macOS), ``user`` could have
         # linked a file of the runner's, or root's, into the checkout: the
         # chown below would hand that file to the workflow user, and the
@@ -119,6 +132,24 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
         if git_identity is not None and _identity(git_dir) != git_identity:
             _as_root("rm", "-rf", "--", str(git_dir))
             raise OSError(f"{user} replaced {git_dir}; the checkout can no longer be trusted")
+
+
+@contextmanager
+def kept_home(root: Path) -> Iterator[str]:
+    """A home for the isolated account that several commands on ``root`` share; "" without an account.
+
+    ``handed_to`` otherwise makes a fresh home for each command. Between
+    commands the home is the workflow user's (``handed_to`` hands it back), and
+    it is removed at the end.
+    """
+    if not isolated_user():
+        yield ""
+        return
+    home = tempfile.mkdtemp(prefix="ci-fix-home-", dir=root.resolve().parent)
+    try:
+        yield home
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
 
 
 def _traversable(user: str, directory: Path) -> bool:
