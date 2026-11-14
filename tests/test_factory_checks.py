@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -116,7 +117,7 @@ def test_a_c_unit_test_file_runs_its_suites(repo):
     assert run_test.ran[0] == "true && ./src/unit/valkey-unit-gtests --gtest_filter='Alpha.*:Beta.*'"
 
 
-def test_formatting_is_checked_with_valkeys_clang_format_when_it_is_installed(repo, monkeypatch):
+def test_formatting_is_checked_with_valkeys_clang_format_on_the_changed_lines_only(repo, monkeypatch):
     (repo / "src" / "x.c").write_text("int x;\n", encoding="utf-8")
     candidate = _candidate(_diff("src/x.c"))
 
@@ -127,12 +128,48 @@ def test_formatting_is_checked_with_valkeys_clang_format_when_it_is_installed(re
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/" + name)
     run_test = _runner()
     failed, checks = _gate(_evidence(), candidate, repo, run_test)
-    assert failed == "" and "clang-format-18 --dry-run --Werror src/x.c" in run_test.ran
-    assert any("accepts the formatting of `src/x.c`" in check for check in checks)
+    assert failed == "" and "clang-format-18 --dry-run --Werror --lines=1:1 src/x.c" in run_test.ran
+    assert any("accepts the formatting of the changed lines of `src/x.c`" in check for check in checks)
+
+    # Each file gets its own ranges, one per run of consecutive changed lines; a deletion marks the line in its place.
+    (repo / "src" / "y.h").write_text("int y;\n", encoding="utf-8")
+    hunks = (
+        "diff --git a/src/y.h b/src/y.h\n--- a/src/y.h\n+++ b/src/y.h\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+        "@@ -10,2 +10,3 @@\n j\n+K\n+L\n m\n@@ -20,2 +21,1 @@\n t\n-u\n"
+    )
+    run_test = _runner()
+    _gate(_evidence(), _candidate(_diff("src/x.c") + hunks), repo, run_test)
+    assert (
+        "clang-format-18 --dry-run --Werror --lines=1:1 src/x.c"
+        " && clang-format-18 --dry-run --Werror --lines=2:2 --lines=11:12 --lines=22:22 src/y.h"
+    ) in run_test.ran
 
     misformatted = _runner({"clang-format-18": TestRun(passed=False, output="x.c:1:1: error: code should be clang-formatted")})
     failed, _checks = _gate(_evidence(), candidate, repo, misformatted)
-    assert failed.startswith("`clang-format-18` wants the changed C files formatted differently")
+    assert failed.startswith("`clang-format-18` wants the lines you changed formatted differently")
+
+
+@pytest.mark.skipif(shutil.which("clang-format-18") is None and shutil.which("clang-format") is None,
+                    reason="needs clang-format")
+def test_a_violation_the_fix_did_not_cause_passes_and_one_in_its_lines_fails(repo, monkeypatch):
+    """An older working commit can carry lines the current rules would format differently (server.h did)."""
+    from scripts.ci_fix import engine as engine_mod
+
+    monkeypatch.setattr(checks_mod, "CLANG_FORMAT", shutil.which("clang-format-18") and "clang-format-18" or "clang-format")
+    monkeypatch.setattr(engine_mod, "isolated_user", lambda: "")
+    (repo / ".clang-format").write_text("BasedOnStyle: LLVM\n", encoding="utf-8")
+    (repo / "src" / "x.c").write_text("int  old = 1;\nint added = 2;\n", encoding="utf-8")
+    # A patch that adds line 2; line 1's two spaces were there before.
+    patch = "diff --git a/src/x.c b/src/x.c\n--- a/src/x.c\n+++ b/src/x.c\n@@ -1,1 +1,2 @@\n int  old = 1;\n+int added = 2;\n"
+    checks: list[str] = []
+
+    deadline = time.monotonic() + 600
+    assert checks_mod._formatting(_evidence(), _candidate(patch), str(repo), engine_mod.run_test_command, deadline, checks) == ""
+    assert any("accepts the formatting of the changed lines" in check for check in checks)
+
+    (repo / "src" / "x.c").write_text("int  old = 1;\nint   added = 2;\n", encoding="utf-8")
+    failed = checks_mod._formatting(_evidence(), _candidate(patch), str(repo), engine_mod.run_test_command, deadline, [])
+    assert failed.startswith("`clang-format") and "x.c:2:" in failed
 
 
 def test_a_changed_command_definition_must_regenerate_commands_def_unchanged(repo):

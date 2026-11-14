@@ -166,27 +166,53 @@ def _formatting(
     evidence: Evidence, candidate: FixCandidate, repo_dir: str, run_test: TestFunc, deadline: float,
     checks: list[str],
 ) -> str:
-    """Valkey's clang-format check, on the C files the fix changed."""
+    """Valkey's clang-format check, on the lines of the C files the fix changed.
+
+    Only the changed lines: the working commit can be older than the latest
+    formatting rules, and carry violations the fix did not cause (server.h on
+    a 2025 commit had two). This is what ``git clang-format`` checks too.
+    """
+    lines = changed_lines(candidate.patch)
     files = sorted(
-        path for path in changed_lines(candidate.patch)
-        if path.startswith("src/") and path.endswith(_C_SOURCE_SUFFIXES) and Path(repo_dir, path).is_file()
+        path for path in lines
+        if lines[path] and path.startswith("src/") and path.endswith(_C_SOURCE_SUFFIXES)
+        and Path(repo_dir, path).is_file()
     )
     if not files:
         return ""
     if shutil.which(CLANG_FORMAT) is None:
         checks.append(f"{CLANG_FORMAT} is not installed here, so the pull request's own CI checks the formatting.")
         return ""
-    command = f"{CLANG_FORMAT} --dry-run --Werror " + " ".join(shlex.quote(path) for path in files)
+    command = " && ".join(
+        f"{CLANG_FORMAT} --dry-run --Werror "
+        + " ".join(f"--lines={first}:{last}" for first, last in _ranges(lines[path]))
+        + f" {shlex.quote(path)}"
+        for path in files
+    )
     result = run_test(repo_dir, command, _timeout(deadline))
     if result.timed_out:
         raise RuntimeError(f"`{command}` did not finish in the time left.")
     if not result.passed:
         return (
-            f"`{CLANG_FORMAT}` wants the changed C files formatted differently. Format them as it says, and "
+            f"`{CLANG_FORMAT}` wants the lines you changed formatted differently. Format them as it says, and "
             f"nothing else.\n\nIts output:\n{result.output}"
         )
-    checks.append(f"`{CLANG_FORMAT}` accepts the formatting of " + ", ".join(f"`{path}`" for path in files) + ".")
+    checks.append(
+        f"`{CLANG_FORMAT}` accepts the formatting of the changed lines of "
+        + ", ".join(f"`{path}`" for path in files) + "."
+    )
     return ""
+
+
+def _ranges(lines: set[int]) -> list[tuple[int, int]]:
+    """``lines`` as inclusive ranges of consecutive numbers, in order."""
+    ranges: list[tuple[int, int]] = []
+    for line in sorted(lines):
+        if ranges and ranges[-1][1] == line - 1:
+            ranges[-1] = (ranges[-1][0], line)
+        else:
+            ranges.append((line, line))
+    return ranges
 
 
 def _generated(
