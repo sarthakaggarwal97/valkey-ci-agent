@@ -1,0 +1,113 @@
+extends: [valkey.liveness]
+id: proposed.resize-cursor-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    On the parent, tryResizeHashTables calls dbIteratorNextDict before reading the
+    dict, so in standalone mode (one dict, next_slot always -1) it never examines
+    any dict at all: a sparse expires table is never shrunk, the active-expire sampling
+    callback skips it forever (fill < 1%), and keys with a TTL never actively expire.
+    The fix reads the dict at the cursor slot first, shrinks it, and the keys expire.
+    70 keys grow the expires dict to 128 buckets; deleting 69 leaves 1 key in 128
+    buckets (<1% fill). DBSIZE stays 1 on the parent and reaches 0 on the fixed build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, enum: [10, 100], default: 10}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "no", save: "", hz: {$ref: inputs.hz}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [PSETEX, k1, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k2, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k3, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k4, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k5, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k6, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k7, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k8, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k9, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k10, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k11, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k12, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k13, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k14, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k15, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k16, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k17, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k18, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k19, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k20, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k21, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k22, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k23, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k24, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k25, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k26, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k27, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k28, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k29, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k30, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k31, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k32, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k33, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k34, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k35, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k36, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k37, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k38, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k39, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k40, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k41, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k42, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k43, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k44, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k45, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k46, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k47, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k48, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k49, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k50, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k51, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k52, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k53, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k54, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k55, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k56, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k57, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k58, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k59, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k60, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k61, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k62, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k63, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k64, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k65, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k66, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k67, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k68, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k69, 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, k70, 12000, v], expect: {equals: OK}}
+    - {command: [DEL, k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14,
+        k15, k16, k17, k18, k19, k20, k21, k22, k23, k24, k25, k26, k27, k28, k29,
+        k30, k31, k32, k33, k34, k35, k36, k37, k38, k39, k40, k41, k42, k43, k44,
+        k45, k46, k47, k48, k49, k50, k51, k52, k53, k54, k55, k56, k57, k58, k59,
+        k60, k61, k62, k63, k64, k65, k66, k67, k68, k69], expect: {equals: 69}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [DBSIZE], wait_s: 30, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

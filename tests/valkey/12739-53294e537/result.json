@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "53294e537cd6c267b96320e68dde5c36a4ac4ffb",
+  "parent": "0ffb9d2ea9f5ea7d9840bfb77543b04a63303f9b",
+  "pr": 12739,
+  "pr_repo": "redis/redis",
+  "subject": "Fix genClusterDebugString minor sds leaks (#12739)",
+  "date": "2023-11-08",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5144,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds sdsfree calls in genClusterDebugString, which is reachable solely from printCrashReport via logServerInfo while the server is already crashing (assert, panic, or fatal signal handler). It fixes a tiny sds leak in a process moments from aborting; the crash-report output and all externally observable behaviour (replies, replication, persistence, topology) are identical on both builds. Exercising the code would require deliberately crashing a cluster-mode server, which the oracles treat as a failure and compared sequences forbid, so no scenario can meaningfully test it."
+}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f3bf8485d8c3f52cf05edc043f47c59e5c732305",
+  "parent": "03345ddc7faf7af079485f2cbe5d17a1611cbce1",
+  "pr": 12660,
+  "pr_repo": "redis/redis",
+  "subject": "Fix resize hash table dictionary iterator (#12660)",
+  "date": "2023-10-19",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6938,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6e4c6ce30623",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 72 (DBSIZE)"
+    },
+    {
+      "scenario": "ai-22c7dc934548",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 72 (DBSIZE)"
+    }
+  ]
+}

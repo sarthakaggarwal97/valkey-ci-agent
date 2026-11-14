@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0ffb9d2ea9f5ea7d9840bfb77543b04a63303f9b",
+  "parent": "6223355cf37aa7d3186b63ca2dfc3be79750db8a",
+  "pr": 12733,
+  "pr_repo": "redis/redis",
+  "subject": "Before evicted and before expired server events are not executed inside an execution unit. (#12733)",
+  "date": "2023-11-08",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.2945,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cf6ed3feeb95059817d7fa8685aa04a8a33a1f92",
+  "parent": "53294e537cd6c267b96320e68dde5c36a4ac4ffb",
+  "pr": 12741,
+  "pr_repo": "redis/redis",
+  "subject": "fix the wrong judgement for activerehashing in standalone mode (#12741)",
+  "date": "2023-11-09",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.2712,
+  "findings": [],
+  "recorded": []
+}

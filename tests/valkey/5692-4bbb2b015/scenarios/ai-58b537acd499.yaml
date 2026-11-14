@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7fa481156de..4bbb2b01523e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58b537acd499
+seed: 710001
+experiment:
+  id: proposed.defrag-expires-pointer-fixup
+  inputs:
+    stable_keys: 2000
+    mutable_keys: 1000
+    mutation_rate: 1000
+    value_size: 64
+    command_rate: 2000
+    run_s: 30
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '0'
+    active-defrag-cycle-min: '10'
+    active-defrag-cycle-max: '25'
+    hz: '100'

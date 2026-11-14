@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.scan-match-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    SCAN with a MATCH pattern that implies a single cluster slot must return exactly
+    the keys a full scan returns, across the slot fast-forward, the cursor-past-slot
+    early return, and hash-tag parsing edge cases (empty tag, unterminated brace,
+    nested braces, escapes, wildcards inside the tag).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}1", v1], expect: {equals: OK}}
+    - {command: [SCAN, 0, MATCH, "{foo}1", COUNT, 100], expect_difference: true, expect: {
+        contains: "{foo}1"}}
+    - {command: [SCAN, 0, MATCH, "{foo}*", COUNT, 100], expect_difference: true, expect: {
+        contains: "{foo}1"}}
+    - {command: [SCAN, 0, MATCH, "{foo}1", COUNT, 100, TYPE, string], expect_difference: true,
+      expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 0, MATCH, "{nokey}x", COUNT, 100], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, "", e0], expect: {equals: OK}}
+    - {command: [SET, "{}", e1], expect: {equals: OK}}
+    - {command: [SET, "{}suffix", e2], expect: {equals: OK}}
+    - {command: [SET, "{foo", u1], expect: {equals: OK}}
+    - {command: [SET, "{{foo}}", d1], expect: {equals: OK}}
+    - {command: [SET, "}x{y}", m1], expect: {equals: OK}}
+    - {command: [SET, "{user1000}.following", f1], expect: {equals: OK}}
+    - {command: [SET, "{foo}1", v1], expect: {equals: OK}}
+    - {command: [SET, plainkey, p1], expect: {equals: OK}}
+    - {command: [SET, "{ab}", w1], expect: {equals: OK}}
+    - {command: [SCAN, 0, MATCH, "{foo}1", COUNT, 1000], expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 0, MATCH, "{user1000}.*", COUNT, 1000], expect: {contains: following}}
+    - {command: [SCAN, 0, MATCH, "{}", COUNT, 1000], expect: {contains: "{}"}}
+    - {command: [SCAN, 0, MATCH, "{}suffix", COUNT, 1000], expect: {contains: suffix}}
+    - {command: [SCAN, 0, MATCH, "{foo", COUNT, 1000], expect: {contains: "{foo"}}
+    - {command: [SCAN, 0, MATCH, "{{foo}}", COUNT, 1000], expect: {contains: "{{foo}}"}}
+    - {command: [SCAN, 0, MATCH, "}x{y}", COUNT, 1000], expect: {contains: "}x{y}"}}
+    - {command: [SCAN, 0, MATCH, plainkey, COUNT, 1000], expect: {contains: plainkey}}
+    - {command: [SCAN, 0, MATCH, "", COUNT, 1000], expect: {exists: true}}
+    - {command: [SCAN, 0, MATCH, "{a?}", COUNT, 1000], expect: {contains: "{ab}"}}
+    - {command: [SCAN, 0, MATCH, "{foo}[12]", COUNT, 1000], expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 0, MATCH, '\\{foo\\}1', COUNT, 1000], expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 1, MATCH, "{foo}1", COUNT, 1000], expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 12182, MATCH, "{foo}1", COUNT, 1000], expect: {contains: "{foo}1"}}
+    - {command: [SCAN, 16383, MATCH, "{foo}1", COUNT, 1000], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [scan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

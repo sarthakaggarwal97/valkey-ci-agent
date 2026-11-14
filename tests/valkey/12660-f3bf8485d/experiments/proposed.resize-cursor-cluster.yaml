@@ -1,0 +1,123 @@
+extends: [valkey.liveness]
+id: proposed.resize-cursor-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    In cluster mode the parent's resize_cursor sticks at the last non-empty slot and
+    dbIteratorNextDict always skips the cursor slot itself, so the dict at the stuck
+    cursor is never resized again. All TTL keys live in one slot (hash tag {foo},
+    slot 12182). A short EXISTS wait on an expiring sentinel key guarantees several
+    cron passes so the cursor parks on 12182 on both builds before the deletes make
+    the dict sparse (1 key in 128 buckets). The fix re-examines the cursor slot every
+    pass, shrinks the dict, and active expire removes the last key; the parent never
+    shrinks it and the key never expires, so DBSIZE stays 1.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, enum: [10, 100], default: 10}
+components:
+- use: valkey.action.commands
+  id: cseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {appendonly: "no", save: "", hz: {$ref: inputs.hz}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [PSETEX, "{foo}t", 600, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}1", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}2", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}3", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}4", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}5", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}6", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}7", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}8", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}9", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}10", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}11", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}12", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}13", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}14", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}15", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}16", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}17", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}18", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}19", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}20", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}21", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}22", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}23", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}24", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}25", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}26", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}27", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}28", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}29", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}30", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}31", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}32", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}33", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}34", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}35", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}36", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}37", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}38", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}39", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}40", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}41", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}42", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}43", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}44", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}45", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}46", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}47", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}48", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}49", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}50", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}51", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}52", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}53", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}54", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}55", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}56", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}57", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}58", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}59", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}60", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}61", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}62", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}63", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}64", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}65", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}66", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}67", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}68", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}69", 12000, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}70", 12000, v], expect: {equals: OK}}
+    - {command: [EXISTS, "{foo}t"], wait_s: 10, expect: {equals: 0}}
+    - {command: [DEL, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5", "{foo}6",
+        "{foo}7", "{foo}8", "{foo}9", "{foo}10", "{foo}11", "{foo}12", "{foo}13",
+        "{foo}14", "{foo}15", "{foo}16", "{foo}17", "{foo}18", "{foo}19", "{foo}20",
+        "{foo}21", "{foo}22", "{foo}23", "{foo}24", "{foo}25", "{foo}26", "{foo}27",
+        "{foo}28", "{foo}29", "{foo}30", "{foo}31", "{foo}32", "{foo}33", "{foo}34",
+        "{foo}35", "{foo}36", "{foo}37", "{foo}38", "{foo}39", "{foo}40", "{foo}41",
+        "{foo}42", "{foo}43", "{foo}44", "{foo}45", "{foo}46", "{foo}47", "{foo}48",
+        "{foo}49", "{foo}50", "{foo}51", "{foo}52", "{foo}53", "{foo}54", "{foo}55",
+        "{foo}56", "{foo}57", "{foo}58", "{foo}59", "{foo}60", "{foo}61", "{foo}62",
+        "{foo}63", "{foo}64", "{foo}65", "{foo}66", "{foo}67", "{foo}68", "{foo}69"],
+      expect: {equals: 69}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [DBSIZE], wait_s: 30, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cseq}

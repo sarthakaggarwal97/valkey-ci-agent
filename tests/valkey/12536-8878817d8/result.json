@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8878817d89e75d1ac03ef662e9e1d66a84db1b2f",
+  "parent": "e9f312e08708e6b719ecd6b5eafb9ec2fefad16e",
+  "pr": 12536,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize SCAN with MATCH when pattern implies cluster slot (#12536)",
+  "date": "2023-11-01",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 28,
+    "percent": 93,
+    "uncovered": [
+      "src/expire.c:278",
+      "src/module.c:10984"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.5762,
+  "findings": [],
+  "recorded": []
+}

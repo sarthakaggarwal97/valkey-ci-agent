@@ -1,0 +1,33 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6223355cf37a..0ffb9d2ea9f5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-69490844c12c
+seed: 13
+experiment:
+  id: valkey.cluster-chaos
+  inputs:
+    command_rate: 500
+    keys_per_slot: 5
+    config_changes: 8
+    config_churn_keys:
+      maxmemory-policy:
+      - noeviction
+      - allkeys-random
+      - volatile-random
+      lazyfree-lazy-expire:
+      - 'no'
+      - 'yes'
+      lazyfree-lazy-eviction:
+      - 'no'
+      - 'yes'
+    waves:
+    - - op: failover
+        shard: 0
+    - - op: failover
+        shard: 1
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    hz: 100

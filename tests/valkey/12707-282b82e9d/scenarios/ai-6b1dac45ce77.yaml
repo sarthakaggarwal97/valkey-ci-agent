@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 28b6155ba5da..282b82e9d204.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6b1dac45ce77
+seed: 5061
+experiment:
+  id: proposed.script-cluster-redir-errors
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

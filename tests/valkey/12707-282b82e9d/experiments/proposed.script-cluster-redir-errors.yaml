@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.script-cluster-redir-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A command inside a script hitting CROSSSLOT, an unstable (migrating) slot, or
+    an unbound slot returns the specific new error message instead of the generic
+    non-local-key message; MOVED and ASK still return the generic one.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scriptredir
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-require-full-coverage: "no"}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.call('MSET','foo','v','bar','v')", "0"], expect_difference: true,
+      expect: {error: "don't hash to the same slot"}}
+    - {command: [SET, "{foo}a", v], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "12182", MIGRATING, "<node.1.id>"], wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('MGET','{foo}a','{foo}b')", "0"], expect_difference: true,
+      expect: {error: "undeclared keys were accessed during rehashing"}}
+    - {command: [EVAL, "return redis.call('GET','{foo}missing')", "0"], expect: {
+        error: "non local key"}}
+    - {command: [CLUSTER, SETSLOT, "12182", STABLE], expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTS, "5061"], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('SET','bar','v')", "0"], expect_difference: true,
+      expect: {error: "slot not served"}}
+    - {command: [CLUSTER, ADDSLOTS, "5061"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "5061", NODE, "<node.1.id>"], wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [EVAL, "return redis.call('GET','bar')", "0"], expect: {error: "non\
+          \ local key"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [scriptredir.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scriptredir}

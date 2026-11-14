@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cluster-reset-clears-blacklist
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER RESET empties the forgotten-node blacklist, so a later FORGET
+    of the cleared node reports it unknown again instead of pretending it is already
+    forgotten
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reset-blacklist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, SOFT], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], expect_difference: true, expect: {
+        error: "Unknown node"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reset-blacklist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset-blacklist}

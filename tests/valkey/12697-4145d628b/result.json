@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4145d628b4417310706357a9eb8a13d813f5d712",
+  "parent": "7d68208a6ea7d57a58d9f3548ea5b11d2caed272",
+  "pr": 12697,
+  "pr_repo": "redis/redis",
+  "subject": "Reduce dbBuckets operation time complexity from O(N) to O(1) (#12697)",
+  "date": "2023-10-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 2,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 43,
+    "executed": 38,
+    "percent": 88,
+    "uncovered": [
+      "src/db.c:68",
+      "src/db.c:506",
+      "src/db.c:1401",
+      "src/db.c:1424",
+      "src/db.c:1449"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 18.7158,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3d7f6e11f15a",
+      "build": "unstable",
+      "seed": 12697,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3d7f6e11f15a",
+      "build": "unstable",
+      "seed": 12698,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3d7f6e11f15a",
+      "build": "unstable",
+      "seed": 12699,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d81339f8f014",
+      "build": "unstable",
+      "seed": 12698,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d81339f8f014",
+      "build": "unstable",
+      "seed": 12699,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d81339f8f014",
+      "build": "unstable",
+      "seed": 12700,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

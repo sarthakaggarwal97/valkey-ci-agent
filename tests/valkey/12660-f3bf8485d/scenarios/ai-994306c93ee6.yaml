@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 03345ddc7faf..f3bf8485d8c3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-994306c93ee6
+seed: 4
+experiment:
+  id: proposed.resize-cursor-cluster
+  inputs:
+    resp: 3
+    hz: 100
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

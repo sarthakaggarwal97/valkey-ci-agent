@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bucket-count-flush
+deployment:
+  modes: [standalone]
+metadata:
+  description: In cluster mode the O(1) bucket_count must match the real bucket total;
+    emptyDbStructure resets key_count but not bucket_count, so after FLUSHALL (sync
+    and ASYNC) the per-db hashtable overhead reported by MEMORY STATS inflates on
+    the change while the parent computes it by iterating the dicts
+components:
+- use: valkey.action.commands
+  id: buckets
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {activerehashing: "no"}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{t0}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 12}}
+    - {command: [EVAL, "local s = redis.call('MEMORY','STATS') for i=1,#s do if s[i]=='db.0'\
+          \ then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}", 0], expect: {
+        exists: true}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, "{t0}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [EVAL, "local s = redis.call('MEMORY','STATS') for i=1,#s do if s[i]=='db.0'\
+          \ then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}", 0], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "{t0}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 12}}
+    - {command: [EVAL, "local s = redis.call('MEMORY','STATS') for i=1,#s do if s[i]=='db.0'\
+          \ then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}", 0], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [buckets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: buckets}

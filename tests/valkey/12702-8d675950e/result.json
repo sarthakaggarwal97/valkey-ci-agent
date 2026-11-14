@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8d675950e6528e164454300d54aaf7bc024b075c",
+  "parent": "4bbb2b01523efe40068258d0265fff1802868d43",
+  "pr": 12702,
+  "pr_repo": "redis/redis",
+  "subject": "Don't crash when adding a forgotten node to blacklist twice (#12702)",
+  "date": "2023-10-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 1,
+    "percent": 50,
+    "uncovered": [
+      "src/cluster.c:2657"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.7482,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-19a4f484865d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'forget-readd' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (CLUSTER MEET <node.1.host> <node.1.port> on node 2), 3 (BLPOP __fuzzer_absent_key__ 8 on node 1)"
+    },
+    {
+      "scenario": "ai-cd3a66955226",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'forget' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (CLUSTER MEET <node.2.host> <node.2.port>)"
+    },
+    {
+      "scenario": "ai-a94fc19bb810",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'forget' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (CLUSTER MEET <node.3.host> <node.3.port>)"
+    }
+  ]
+}

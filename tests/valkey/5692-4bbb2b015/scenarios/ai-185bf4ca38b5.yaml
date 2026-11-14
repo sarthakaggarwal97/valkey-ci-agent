@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7fa481156de..4bbb2b01523e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-185bf4ca38b5
+seed: 11874
+experiment:
+  id: proposed.dict-rehash-lookups
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

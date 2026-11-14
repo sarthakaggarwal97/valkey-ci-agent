@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6223355cf37a..0ffb9d2ea9f5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4861bc0bc6c6
+seed: 44
+experiment:
+  id: proposed.eviction-postnotification-compare
+  inputs:
+    resp: 2
+    lazyfree: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

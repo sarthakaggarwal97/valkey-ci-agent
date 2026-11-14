@@ -1,0 +1,65 @@
+extends: [valkey.base]
+id: proposed.defrag-expires-pointer-fixup
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Active defrag relocates key-name sds strings while db->expires is populated and
+    incrementally rehashing: defragKey must re-find each expires entry with dictFindEntryByPtrAndHash,
+    whose table-0 bucket skip for already-rehashed slots the change added (dict.c:1502).
+    A missed entry leaves a dangling key pointer in db->expires; liveness (crash or
+    sanitizer report), the ledger and deployment-state oracles judge the run.
+inputs:
+  properties:
+    command_rate: {type: number, minimum: 0, maximum: 20000, default: 1000}
+    run_s: {type: number, minimum: 1, maximum: 600, default: 30}
+components:
+- use: valkey.action.commands
+  id: seed-expires
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [SET, 'exp:s1', v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:s2', v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:s3', v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:s4', v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:medium-length-key-name-000000001', v, EX, 100000], expect: {
+        equals: OK}}
+    - {command: [SET, 'exp:medium-length-key-name-000000002', v, EX, 100000], expect: {
+        equals: OK}}
+    - {command: [SET, 'exp:medium-length-key-name-000000003', v, EX, 100000], expect: {
+        equals: OK}}
+    - {command: [SET, 'exp:medium-length-key-name-000000004', v, EX, 100000], expect: {
+        equals: OK}}
+    - {command: [SET, 'exp:very-long-key-name-padding-padding-padding-padding-0001',
+        v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:very-long-key-name-padding-padding-padding-padding-0002',
+        v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:very-long-key-name-padding-padding-padding-padding-0003',
+        v, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, 'exp:very-long-key-name-padding-padding-padding-padding-0004',
+        v, EX, 100000], expect: {equals: OK}}
+- use: valkey.workload.command-table
+  id: ttl-traffic
+  config:
+    rate: {$ref: inputs.command_rate}
+    keys: 500
+- use: valkey.observer.info
+  id: defrag-stats
+  config:
+    instances: primary
+    sections: [stats]
+    interval_s: 1
+    expectations:
+    - {evidence_id: valkey.defrag.key-hits, field: active_defrag_key_hits, min: 1,
+      when: final, required: true}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [writes, seed-expires, ttl-traffic, defrag-stats]
+  config:
+    seconds: {$ref: inputs.run_s}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.defrag.key-hits, source: defrag-stats}
+- {evidence_id: valkey.command.sequence, source: seed-expires}

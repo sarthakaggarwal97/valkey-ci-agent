@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a888503b4f247c27d131ed9727e255c0dc110eb1",
+  "parent": "282b82e9d20433aa266cd9f16ef1ccbbee199ce0",
+  "pr": 12722,
+  "pr_repo": "redis/redis",
+  "subject": "Remove unnecessary argument(tp) in gettimeofday() call for retrieving timezone (#12722)",
+  "date": "2023-11-06",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.229,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the non-Linux/non-Solaris branch of getTimeZone() in src/util.c, replacing gettimeofday(&tv, &tz) with gettimeofday(NULL, &tz). On Linux (where the fuzzer runs) this code is excluded by the preprocessor, so the builds under test are byte-for-byte equivalent on this path; and even where compiled, passing NULL for the timeval is semantically identical \u2014 the timezone struct is filled the same and the return value is unchanged. It is a pure refactor with no behaviour change, so no scenario can reach or distinguish it."
+}

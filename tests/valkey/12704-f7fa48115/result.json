@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f7fa481156de051972dd49336fb04639bebdbe34",
+  "parent": "4145d628b4417310706357a9eb8a13d813f5d712",
+  "pr": 12704,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize finding the slot for a given key count in a fenwick tree (#12704)",
+  "date": "2023-10-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.445,
+  "findings": [],
+  "recorded": []
+}

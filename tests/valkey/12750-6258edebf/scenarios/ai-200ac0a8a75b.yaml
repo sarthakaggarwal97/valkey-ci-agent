@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cf6ed3feeb95..6258edebf04e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-200ac0a8a75b
+seed: 1
+experiment:
+  id: proposed.flush-stale-bucket-count
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

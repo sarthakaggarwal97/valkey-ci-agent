@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.eviction-postnotification-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deterministic evictions with module post-notification jobs, compared
+    across the two builds; eviction counters, evicted keys and OOM replies must match
+    and neither build may crash in the eviction execution unit
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config:
+      maxmemory-policy: volatile-random
+      lazyfree-lazy-eviction: {$ref: inputs.lazyfree}
+    timeout_s: 10
+    commands:
+    - {command: [SET, vol1, aaaaaaaaaaaaaaaa, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol2, bbbbbbbbbbbbbbbb, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol3, cccccccccccccccc, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, keep, durable], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 100kb], expect: {equals: OK}}
+    - {command: [SET, trigger, x], expect: {error: "OOM"}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [EXISTS, vol1, vol2, vol3], expect: {equals: 0}}
+    - {command: [GET, evicted], expect: {equals: "3"}}
+    - {command: [GET, keep], expect: {equals: durable}}
+    - {command: [EXISTS, trigger], expect: {equals: 0}}
+    - {command: [SET, vol4, dddddddddddddddd, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol5, eeeeeeeeeeeeeeee, EX, 1000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 100kb], expect: {equals: OK}}
+    - {command: [SET, trigger2, y], expect: {error: "OOM"}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [EXISTS, vol4, vol5], expect: {equals: 0}}
+    - {command: [GET, evicted], expect: {equals: "5"}}
+    - {command: [EXISTS, before_evicted], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

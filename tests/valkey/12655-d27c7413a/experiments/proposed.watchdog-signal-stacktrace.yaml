@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.watchdog-signal-stacktrace
+deployment:
+  modes: [standalone]
+metadata:
+  description: Arm the software watchdog and block the main thread with DEBUG SLEEP
+    so SIGALRM fires repeatedly, driving the heap-free signal-handler stacktrace path
+    (writeStacktraces, get_ready_to_signal_threads_tids, collect_stacktrace_data/get_stack_trace_pool,
+    ThreadsManager_runOnThreads) on the live server without a crash. The liveness
+    oracle checks no crash or sanitizer report escapes the signal handler, and the
+    sequence completing proves the server survived the collection.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: wd
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, "100"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [wd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: wd}

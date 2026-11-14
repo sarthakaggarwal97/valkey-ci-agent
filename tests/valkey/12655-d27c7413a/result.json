@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d27c7413a95a0a271b94376f3ec64dae06326b29",
+  "parent": "0270abda82555ddb3d4a1f5509600725408226ba",
+  "pr": 12655,
+  "pr_repo": "redis/redis",
+  "subject": "remove heap allocations from signal handlers. (#12655)",
+  "date": "2023-10-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 30,
+    "executed": 28,
+    "percent": 93,
+    "uncovered": [
+      "src/debug.c:1872",
+      "src/threads_mngr.c:88"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.4617,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a8ccc10b82a1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'busy' returned ERROR: no valkey-benchmark beside the build: ['/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark']"
+    },
+    {
+      "scenario": "ai-39b85aed8ea8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'busy' returned ERROR: no valkey-benchmark beside the build: ['/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark']"
+    },
+    {
+      "scenario": "ai-593ec4a63bb7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'busy' returned ERROR: no valkey-benchmark beside the build: ['/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark']"
+    }
+  ]
+}

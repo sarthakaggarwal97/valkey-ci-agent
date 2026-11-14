@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.replica-flush-stale-bucket-count
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A replicated FLUSHALL empties a cluster replica's db through the same emptyDbStructure
+    path; the replica's bucket_count, built up while loading the full-sync RDB, must
+    reset too, or its MEMORY STATS hashtable overhead stays inflated.
+components:
+- use: valkey.action.commands
+  id: replflush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {activerehashing: "no"}
+    timeout_s: 90
+    commands:
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SET','{t}'..i,'v')\
+          \ end return redis.call('DBSIZE')", 0, 30000]
+      expect: {equals: 30000}
+    - command: [CLUSTER, REPLICATE, "<node.0.id>"]
+      node: 1
+      wait_s: 30
+      expect: {equals: OK}
+    - command: [DBSIZE]
+      node: 1
+      wait_s: 30
+      expect: {equals: 30000}
+    - command: [FLUSHALL]
+      expect: {equals: OK}
+    - command: [SET, k1, v]
+      expect: {equals: OK}
+    - command: [DBSIZE]
+      node: 1
+      wait_s: 30
+      expect: {equals: 1}
+    - command: [EVAL_RO, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if\
+          \ t[i]=='db.0' then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then\
+          \ return d[j+1] end end end end return -1", 0, overhead.hashtable.main]
+      node: 1
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.main]
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replflush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replflush}

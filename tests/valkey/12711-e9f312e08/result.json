@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e9f312e08708e6b719ecd6b5eafb9ec2fefad16e",
+  "parent": "8d675950e6528e164454300d54aaf7bc024b075c",
+  "pr": 12711,
+  "pr_repo": "redis/redis",
+  "subject": "Change stat_client_qbuf_limit_disconnections to atomic. (#12711)",
+  "date": "2023-11-01",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.8065,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only converts the stat_client_qbuf_limit_disconnections counter from a plain long long to a redisAtomic long long, switching its single increment (readQueryFromClient), its reset (resetServerStats), and its INFO read (genRedisInfoString) to atomicIncr/atomicSet/atomicGet. It is a thread-safety correctness refactor with no externally observable behavior change: the INFO Stats field client_query_buffer_limit_disconnections reports the same value, the disconnection on exceeding client-query-buffer-limit is unchanged, and no command reply, persistence, replication, or tool behavior chan"
+}

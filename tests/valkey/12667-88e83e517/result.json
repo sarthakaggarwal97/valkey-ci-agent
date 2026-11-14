@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "88e83e517bf2b5271c4df435ec9daf4a6c132230",
+  "parent": "9ca8490315063a426793516e25a23065f3647679",
+  "pr": 12667,
+  "pr_repo": "redis/redis",
+  "subject": "Add DEBUG_ASSERTIONS option to custom assert (#12667)",
+  "date": "2023-11-11",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2544,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a debugServerAssertWithInfo macro that is a no-op unless the build is compiled with -DDEBUG_ASSERTIONS, plus CI workflow edits enabling that flag in GitHub Actions sanitizer jobs. In the builds under test the new assertion in getKeySlot expands to nothing, so the compiled code and all runtime behaviour (replies, replication, cluster slot handling) are identical to the parent; there is no reachable changed path for a scenario to drive."
+}

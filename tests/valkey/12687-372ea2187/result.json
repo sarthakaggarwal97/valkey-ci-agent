@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "372ea21875af32d71572414e683f464e7919ad53",
+  "parent": "3fac869f02657d94dc89fab23acb8ef188889c96",
+  "pr": 12687,
+  "pr_repo": "redis/redis",
+  "subject": "Update comment around propagateDeletion (#12687)",
+  "date": "2023-10-24",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2238,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only updates comments: it rewords the doc comment above propagateDeletion in src/db.c (expiry -> general implicit deletion wording) and adds an explanatory comment before moduleNotifyKeyspaceEvent in delKeysInSlot in src/cluster.c. No statements, data structures, configs or replies are modified, so there is no changed behaviour for a scenario to reach."
+}

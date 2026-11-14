@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6258edebf04ef5104409e11c60b60923db0e778f",
+  "parent": "cf6ed3feeb95059817d7fa8685aa04a8a33a1f92",
+  "pr": 12750,
+  "pr_repo": "redis/redis",
+  "subject": "reset bucket_count when empty db (#12750)",
+  "date": "2023-11-10",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.2001,
+  "findings": [],
+  "recorded": []
+}

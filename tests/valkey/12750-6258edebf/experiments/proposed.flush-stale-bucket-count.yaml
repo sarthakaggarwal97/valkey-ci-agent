@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.flush-stale-bucket-count
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    In cluster mode FLUSHALL/FLUSHDB must reset each db's cached bucket_count. Before
+    the fix the stale count inflates MEMORY STATS overhead.hashtable.main and overhead.hashtable.expires
+    after a flush, and the error accumulates across flushes. Exercises both the sync
+    (dictEmpty) and async (emptyDbAsync) branches of emptyDbStructure.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {activerehashing: "no"}
+    timeout_s: 60
+    commands:
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SET','{t}'..i,'v')\
+          \ end return redis.call('DBSIZE')", 0, 40000]
+      expect: {equals: 40000}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SET','{e}'..i,'v','EX',1000)\
+          \ end return redis.call('DBSIZE')", 0, 10000]
+      expect: {equals: 50000}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.main]
+      compare: skip
+    - command: [FLUSHALL, SYNC]
+      expect: {equals: OK}
+    - command: [SET, k1, v]
+      expect: {equals: OK}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.main]
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.expires]
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SET','{t}'..i,'v')\
+          \ end return redis.call('DBSIZE')", 0, 40000]
+      expect: {equals: 40001}
+    - command: [FLUSHDB, ASYNC]
+      expect: {equals: OK}
+    - command: [SET, k2, v]
+      expect: {equals: OK}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.main]
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    - command: [EVAL, "local t=redis.call('MEMORY','STATS') for i=1,#t,2 do if t[i]=='db.0'\
+          \ then local d=t[i+1] for j=1,#d,2 do if d[j]==ARGV[1] then return d[j+1]\
+          \ end end end end return -1", 0, overhead.hashtable.expires]
+      expect_difference: true
+      expect: {min: 900000, max: 1000000}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

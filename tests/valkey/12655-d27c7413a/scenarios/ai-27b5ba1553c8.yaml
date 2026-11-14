@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0270abda8255..d27c7413a95a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-27b5ba1553c8
+seed: 2
+experiment:
+  id: proposed.watchdog-signal-stacktrace
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    enable-debug-command: 'yes'
+    io-threads: 16

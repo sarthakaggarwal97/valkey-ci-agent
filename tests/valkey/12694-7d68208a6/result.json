@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7d68208a6ea7d57a58d9f3548ea5b11d2caed272",
+  "parent": "ba900f6cb8334eee23b943afe1aaa757dc80cf45",
+  "pr": 12694,
+  "pr_repo": "redis/redis",
+  "subject": "Reset later item flag after defrag later is done (#12694)",
+  "date": "2023-10-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1071,
+  "findings": [],
+  "recorded": []
+}

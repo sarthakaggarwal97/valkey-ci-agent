@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4bbb2b01523e..8d675950e652.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a94fc19bb810
+seed: 20261
+experiment:
+  id: proposed.cluster-forgotten-gossip-two-forgetters
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7100

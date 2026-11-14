@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bucket-count-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: A cluster replica applies a replicated FLUSHALL through emptyDbStructure
+    too, so its bucket_count also goes stale; compare MEMORY STATS per-db hashtable
+    overhead on both the primary and the replica against the parent after a flush-and-rewrite
+    cycle
+components:
+- use: valkey.action.commands
+  id: repl-buckets
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {activerehashing: "no"}
+    timeout_s: 90
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, "{t0}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [WAIT, 1, 10000], expect: {equals: 1}}
+    - {command: [EVAL_RO, "local s = redis.call('MEMORY','STATS') for i=1,#s do if\
+          \ s[i]=='db.0' then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}",
+        0], expect: {exists: true}}
+    - {command: [EVAL_RO, "local s = redis.call('MEMORY','STATS') for i=1,#s do if\
+          \ s[i]=='db.0' then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}",
+        0], node: 1, expect: {exists: true}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [WAIT, 1, 10000], expect: {equals: 1}}
+    - {command: [SET, "{t0}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t0}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t1}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t2}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}a", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}b", v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{t3}c", v, EX, 10000], expect: {equals: OK}}
+    - {command: [WAIT, 1, 10000], expect: {equals: 1}}
+    - {command: [EVAL_RO, "local s = redis.call('MEMORY','STATS') for i=1,#s do if\
+          \ s[i]=='db.0' then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}",
+        0], expect_difference: true, expect: {exists: true}}
+    - {command: [EVAL_RO, "local s = redis.call('MEMORY','STATS') for i=1,#s do if\
+          \ s[i]=='db.0' then return {s[i+1][2], s[i+1][4]} end end return {-1,-1}",
+        0], node: 1, expect_difference: true, expect: {exists: true}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl-buckets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl-buckets}

@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.activerehashing-idle-multidb
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Standalone activerehashing must finish idle dicts left mid-rehash in the db0 expires
+    dict and in dbs above 0. The parent's incrementallyRehash returns 1 whenever db0's
+    main dict merely exists, so rehash_db never advances and those dicts stay in rehashing
+    state forever while idle; the fix returns 0 when nothing is rehashing, letting
+    the cron reach them.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: string, enum: ["10", "100", "500"], default: "10"}
+components:
+- use: valkey.action.commands
+  id: rehash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      activerehashing: "yes"
+      enable-debug-command: "yes"
+      save: ""
+      databases: "16"
+      hz: {$ref: inputs.hz}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, "0"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "for i=1,10000 do redis.call('SET','k'..i,'v') end for i=1,2100 do redis.call('EXPIRE','k'..i,10000)\
+        \ end return redis.call('DBSIZE')"
+      - "0"
+      expect: {equals: 10000}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "for i=1,10000 do redis.call('SET','k'..i,'v') end return redis.call('DBSIZE')"
+      - "0"
+      expect: {equals: 10000}
+    - {command: [SELECT, "15"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "for i=1,10000 do redis.call('SET','k'..i,'v') end return redis.call('DBSIZE')"
+      - "0"
+      expect: {equals: 10000}
+    - {command: [DEBUG, HTSTATS, "1"], wait_s: 20, expect_difference: true, expect: {
+        contains: "number of elements: 10000"}}
+    - {command: [DEBUG, HTSTATS, "15"], wait_s: 20, expect_difference: true, expect: {
+        contains: "number of elements: 10000"}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 10, expect_difference: true, expect: {
+        contains: "number of elements: 2100"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rehash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rehash}

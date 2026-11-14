@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7d68208a6ea7..4145d628b441.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cf9c47eb5923
+seed: 104
+experiment:
+  id: proposed.cluster-expires-rehash
+  inputs:
+    activerehashing: 'no'
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7300

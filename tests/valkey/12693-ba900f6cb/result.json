@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba900f6cb8334eee23b943afe1aaa757dc80cf45",
+  "parent": "372ea21875af32d71572414e683f464e7919ad53",
+  "pr": 12693,
+  "pr_repo": "redis/redis",
+  "subject": "Fix fd leak causing deleted files to remain open and eat disk space (#12693)",
+  "date": "2023-10-25",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.0921,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

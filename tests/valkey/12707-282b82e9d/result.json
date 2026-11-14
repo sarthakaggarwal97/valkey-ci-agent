@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "282b82e9d20433aa266cd9f16ef1ccbbee199ce0",
+  "parent": "28b6155ba5daa252240f334be41774d840bcfbd9",
+  "pr": 12707,
+  "pr_repo": "redis/redis",
+  "subject": "Handle all CLUSTER_REDIR_ error code when verifying script. (#12707)",
+  "date": "2023-11-06",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1796,
+  "findings": [],
+  "recorded": []
+}

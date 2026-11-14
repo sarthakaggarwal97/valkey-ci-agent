@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4bbb2b01523efe40068258d0265fff1802868d43",
+  "parent": "f7fa481156de051972dd49336fb04639bebdbe34",
+  "pr": 5692,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize CPU cache efficiency on dict while it's being rehashed (#5692)",
+  "date": "2023-10-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.4657,
+  "findings": [],
+  "recorded": []
+}

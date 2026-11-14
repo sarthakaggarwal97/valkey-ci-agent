@@ -1,0 +1,164 @@
+extends: [valkey.liveness]
+id: proposed.standalone-bucket-count
+deployment:
+  modes: [standalone]
+metadata:
+  description: dbBuckets non-cluster branch (db.c:1396-1401) checked via MEMORY STATS
+    hashtable overheads through dict grow, incremental rehash completion and cron
+    shrink, compared against the parent build whose dbBuckets sums real dict buckets
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: buckets
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {loglevel: verbose}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{t}warm", v], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local function ov(n)
+          local t = redis.call('MEMORY','STATS')
+          for i=1,#t,2 do
+            if t[i] == 'db.0' then
+              local d = t[i+1]
+              for j=1,#d,2 do
+                if d[j] == n then return d[j+1] end
+              end
+            end
+          end
+          return -1
+        end
+        local m = ov('overhead.hashtable.main')
+        local e = ov('overhead.hashtable.expires')
+        redis.call('SET','{t}bm',m)
+        redis.call('SET','{t}be',e)
+        return {m, e}
+      - "0"
+      expect: {exists: true}
+    - command:
+      - EVAL
+      - |
+        for i=1,100 do
+          redis.call('SET','{t}k:'..i,'v')
+          redis.call('PEXPIRE','{t}k:'..i,3600000)
+        end
+        return redis.status_reply('OK')
+      - "0"
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - |
+        for i=1,60 do
+          redis.call('GET','{t}k:1')
+          redis.call('TTL','{t}k:2')
+        end
+        local function ov(n)
+          local t = redis.call('MEMORY','STATS')
+          for i=1,#t,2 do
+            if t[i] == 'db.0' then
+              local d = t[i+1]
+              for j=1,#d,2 do
+                if d[j] == n then return d[j+1] end
+              end
+            end
+          end
+          return -1
+        end
+        return ov('overhead.hashtable.main') - tonumber(redis.call('GET','{t}bm'))
+      - "0"
+      expect: {min: 3000, max: 12000}
+    - command:
+      - EVAL
+      - |
+        for i=1,60 do
+          redis.call('GET','{t}k:1')
+          redis.call('TTL','{t}k:2')
+        end
+        local function ov(n)
+          local t = redis.call('MEMORY','STATS')
+          for i=1,#t,2 do
+            if t[i] == 'db.0' then
+              local d = t[i+1]
+              for j=1,#d,2 do
+                if d[j] == n then return d[j+1] end
+              end
+            end
+          end
+          return -1
+        end
+        return ov('overhead.hashtable.expires') - tonumber(redis.call('GET','{t}be'))
+      - "0"
+      expect: {min: 2000, max: 9000}
+    - {command: [MEMORY, STATS], compare: skip}
+    - {command: [MEMORY, DOCTOR], compare: skip}
+    - command:
+      - EVAL
+      - |
+        for i=3,100 do redis.call('DEL','{t}k:'..i) end
+        return redis.status_reply('OK')
+      - "0"
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - |
+        for i=1,60 do
+          redis.call('GET','{t}k:1')
+          redis.call('TTL','{t}k:2')
+        end
+        local function ov(n)
+          local t = redis.call('MEMORY','STATS')
+          for i=1,#t,2 do
+            if t[i] == 'db.0' then
+              local d = t[i+1]
+              for j=1,#d,2 do
+                if d[j] == n then return d[j+1] end
+              end
+            end
+          end
+          return -1
+        end
+        return ov('overhead.hashtable.main') - tonumber(redis.call('GET','{t}bm'))
+      - "0"
+      wait_s: 20
+      expect: {min: 0, max: 600}
+    - command:
+      - EVAL
+      - |
+        for i=1,60 do
+          redis.call('GET','{t}k:1')
+          redis.call('TTL','{t}k:2')
+        end
+        local function ov(n)
+          local t = redis.call('MEMORY','STATS')
+          for i=1,#t,2 do
+            if t[i] == 'db.0' then
+              local d = t[i+1]
+              for j=1,#d,2 do
+                if d[j] == n then return d[j+1] end
+              end
+            end
+          end
+          return -1
+        end
+        return ov('overhead.hashtable.expires') - tonumber(redis.call('GET','{t}be'))
+      - "0"
+      wait_s: 20
+      expect: {min: 0, max: 500}
+    - {command: [MEMORY, STATS], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 5}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [buckets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: buckets}

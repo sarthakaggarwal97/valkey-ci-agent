@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28b6155ba5daa252240f334be41774d840bcfbd9",
+  "parent": "15a048d4f0465dc58be21d7e46d527ccfcc34a64",
+  "pr": 11489,
+  "pr_repo": "redis/redis",
+  "subject": "Fix the bug that write redis sensitive command information to redis_cli historyfile (#11489)",
+  "date": "2023-11-05",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.9824,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters which commands valkey-cli's interactive REPL withholds from its history file (isSensitiveCommand in src/redis-cli.c). That function's effect is gated on stdin being a tty: repl() enables history and resolves the history file only inside isatty(fileno(stdin)) (redis-cli.c:3360-3366), so with piped stdin neither build ever writes or keeps history. The fuzzer's tool runner (valkey.action.tools) feeds stdin through a pipe and provides no pseudo-terminal, so no run can produce any observable difference (exit status, output, or files) between the fixed and parent builds, and a"
+}

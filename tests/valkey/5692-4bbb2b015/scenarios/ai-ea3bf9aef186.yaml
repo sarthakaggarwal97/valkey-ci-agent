@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7fa481156de..4bbb2b01523e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea3bf9aef186
+seed: 90211
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 2000
+    mutable_keys: 20000
+    stable_keys: 2000
+    run_before_crash_s: 8
+    run_after_crash_s: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    activerehashing: 'yes'
+    activedefrag: 'yes'
+    active-defrag-threshold-lower: '0'
+    active-defrag-ignore-bytes: '1'
+    hz: '100'

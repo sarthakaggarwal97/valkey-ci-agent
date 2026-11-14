@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "03345ddc7faf7af079485f2cbe5d17a1611cbce1",
+  "parent": "3c734b8e9dc357f8ec743e8db25ca916cfdcf7bc",
+  "pr": 12671,
+  "pr_repo": "redis/redis",
+  "subject": "Fix issue of listen before chmod on Unix sockets (CVE-2023-45145) (#12671)",
+  "date": "2023-10-18",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2265,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reorders chmod() before listen() in anetUnixServer (CVE-2023-45145), closing a microsecond-scale startup race where the Unix socket briefly listened with umask-default permissions before unixsocketperm was applied. TCP callers pass perm=0 and the chmod is guarded to AF_LOCAL, so no other path changes. The steady-state behaviour is identical on both builds: same replies, same final socket mode, no effect on replication, persistence, cluster, or tools, so a compared sequence has no command whose reply could differ (every expect_difference would be unreached-change). Observing the"
+}

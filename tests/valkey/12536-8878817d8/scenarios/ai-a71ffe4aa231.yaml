@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e9f312e08708..8878817d89e7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a71ffe4aa231
+seed: 12536
+experiment:
+  id: proposed.scan-match-slot
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
