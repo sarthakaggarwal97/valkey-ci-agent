@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 98a6e55d4e7e..7b070423b8e2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c6a39f5511f
+seed: 101
+experiment:
+  id: proposed.cluster-active-expire-uaf
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.kvstore-rehash-uaf
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Emptying a rehashing cluster slot dict then driving cron must not use
+    freed memory
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: uaf
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {hz: 100, activerehashing: yes}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [MSET, "{t}1", a, "{t}2", a, "{t}3", a, "{t}4", a, "{t}5", a, "{t}6",
+        a, "{t}7", a, "{t}8", a, "{t}9", a, "{t}10", a, "{t}11", a, "{t}12", a, "{t}13",
+        a, "{t}14", a, "{t}15", a, "{t}16", a, "{t}17", a, "{t}18", a, "{t}19", a,
+        "{t}20", a, "{t}21", a, "{t}22", a, "{t}23", a, "{t}24", a, "{t}25", a, "{t}26",
+        a, "{t}27", a, "{t}28", a, "{t}29", a, "{t}30", a, "{t}31", a, "{t}32", a,
+        "{t}33", a, "{t}34", a, "{t}35", a, "{t}36", a, "{t}37", a, "{t}38", a, "{t}39",
+        a, "{t}40", a, "{t}41", a, "{t}42", a, "{t}43", a, "{t}44", a, "{t}45", a,
+        "{t}46", a, "{t}47", a, "{t}48", a, "{t}49", a, "{t}50", a, "{t}51", a, "{t}52",
+        a, "{t}53", a, "{t}54", a, "{t}55", a, "{t}56", a, "{t}57", a, "{t}58", a,
+        "{t}59", a, "{t}60", a, "{t}61", a, "{t}62", a, "{t}63", a, "{t}64", a, "{t}65",
+        a, "{t}66", a, "{t}67", a, "{t}68", a, "{t}69", a, "{t}70", a, "{t}71", a,
+        "{t}72", a, "{t}73", a, "{t}74", a, "{t}75", a, "{t}76", a, "{t}77", a, "{t}78",
+        a, "{t}79", a, "{t}80", a, "{t}81", a, "{t}82", a, "{t}83", a, "{t}84", a,
+        "{t}85", a, "{t}86", a, "{t}87", a, "{t}88", a, "{t}89", a, "{t}90", a, "{t}91",
+        a, "{t}92", a, "{t}93", a, "{t}94", a, "{t}95", a, "{t}96", a, "{t}97", a,
+        "{t}98", a, "{t}99", a, "{t}100", a, "{t}101", a, "{t}102", a, "{t}103", a,
+        "{t}104", a, "{t}105", a, "{t}106", a, "{t}107", a, "{t}108", a, "{t}109",
+        a, "{t}110", a, "{t}111", a, "{t}112", a, "{t}113", a, "{t}114", a, "{t}115",
+        a, "{t}116", a, "{t}117", a, "{t}118", a, "{t}119", a, "{t}120", a, "{t}121",
+        a, "{t}122", a, "{t}123", a, "{t}124", a, "{t}125", a, "{t}126", a, "{t}127",
+        a, "{t}128", a], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 128}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [PING], wait_s: 20, expect_difference: true, expect: {equals: PONG}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [uaf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: uaf}

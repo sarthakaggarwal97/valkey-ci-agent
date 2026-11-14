@@ -1,0 +1,69 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad28d222edcef9d4496fd7a94656013f07dd08e5",
+  "parent": "a8e745117f3648cc813d18f5a8cf1218ec83cb5d",
+  "pr": 13108,
+  "pr_repo": "redis/redis",
+  "subject": "Lua eval scripts first in first out LRU eviction (#13108)",
+  "date": "2024-03-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 45,
+    "executed": 42,
+    "percent": 93,
+    "uncovered": [
+      "src/eval.c:295",
+      "src/eval.c:714",
+      "src/lazyfree.c:207"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9762,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-987d3f47686f",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-987d3f47686f",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-987d3f47686f",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-86aa2f4b49bb",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-86aa2f4b49bb",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-86aa2f4b49bb",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

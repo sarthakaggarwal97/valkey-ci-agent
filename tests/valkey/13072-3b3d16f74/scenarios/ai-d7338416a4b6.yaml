@@ -1,0 +1,56 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad28d222edce..3b3d16f74880.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d7338416a4b6
+seed: 1317
+experiment:
+  id: valkey.cluster-chaos
+  inputs:
+    keys_per_slot: 40
+    command_rate: 8000
+    config_changes: 16
+    config_churn_keys:
+      activedefrag:
+      - 'yes'
+      - 'no'
+      hz:
+      - '100'
+      - '500'
+      lazyfree-lazy-server-del:
+      - 'yes'
+      - 'no'
+      lazyfree-lazy-expire:
+      - 'yes'
+      - 'no'
+      active-defrag-ignore-bytes:
+      - '1'
+      - 100mb
+    waves:
+    - - op: kill
+        target: primary
+        signal: SIGKILL
+      - op: failover
+        shard: 1
+        delay_s: 0.5
+    - - op: failover
+        shard: 0
+        force: true
+      - op: kill
+        target: replica
+        signal: SIGTERM
+        after: 0
+    - - op: kill
+        target: primary
+        signal: SIGKILL
+      - op: failover
+        shard: 2
+        force: true
+        delay_s: 0.5
+    validation:
+      blocking_on_failure: false
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7000
+  server_config:
+    hz: '500'

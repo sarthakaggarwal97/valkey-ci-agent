@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bad33f8738b4be5f58c4439a0c78312e4afbe432",
+  "parent": "e04d41d78dcdc4f2b332cdcf168521257ab0024e",
+  "pr": 13148,
+  "pr_repo": "redis/redis",
+  "subject": "fix wrong data type conversion in zrangeResultBeginStore (#13148)",
+  "date": "2024-03-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5451,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e3e794bd5474",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zrangestore' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (ZRANGE dscore 0 -1 WITHSCORES)"
+    }
+  ]
+}

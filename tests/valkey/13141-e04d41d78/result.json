@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e04d41d78dcdc4f2b332cdcf168521257ab0024e",
+  "parent": "aeada20140570643cda084d374056469a5c27bf2",
+  "pr": 13141,
+  "pr_repo": "redis/redis",
+  "subject": "Prevent lua error_reply abuse from causing errorstats to become larger (#13141)",
+  "date": "2024-03-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 34,
+    "executed": 34,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6027,
+  "findings": [],
+  "recorded": []
+}

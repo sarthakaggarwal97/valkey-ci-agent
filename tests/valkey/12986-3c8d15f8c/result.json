@@ -1,0 +1,61 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c8d15f8c3e3aca887555e3509e9c6fe4205ae1e",
+  "parent": "5fdaa53d20c82c99042e79b737fb9bc157a73d60",
+  "pr": 12986,
+  "pr_repo": "redis/redis",
+  "subject": "Pick random slot for a node to distribute operation across slots in redis-benchmark (#12986)",
+  "date": "2024-03-11",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/redis-benchmark.c:428"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 11.9129,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3a57d3798a15",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: the candidate build has no valkey-benchmark beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark"
+    },
+    {
+      "scenario": "ai-191df8002e1c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: the candidate build has no valkey-benchmark beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark"
+    },
+    {
+      "scenario": "ai-1bd8e938a7bb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: the candidate build has no valkey-benchmark beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark"
+    },
+    {
+      "scenario": "ai-5c2f3db0ac46",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: the candidate build has no valkey-benchmark beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark"
+    },
+    {
+      "scenario": "ai-43c882a62c62",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: the candidate build has no valkey-benchmark beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-benchmark"
+    }
+  ]
+}

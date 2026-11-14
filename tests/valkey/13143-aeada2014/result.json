@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aeada20140570643cda084d374056469a5c27bf2",
+  "parent": "7b070423b8e20cf14a9ab80dfa7bea5ba88c54a3",
+  "pr": 13143,
+  "pr_repo": "redis/redis",
+  "subject": "Avoid unnecessary dict shrink in zremrangeGenericCommand (#13143)",
+  "date": "2024-03-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3046,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only skips dictShrinkIfNeeded on a sorted set's dict when the ZREMRANGEBY* delete emptied it and dbDelete is about to free the entire object anyway; when members remain the shrink still runs as before. It is a performance-only refactor with no observable change to replies, keyspace events, data, encoding, or replication, so there is nothing a scenario could detect."
+}

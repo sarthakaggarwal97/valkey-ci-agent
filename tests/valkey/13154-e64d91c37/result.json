@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e64d91c37105bc2e23816b6f81b9ffc5e5d99801",
+  "parent": "bad33f8738b4be5f58c4439a0c78312e4afbe432",
+  "pr": 13154,
+  "pr_repo": "redis/redis",
+  "subject": "Fix dict use-after-free problem in kvs->rehashing (#13154)",
+  "date": "2024-03-20",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 2,
+    "percent": 50,
+    "uncovered": [
+      "src/dict.c:712",
+      "src/dict.c:1598"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.9597,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

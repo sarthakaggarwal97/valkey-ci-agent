@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9a6721bd11ca9454b425a695c9455434564c2dd5",
+  "parent": "35864853559560b9144faf3202e97b35b11b14f1",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix check aof",
+  "date": "2024-03-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2625,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the project's own test harness (tests/integration/aof.tcl, swapping the hardcoded binary path src/redis-check-aof for the renamed src/placeholderkv-check-aof in exec calls) and a help-text string in utils/generate-commands-json.py. No server code, tool code, or runtime behaviour changes: valkey-check-aof itself is untouched, only how the Tcl tests invoke it. There is no behavioural difference between the change and its parent for any scenario to exercise or compare."
+}

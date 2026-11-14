@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.cluster-active-expire-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active expire that empties a cluster slot dict during the scan must
+    not use the freed dict
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expire
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {hz: 100, active-expire-effort: 10}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}1", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}2", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}3", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}4", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}5", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}6", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}7", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}8", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}9", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}10", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}11", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}12", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}13", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}14", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}15", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}16", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}17", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}18", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}19", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}20", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}21", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}22", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}23", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}24", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}25", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}26", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}27", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}28", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}29", 250, v], expect: {equals: OK}}
+    - {command: [PSETEX, "{foo}30", 250, v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 20, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [expire.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expire}

@@ -1,0 +1,303 @@
+extends: [valkey.liveness]
+id: proposed.errorstats-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: errorstats disables itself at 128 distinct error codes, inserts ERRORSTATS_DISABLED,
+    stops counting, and re-enables on CONFIG RESETSTAT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: errstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E001], expect: {
+        error: E001}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E002], expect: {
+        error: E002}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E003], expect: {
+        error: E003}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E004], expect: {
+        error: E004}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E005], expect: {
+        error: E005}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E006], expect: {
+        error: E006}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E007], expect: {
+        error: E007}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E008], expect: {
+        error: E008}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E009], expect: {
+        error: E009}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E010], expect: {
+        error: E010}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E011], expect: {
+        error: E011}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E012], expect: {
+        error: E012}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E013], expect: {
+        error: E013}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E014], expect: {
+        error: E014}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E015], expect: {
+        error: E015}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E016], expect: {
+        error: E016}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E017], expect: {
+        error: E017}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E018], expect: {
+        error: E018}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E019], expect: {
+        error: E019}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E020], expect: {
+        error: E020}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E021], expect: {
+        error: E021}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E022], expect: {
+        error: E022}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E023], expect: {
+        error: E023}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E024], expect: {
+        error: E024}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E025], expect: {
+        error: E025}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E026], expect: {
+        error: E026}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E027], expect: {
+        error: E027}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E028], expect: {
+        error: E028}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E029], expect: {
+        error: E029}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E030], expect: {
+        error: E030}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E031], expect: {
+        error: E031}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E032], expect: {
+        error: E032}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E033], expect: {
+        error: E033}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E034], expect: {
+        error: E034}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E035], expect: {
+        error: E035}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E036], expect: {
+        error: E036}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E037], expect: {
+        error: E037}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E038], expect: {
+        error: E038}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E039], expect: {
+        error: E039}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E040], expect: {
+        error: E040}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E041], expect: {
+        error: E041}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E042], expect: {
+        error: E042}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E043], expect: {
+        error: E043}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E044], expect: {
+        error: E044}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E045], expect: {
+        error: E045}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E046], expect: {
+        error: E046}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E047], expect: {
+        error: E047}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E048], expect: {
+        error: E048}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E049], expect: {
+        error: E049}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E050], expect: {
+        error: E050}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E051], expect: {
+        error: E051}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E052], expect: {
+        error: E052}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E053], expect: {
+        error: E053}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E054], expect: {
+        error: E054}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E055], expect: {
+        error: E055}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E056], expect: {
+        error: E056}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E057], expect: {
+        error: E057}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E058], expect: {
+        error: E058}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E059], expect: {
+        error: E059}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E060], expect: {
+        error: E060}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E061], expect: {
+        error: E061}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E062], expect: {
+        error: E062}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E063], expect: {
+        error: E063}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E064], expect: {
+        error: E064}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E065], expect: {
+        error: E065}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E066], expect: {
+        error: E066}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E067], expect: {
+        error: E067}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E068], expect: {
+        error: E068}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E069], expect: {
+        error: E069}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E070], expect: {
+        error: E070}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E071], expect: {
+        error: E071}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E072], expect: {
+        error: E072}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E073], expect: {
+        error: E073}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E074], expect: {
+        error: E074}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E075], expect: {
+        error: E075}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E076], expect: {
+        error: E076}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E077], expect: {
+        error: E077}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E078], expect: {
+        error: E078}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E079], expect: {
+        error: E079}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E080], expect: {
+        error: E080}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E081], expect: {
+        error: E081}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E082], expect: {
+        error: E082}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E083], expect: {
+        error: E083}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E084], expect: {
+        error: E084}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E085], expect: {
+        error: E085}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E086], expect: {
+        error: E086}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E087], expect: {
+        error: E087}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E088], expect: {
+        error: E088}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E089], expect: {
+        error: E089}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E090], expect: {
+        error: E090}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E091], expect: {
+        error: E091}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E092], expect: {
+        error: E092}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E093], expect: {
+        error: E093}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E094], expect: {
+        error: E094}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E095], expect: {
+        error: E095}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E096], expect: {
+        error: E096}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E097], expect: {
+        error: E097}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E098], expect: {
+        error: E098}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E099], expect: {
+        error: E099}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E100], expect: {
+        error: E100}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E101], expect: {
+        error: E101}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E102], expect: {
+        error: E102}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E103], expect: {
+        error: E103}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E104], expect: {
+        error: E104}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E105], expect: {
+        error: E105}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E106], expect: {
+        error: E106}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E107], expect: {
+        error: E107}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E108], expect: {
+        error: E108}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E109], expect: {
+        error: E109}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E110], expect: {
+        error: E110}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E111], expect: {
+        error: E111}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E112], expect: {
+        error: E112}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E113], expect: {
+        error: E113}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E114], expect: {
+        error: E114}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E115], expect: {
+        error: E115}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E116], expect: {
+        error: E116}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E117], expect: {
+        error: E117}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E118], expect: {
+        error: E118}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E119], expect: {
+        error: E119}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E120], expect: {
+        error: E120}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E121], expect: {
+        error: E121}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E122], expect: {
+        error: E122}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E123], expect: {
+        error: E123}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E124], expect: {
+        error: E124}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E125], expect: {
+        error: E125}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E126], expect: {
+        error: E126}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E127], expect: {
+        error: E127}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E128], expect: {
+        error: E128}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E001], expect: {
+        error: E001}}
+    - {command: [INFO, errorstats], compare: skip, expect: {contains: "errorstat_E001:count=2"}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E129], expect: {
+        error: E129}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERRORSTATS_DISABLED:count=1"}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E130], expect: {
+        error: E130}}
+    - {command: [EVAL, "return redis.error_reply('ERRORSTATS_DISABLED m')", 0], expect: {
+        error: ERRORSTATS_DISABLED}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E001], expect: {
+        error: E001}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERRORSTATS_DISABLED:count=1"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.error_reply(ARGV[1]..' m')", 0, E200], expect: {
+        error: E200}}
+    - {command: [INFO, errorstats], compare: skip, expect: {contains: "errorstat_E200:count=1"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [INFO, errorstats], compare: skip, expect: {contains: "# Errorstats"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [errstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: errstats}

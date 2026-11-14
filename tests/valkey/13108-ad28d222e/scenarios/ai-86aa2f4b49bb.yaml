@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a8e745117f36..ad28d222edce.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-86aa2f4b49bb
+seed: 2
+experiment:
+  id: proposed.eval-script-lru-eviction
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

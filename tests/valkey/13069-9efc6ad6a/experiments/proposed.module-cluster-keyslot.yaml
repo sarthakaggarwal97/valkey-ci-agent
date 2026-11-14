@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-keyslot
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    RedisModule_ClusterKeySlot and RedisModule_ClusterCanonicalKeyNameInSlot, driven
+    through misc.so's new test.keyslot command, which round-trips every slot through
+    the canonical slot table with asserts and then returns the slot of its argument;
+    compared against the parent build, where the command does not exist. CLUSTER KEYSLOT
+    anchors the expected slot values on both builds, and adversarial key shapes exercise
+    the hash-tag parsing.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: keyslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [test.keyslot, foo], expect_difference: true, expect: {equals: 12182}}
+    - {command: [test.keyslot, "{foo}.extra"], expect_difference: true, expect: {
+        equals: 12182}}
+    - {command: [test.keyslot, "a{foo}b{bar}c"], expect_difference: true, expect: {
+        equals: 12182}}
+    - {command: [test.keyslot, ""], expect_difference: true, expect: {equals: 0}}
+    - {command: [test.keyslot, "{}foo"], expect_difference: true, expect: {min: 0,
+        max: 16383}}
+    - {command: [test.keyslot, "foo{bar"], expect_difference: true, expect: {min: 0,
+        max: 16383}}
+    - {command: [test.keyslot, "foo}{bar"], expect_difference: true, expect: {min: 0,
+        max: 16383}}
+    - {command: [test.keyslot, "{{{{{{{{}}}}}}}}"], expect_difference: true, expect: {
+        min: 0, max: 16383}}
+    - {command: [test.keyslot, !!binary "AP8Ae3t9AA=="], expect_difference: true,
+      expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [test.keyslot, a, b], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [keyslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyslot}

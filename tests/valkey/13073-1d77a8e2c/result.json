@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1d77a8e2c5e2322cc119af34a6685876af90effd",
+  "parent": "3b3d16f7488063f0d2ee7d5cfaeba736169046de",
+  "pr": 13073,
+  "pr_repo": "redis/redis",
+  "subject": "Makefile respect user's REDIS_CFLAGS and OPT (#13073)",
+  "date": "2024-03-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2263,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/Makefile: it relocates default optimization flags (-flto, -fno-omit-frame-pointer) from REDIS_CFLAGS into the OPTIMIZATION variable and adds $(OPT) to FINAL_LDFLAGS so user-provided REDIS_CFLAGS and OPT are honored. It is purely a build/CI flag-handling change with no runtime behaviour change to the server, commands, replication, persistence, or tools, so there is no changed code path a fuzzer scenario could reach."
+}

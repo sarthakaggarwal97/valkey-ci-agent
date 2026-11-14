@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.xread-last-entry
+deployment:
+  modes: [standalone]
+metadata:
+  description: XREAD with the new + ID returns only the stream's last entry; the parent
+    rejects + as an invalid stream ID
+inputs:
+  properties:
+    stream_node_max_entries: {type: integer, default: 100}
+components:
+- use: valkey.action.commands
+  id: xread
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {stream-node-max-entries: {$ref: inputs.stream_node_max_entries}}
+    resp: 2
+    timeout_s: 10
+    checks: {variants: true, replica: true}
+    commands:
+    - {command: [XREAD, STREAMS, nostream, "+"], expect_difference: true, expect: {
+        equals: null}}
+    - {command: [XADD, s, 1-1, k1, v1], expect: {equals: "1-1"}}
+    - {command: [XADD, s, 2-1, k2, v2], expect: {equals: "2-1"}}
+    - {command: [XADD, s, 3-1, k3, v3], expect: {equals: "3-1"}}
+    - {command: [XREAD, STREAMS, s, "+"], expect_difference: true, expect: {equals: [
+          [s, [["3-1", [k3, v3]]]]]}}
+    - {command: [XREAD, COUNT, 3, STREAMS, s, "+"], expect_difference: true, expect: {
+        equals: [[s, [["3-1", [k3, v3]]]]]}}
+    - {command: [XADD, s, 3-18446744073709551614, k4, v4], expect: {equals: "3-18446744073709551614"}}
+    - {command: [XADD, s, 3-18446744073709551615, k5, v5], expect: {equals: "3-18446744073709551615"}}
+    - {command: [XREAD, STREAMS, s, "+"], expect_difference: true, expect: {equals: [
+          [s, [["3-18446744073709551615", [k5, v5]]]]]}}
+    - {command: [XDEL, s, 3-18446744073709551615], expect: {equals: 1}}
+    - {command: [XREAD, STREAMS, s, "+"], expect_difference: true, expect: {equals: null}}
+    - {command: [XADD, t, 7-0, k, v], expect: {equals: "7-0"}}
+    - {command: [XREAD, STREAMS, s, t, nostream, "+", "+", "+"], expect_difference: true,
+      expect: {equals: [[t, [["7-0", [k, v]]]]]}}
+    - {command: [XREAD, BLOCK, 5000, STREAMS, t, "+"], expect_difference: true, expect: {
+        equals: [[t, [["7-0", [k, v]]]]]}}
+    - {command: [XADD, STREAMS, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XREAD, COUNT, 1, STREAMS, STREAMS, "+"], expect_difference: true,
+      expect: {equals: [[STREAMS, [["1-1", [f, v]]]]]}}
+    - {command: [XADD, "+", 2-2, f, v], expect: {equals: "2-2"}}
+    - {command: [XREAD, STREAMS, "+", "+"], expect_difference: true, expect: {equals: [
+          ["+", [["2-2", [f, v]]]]]}}
+    - {command: [XGROUP, CREATE, z, g, "$", MKSTREAM], expect: {equals: OK}}
+    - {command: [XREAD, STREAMS, z, "+"], expect_difference: true, expect: {error: "last\
+          \ element ID is 0-0"}}
+    - {command: [XREADGROUP, GROUP, g, c1, STREAMS, z, "+"], expect_difference: true,
+      expect: {error: "meaningless"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [XREAD, BLOCK, 0, STREAMS, nostream2, "+"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [null]}}
+    - {raw: "XREAD BLOCK 8000 STREAMS bs +\r\n", connection: blk, expect_difference: true,
+      expect: {exists: false}}
+    - {command: [XADD, bs, 9-9, bk, bv], expect: {equals: "9-9"}}
+    - {read: true, connection: blk, expect_difference: true, expect: {exists: true}}
+required_events: [xread.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xread}

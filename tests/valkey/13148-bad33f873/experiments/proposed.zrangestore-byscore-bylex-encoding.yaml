@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.zrangestore-byscore-bylex-encoding
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZRANGESTORE BYSCORE/BYLEX stores a small result as listpack, not skiplist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zrangestore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 128, zset-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ZADD, src, '0', a, '0', b, '0', c, '0', d, '0', e], expect: {equals: 5}}
+    - {command: [ZRANGESTORE, dscore, src, '0', '0', BYSCORE], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, dscore], expect_difference: true, expect: {equals: listpack}}
+    - {command: [ZRANGESTORE, dlex, src, '-', '+', BYLEX], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, dlex], expect_difference: true, expect: {equals: listpack}}
+    - {command: [ZRANGESTORE, drev, src, '+', '-', BYLEX, REV], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, drev], expect_difference: true, expect: {equals: listpack}}
+    - {command: [ZRANGESTORE, dlim, src, '0', '0', BYSCORE, LIMIT, '0', '2'], expect: {
+        equals: 2}}
+    - {command: [OBJECT, ENCODING, dlim], expect_difference: true, expect: {equals: listpack}}
+    - {command: [ZRANGE, dscore, '0', '-1', WITHSCORES], expect: {equals: [a, '0',
+          b, '0', c, '0', d, '0', e, '0']}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zrangestore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zrangestore}

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9efc6ad6a63198e6f6af3c5e9fabc3a7ffc6fe4b",
+  "parent": "9c065c417d5cd7a1b35310d8c7760eeb119be1c0",
+  "pr": 13069,
+  "pr_repo": "redis/redis",
+  "subject": "Add API RedisModule_ClusterKeySlot and RedisModule_ClusterCanonicalKeyNameInSlot (#13069)",
+  "date": "2024-03-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4653,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1411f642af00",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keyslot' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CLUSTER KEYSLOT foo), 13 (CLUSTER COUNTKEYSINSLOT 12182)"
+    }
+  ]
+}

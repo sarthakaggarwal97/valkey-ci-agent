@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "38632278fd06fe186f7707e4fa099f666d805547",
+  "parent": "e64d91c37105bc2e23816b6f81b9ffc5e5d99801",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "A single commit to get stuff building",
+  "date": "2024-03-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5322,
+  "findings": [],
+  "recorded": [],
+  "reason": "The commit touches only build and CI machinery and docs: it renames make variables (REDIS_CFLAGS/REDIS_LDFLAGS to SERVER_CFLAGS/SERVER_LDFLAGS), renames the produced binaries to placeholderkv-*, rearranges where -flto/-O3 flags are applied in src/Makefile, and updates .github/workflows/ci.yml, .gitignore, README.md and the tests/instances.tcl harness accordingly. No C source file is modified, so no command reply, replication, persistence, cluster or tool behaviour changes; both builds run identical server code and no scenario could observe a difference."
+}

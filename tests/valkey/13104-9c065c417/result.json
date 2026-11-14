@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9c065c417d5cd7a1b35310d8c7760eeb119be1c0",
+  "parent": "da727ad445a640950baa097124070468a0316cc9",
+  "pr": 13104,
+  "pr_repo": "redis/redis",
+  "subject": "Enable accept4() on *BSD (#13104)",
+  "date": "2024-03-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2344,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens the HAVE_ACCEPT4 preprocessor guard in src/config.h to define it on OpenBSD 5.7+, FreeBSD 10+ and NetBSD 8.0+. On Linux, where the fuzzer builds and runs, __linux__ already defined HAVE_ACCEPT4 before and after the change, so the compiled binaries are identical and no behaviour differs. The BSD-only accept4() path cannot be reached on this platform, so no scenario can test it here."
+}

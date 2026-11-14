@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c9710fca10c8ea064b9e390d64ba9ec06cbbfd5",
+  "parent": "340ab6d62d7f3fa34e9901acccad576367bf2077",
+  "pr": 30,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the CI sentinel break issue (#30)",
+  "date": "2024-03-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.306,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only updates the executable-name substring that enables Sentinel mode (redis-sentinel -> placeholderkv-sentinel during the project rename) and the matching binary name in the CI test harness (tests/instances.tcl). The behaviour depends solely on the filename the server binary is invoked as; the fuzzer's runner always invokes the supplied server binary under its own name and has no sentinel deployment mode, so no experiment, command sequence, fault, or tools run can reach the changed code path. No command replies, replication, persistence, or cluster behaviour changed - this is a bui"
+}

@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7b070423b8e20cf14a9ab80dfa7bea5ba88c54a3",
+  "parent": "98a6e55d4e7eed5bb68480672a3358ee21b9dce8",
+  "pr": 13135,
+  "pr_repo": "redis/redis",
+  "subject": "Fix dictionary use-after-free in active expire and make kvstore iter to respect EMPTY flag (#13135)",
+  "date": "2024-03-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 30,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4741,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in activeExpireCycle",
+      "scenario": "ai-2c6a39f5511f",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13135",
+      "fingerprint": "46834c8d9b4f084acba2",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

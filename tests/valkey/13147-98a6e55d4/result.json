@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98a6e55d4e7eed5bb68480672a3358ee21b9dce8",
+  "parent": "3f725b8619ad9ae9eb129e760a47e635972be3ee",
+  "pr": 13147,
+  "pr_repo": "redis/redis",
+  "subject": "Add missing REDIS_STATIC in quicklist (#13147)",
+  "date": "2024-03-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.227,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds REDIS_STATIC to two forward declarations in quicklist.c so they match the static definitions of _quicklistSplitNode and _quicklistMergeNodes. REDIS_STATIC expands to 'static' (or nothing in test builds), so this affects symbol linkage/visibility at compile time only; no runtime behaviour, reply, data encoding, replication or persistence path changes, and no scenario could distinguish the two builds."
+}

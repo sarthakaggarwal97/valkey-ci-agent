@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da727ad445a640950baa097124070468a0316cc9",
+  "parent": "3c8d15f8c3e3aca887555e3509e9c6fe4205ae1e",
+  "pr": 12958,
+  "pr_repo": "redis/redis",
+  "subject": "Fix redis-check-aof incorrectly considering data in manifest format as MP-AOF (#12958)",
+  "date": "2024-03-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/redis-check-aof.c:237",
+      "src/redis-check-aof.c:349",
+      "src/redis-check-aof.c:386",
+      "src/redis-check-aof.c:403",
+      "src/redis-check-aof.c:416"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.5856,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d77fb5fdd598",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'check-aof' returned ERROR: the candidate build has no valkey-check-aof beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-check-aof"
+    },
+    {
+      "scenario": "ai-fa8de74ca45e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'checkaof' returned ERROR: the candidate build has no valkey-check-aof beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-check-aof"
+    },
+    {
+      "scenario": "ai-2d3a3ea69252",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'liveaof' returned ERROR: the candidate build has no valkey-check-aof beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-check-aof"
+    }
+  ]
+}

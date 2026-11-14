@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a8e745117f3648cc813d18f5a8cf1218ec83cb5d",
+  "parent": "9efc6ad6a63198e6f6af3c5e9fabc3a7ffc6fe4b",
+  "pr": 13117,
+  "pr_repo": "redis/redis",
+  "subject": "Xread last entry in stream (#7388) (#13117)",
+  "date": "2024-03-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5749,
+  "findings": [],
+  "recorded": []
+}

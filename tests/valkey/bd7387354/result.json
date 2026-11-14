@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bd7387354a9d9b9664ca6215bf3e6d955e07eb03",
+  "parent": "9a6721bd11ca9454b425a695c9455434564c2dd5",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixed fork/exec problem",
+  "date": "2024-03-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.6208,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters which process names (argv[0] basenames) trigger check-rdb/check-aof mode in main(): the old code matched 'redis-check-rdb'/'redis-check-aof', the fix matches 'placeholderkv-check-rdb'/'placeholderkv-check-aof', the names this era's Makefile actually builds. The dispatch keys solely on argv[0] (server.c:6971), and no installed component can control it: valkey.action.tools only runs tools named valkey-cli/valkey-benchmark/valkey-check-rdb/valkey-check-aof and always passes the bare valkey-* name as argv[0], which matches neither the parent's pattern nor the fixed one, so b"
+}

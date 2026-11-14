@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bad33f8738b4..e64d91c37105.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-192c51b56f64
+seed: 7101
+experiment:
+  id: proposed.kvstore-rehash-uaf
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: cluster
+  base_port: 7100
+  primaries: 3
+  replicas_per_primary: 0

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e04d41d78dcd..bad33f8738b4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-62142d37a195
+seed: 1
+experiment:
+  id: proposed.zrangestore-byscore-bylex-encoding
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

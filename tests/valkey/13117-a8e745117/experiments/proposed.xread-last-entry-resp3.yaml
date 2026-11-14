@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.xread-last-entry-resp3
+deployment:
+  modes: [standalone]
+metadata:
+  description: XREAD + under RESP3 replies a map of stream name to its last entry;
+    the parent rejects + as an invalid ID
+components:
+- use: valkey.action.commands
+  id: xread3
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [XREAD, STREAMS, nostream, "+"], expect_difference: true, expect: {
+        equals: null}}
+    - {command: [XADD, x, 1-1, k1, v1], expect: {equals: "1-1"}}
+    - {command: [XADD, x, 2-1, k2, v2], expect: {equals: "2-1"}}
+    - {command: [XADD, x, 3-1, k3, v3], expect: {equals: "3-1"}}
+    - {command: [XREAD, STREAMS, x, "+"], expect_difference: true, expect: {equals: {
+          x: [["3-1", [k3, v3]]]}}}
+    - {command: [XADD, x, 3-18446744073709551615, k5, v5], expect: {equals: "3-18446744073709551615"}}
+    - {command: [XREAD, COUNT, 5, STREAMS, x, "+"], expect_difference: true, expect: {
+        equals: {x: [["3-18446744073709551615", [k5, v5]]]}}}
+    - {command: [XGROUP, CREATE, z, g, "$", MKSTREAM], expect: {equals: OK}}
+    - {command: [XREAD, STREAMS, z, "+"], expect_difference: true, expect: {error: "last\
+          \ element ID is 0-0"}}
+    - {command: [XREADGROUP, GROUP, g, c1, STREAMS, z, "+"], expect_difference: true,
+      expect: {error: "meaningless"}}
+    - {raw: "XREAD BLOCK 8000 STREAMS bs +\r\n", connection: blk, expect_difference: true,
+      expect: {exists: false}}
+    - {command: [XADD, bs, 9-9, bk, bv], expect: {equals: "9-9"}}
+    - {read: true, connection: blk, expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [xread3.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xread3}

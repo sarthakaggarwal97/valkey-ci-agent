@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0aaae734f46101e621f9d56d76c42d04029d3c99",
+  "parent": "38632278fd06fe186f7707e4fa099f666d805547",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect find/replace",
+  "date": "2024-03-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2333,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects a mangled library filename (libhiENGINE_ssl.a -> libhiredis_ssl.a) in src/Makefile's BUILD_TLS=yes/module link flags. It is a build-system fix: with the bug, a TLS build fails to link; with the fix, it links. No runtime code, command reply, replication, persistence or config behaviour changes, so there is nothing for a scenario to exercise \u2014 the build either succeeds or does not."
+}
