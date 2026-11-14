@@ -109,7 +109,9 @@ def prepare_in(
             frozen_paths=evidence.paths,
         )
         fixed = fix_func(
-            judged, evidence.log, agent_func=fix_agent, review_func=partial(review.review, run_test=run_test),
+            judged, evidence.log, agent_func=fix_agent,
+            # One count of counterexample rejections for the run's rounds.
+            review_func=partial(review.review, run_test=run_test, rejections=[]),
             test_func=run_test, repo_dir=repo_dir, job=JOB, check_func=checks.gate(evidence),
             budget_s=max(60, int(deadline - time.monotonic())), guide=guide_for(task.failure.repo_full_name),
         )

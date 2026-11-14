@@ -91,8 +91,14 @@ the change still gets wrong: what the issue describes that the test does not
 check, such as a restart or a replica, or an acceptance criterion the tests
 miss. It has to name a specific counterexample or explain why none exists,
 and it may write the counterexample as a self-contained Tcl test. Code runs
-that test with the fix. A counterexample that fails sends the change back
-with the reviewer's reasoning; one that passes is noted in the report. The
+that test with the fix. A counterexample that fails with the fix is run once
+more without it, on the working commit with the frozen test alone: one that
+fails there too says nothing about the fix, and is dropped with a line in the
+log, while the rest of the review stands. One that passes without the fix and
+fails with it sends the change back with the reviewer's reasoning, once per
+run: after that the reviewer is told to approve or name a concrete defect in
+the diff, and a further counterexample is run and noted but cannot send the
+change back on its own. One that passes is noted in the report. The
 reviewer also rejects a change larger than the cause requires, one that does
 not match the surrounding code, or one that would be hard to backport.
 

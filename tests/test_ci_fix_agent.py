@@ -535,6 +535,19 @@ def test_an_adversarial_review_asks_for_a_counterexample_and_reads_the_one_it_ge
     assert '"counterexample": {"name":' in seen["prompt"]
     assert review.approved is False and review.reasoning == "a restart loses the lag"
     assert review.counterexample == Counterexample("lag after restart", tcl)
+    assert "A counterexample has already sent this change back once" not in seen["prompt"]
+
+
+def test_after_a_counterexample_rejection_the_reviewer_is_told_another_cannot_reject_alone(tmp_path, monkeypatch) -> None:
+    from scripts.ci_fix.agent import adversarial_review
+
+    seen = {}
+    monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: seen.update(prompt=prompt) or _result(
+        {"approved": True, "reasoning": "fine"}))
+
+    adversarial_review(FixCandidate(action=CandidateAction.PATCH, patch="d"), str(tmp_path), "log", after_rejection=True)
+
+    assert "A counterexample has already sent this change back once in this run. Approve\nit, or name a concrete defect in the diff" in seen["prompt"]
 
 
 @pytest.mark.parametrize("counterexample", [
