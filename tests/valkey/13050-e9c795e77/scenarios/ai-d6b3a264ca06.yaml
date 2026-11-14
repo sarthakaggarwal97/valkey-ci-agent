@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7ca0b84af612..e9c795e77759.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d6b3a264ca06
+seed: 1
+experiment:
+  id: proposed.rdb-resizedb-expires-expand
+deployment:
+  mode: standalone
+  base_port: 7000

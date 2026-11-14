@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c854873746e9..50d6fe8c4beb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e06196a80244
+seed: 12966
+experiment:
+  id: proposed.watch-metrics
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

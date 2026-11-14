@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0777dc789636..1f00c951c27f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4e359a207475
+seed: 4
+experiment:
+  id: proposed.lset-quicklist-split-merge
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300
+  server_config:
+    enable-debug-command: 'yes'
+    list-max-listpack-size: 4
+    list-compress-depth: 1

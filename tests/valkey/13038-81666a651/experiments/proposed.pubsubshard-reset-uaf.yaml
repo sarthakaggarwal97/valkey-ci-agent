@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.pubsubshard-reset-uaf
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Freeing a slot's shard-channel dict during CLUSTER RESET SOFT must
+    not touch freed memory
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardreset
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SSUBSCRIBE, ch-one], connection: sub}
+    - {command: [SSUBSCRIBE, ch-two], connection: sub}
+    - {command: [SSUBSCRIBE, ch-three], connection: sub}
+    - {command: [SSUBSCRIBE, ch-four], connection: sub}
+    - {command: [SSUBSCRIBE, ch-five], connection: sub}
+    - {command: [PUBSUB, SHARDCHANNELS], compare: unordered, expect: {contains: ch-one}}
+    - {command: [CLUSTER, RESET, SOFT], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardreset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardreset}

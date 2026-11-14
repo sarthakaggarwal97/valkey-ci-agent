@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "50d6fe8c4beba95ea5572e7da98a7d4e6518a05a",
+  "parent": "c854873746e9515f322d805f863e839ebfcefd62",
+  "pr": 12966,
+  "pr_repo": "redis/redis",
+  "subject": "Add metrics for WATCH (#12966)",
+  "date": "2024-02-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2739,
+  "findings": [],
+  "recorded": []
+}

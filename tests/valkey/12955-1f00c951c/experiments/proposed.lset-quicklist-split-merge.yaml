@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.lset-quicklist-split-merge
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET replacing an entry with a large element drives the rewritten quicklist
+    split/create-node/merge/compress path and must not crash or corrupt the list
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lset
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, "16"], expect: {equals: OK}}
+    - {command: [RPUSH, lst, a, b, c, d, e, f, g, h, i, j, k, l], expect: {equals: 12}}
+    - {command: [OBJECT, ENCODING, lst], expect: {equals: quicklist}}
+    - {command: [LSET, lst, 5, "XXXXXXXXXXXXXXXXXXXXXXXX"], expect: {equals: OK}}
+    - {command: [LINDEX, lst, 5], expect: {equals: "XXXXXXXXXXXXXXXXXXXXXXXX"}}
+    - {command: [LLEN, lst], expect: {equals: 12}}
+    - {command: [LSET, lst, 5, "YYYYYYYYYYYYYYYYYYYYYYYY"], expect: {equals: OK}}
+    - {command: [LINDEX, lst, 5], expect: {equals: "YYYYYYYYYYYYYYYYYYYYYYYY"}}
+    - {command: [LSET, lst, 5, m], expect: {equals: OK}}
+    - {command: [LINDEX, lst, 5], expect: {equals: m}}
+    - {command: [LRANGE, lst, 0, -1], expect: {equals: [a, b, c, d, e, m, g, h, i,
+          j, k, l]}}
+    - {command: [LSET, lst, 11, "WWWWWWWWWWWWWWWWWWWWWWWW"], expect: {equals: OK}}
+    - {command: [LINDEX, lst, 11], expect: {equals: "WWWWWWWWWWWWWWWWWWWWWWWW"}}
+    - {command: [LSET, lst, 0, "VVVVVVVVVVVVVVVVVVVVVVVV"], expect: {equals: OK}}
+    - {command: [LINDEX, lst, 0], expect: {equals: "VVVVVVVVVVVVVVVVVVVVVVVV"}}
+    - {command: [LLEN, lst], expect: {equals: 12}}
+    - {command: [LRANGE, lst, 0, -1], expect: {equals: ["VVVVVVVVVVVVVVVVVVVVVVVV",
+          b, c, d, e, m, g, h, i, j, k, "WWWWWWWWWWWWWWWWWWWWWWWW"]}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, "0"], expect: {equals: OK}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lset}

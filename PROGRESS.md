@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T08:49+00:00.
+Updated 2026-11-14T08:50+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2299 | 241 | #12996 (2024-02-20) | 302 | 244.3 |
+| valkey-io/valkey | 2324 | 216 | #13008 (2024-02-06) | 327 | 247.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
 | valkey-io/valkey-search | 690 | 0 | f8106e72e984 (2024-11-27) | 10 | 42.4 |
@@ -13,28 +13,28 @@ Updated 2026-11-14T08:49+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-14T06:53:57+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43560262144): 20 merge(s) tested, 1 without a code change.
+[2026-11-14T08:50:26+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43568547734): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35): to retry, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed (artifacts.parent acquire: FileNotFoundError)
-- [redis/redis#13115](https://github.com/redis/redis/pull/13115) ([tests](tests/valkey/13115-5fdaa53d2/)): Fix conversion of numbers in lua args to redis args (#13115): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13112](https://github.com/redis/redis/pull/13112) ([tests](tests/valkey/13112-4979cf02f/)): Change crc16 slot table to be fixed size character array instead of pointer to strings (#13112): declined: Pure data-layout refactor: crc16_slot_table changes from an array of 16384 string pointers to a flat array of char[4] entries, with the string initializers untouched. The table's only consumer is valkey-benchmark's cluster-mode hash-tag substitution (setClusterKeyHashTag, redis-benchmark.c
-- [redis/redis#13055](https://github.com/redis/redis/pull/13055) ([tests](tests/valkey/13055-28976a900/)): Fix PONG message processing for primary-ship tracking during failovers (#13055): 0 of 10 test(s) reached the change, coverage 78%
-- [redis/redis#13058](https://github.com/redis/redis/pull/13058) ([tests](tests/valkey/13058-ad1273033/)): Implement defragmentation for pubsub kvstore (#13058): 0 of 5 test(s) reached the change, coverage 88%; crash, introduced and since fixed (recorded)
-- [redis/redis#13101](https://github.com/redis/redis/pull/13101) ([tests](tests/valkey/13101-33ea43258/)): Call finalizerProc when free the aeTimeEvent in ae (#13101): declined: The change makes aeDeleteEventLoop call each pending time event's finalizerProc before freeing it (src/ae.c:152-153). No code in the tree registers a finalizer: every aeCreateTimeEvent call site (serverCron in server.c:2743, evictionTimeProc in evict.c:475, module timers in module.c:9244, 
-- [redis/redis#13103](https://github.com/redis/redis/pull/13103) ([tests](tests/valkey/13103-df75153d7/)): Fix reply schemas validator build issue due to new regular expression (#13103): declined: The change only modifies utils/generate-command-code.py, a build-time code generator used for the reply-schemas validator CI build. It escapes backslash and plus characters in generated C identifiers and uses json.dumps for string literals so the generated code compiles when a reply schema
-- [redis/redis#13097](https://github.com/redis/redis/pull/13097) ([tests](tests/valkey/13097-a50bbcb65/)): redis-cli fixes around help hints version filtering (#13097): declined: This is a valkey-cli bug fix in the legacy help-hint version-filtering path (versionIsSupported and removeUnsupportedArgs in src/redis-cli.c), reached only when the CLI compares the connected server's reported version against the command/argument `since` strings compiled into cli_commands.
-- [redis/redis#12913](https://github.com/redis/redis/pull/12913) ([tests](tests/valkey/12913-4cae99e78/)): Add overhead of all DBs and rehashing dict count to info. (#12913): 4 of 6 test(s) reached the change, coverage 100%
-- [redis/redis#12898](https://github.com/redis/redis/pull/12898) ([tests](tests/valkey/12898-f17381a38/)): Fix propagation of entries_read by calling streamPropagateGroupID unconditionally (#12898): 2 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#13098](https://github.com/redis/redis/pull/13098) ([tests](tests/valkey/13098-cc9fbd270/)): freeDictIfNeeded when kvstoreEmpty (#13098): declined: The added freeDictIfNeeded() call in kvstoreEmpty() is unreachable with effect in this checkout: freeDictIfNeeded is a no-op unless the kvstore has KVSTORE_FREE_EMPTY_DICTS, the only kvstores ever passed to kvstoreEmpty are db->keys/db->expires (db.c:498-499) which are always created witho
-- [redis/redis#13087](https://github.com/redis/redis/pull/13087) ([tests](tests/valkey/13087-a7abc2f06/)): SCRIPT FLUSH run truly async, close lua interpreter in bio (#13087): 0 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#13092](https://github.com/redis/redis/pull/13092) ([tests](tests/valkey/13092-763827c98/)): Fix redis-cli --count (for --scan, --bigkeys, etc) was ignored unless --pattern was also used (#13092): 0 of 4 test(s) reached the change, coverage 0%
-- [redis/redis#13080](https://github.com/redis/redis/pull/13080) ([tests](tests/valkey/13080-0a12f380e/)): Optimize DEL on expired keys (#13080): declined: The change is a behaviour-preserving optimization: expireIfNeeded's 0/1 return is renamed to a KEY_VALID/KEY_EXPIRED/KEY_DELETED enum with KEY_VALID=0, and every call site (lookupKey, dbRandomKey, scanGenericCommand) keeps the exact old truthiness via '!= KEY_VALID'. The only logic change,
-- [redis/redis#13068](https://github.com/redis/redis/pull/13068) ([tests](tests/valkey/13068-104b20760/)): Fix size stat in malloc(0) and cleanups around zmalloc file (#13068): declined: The only behavioural line (size = MALLOC_MIN_SIZE(size) in zmalloc's prefix-size accounting) is compiled only when HAVE_MALLOC_SIZE is undefined, i.e. no jemalloc/tcmalloc/macOS and no libc malloc_usable_size; the fuzzer's Linux builds (jemalloc or glibc) never compile that path. The rest 
-- [redis/redis#13086](https://github.com/redis/redis/pull/13086) ([tests](tests/valkey/13086-bfcaa7db0/)): Fix minor memory leak in rewriteSetObject (#13086): declined: The change only frees a set iterator on the rio-write-failure path of rewriteSetObject during AOF rewrite. That path is reached solely when writing the rewrite output fails (a disk I/O error), which the fuzzer cannot induce: the only disk-full fault (valkey.bgsave-disk-full) needs root and
-- [redis/redis#12971](https://github.com/redis/redis/pull/12971) ([tests](tests/valkey/12971-4a265554a/)): Expose lua os.clock() api (#12971): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#12659](https://github.com/redis/redis/pull/12659) ([tests](tests/valkey/12659-165afc5f2/)): Determine the large limit of the quicklist node based on fill (#12659): 4 of 6 test(s) reached the change, coverage 95%
-- [redis/redis#13078](https://github.com/redis/redis/pull/13078) ([tests](tests/valkey/13078-820a4e45f/)): Edit the history field of xinfo-consumers (#13078): declined: The change only rewords the 7.2.0 history string of XINFO CONSUMERS in src/commands.def and src/commands/xinfo-consumers.json (documentation metadata surfaced via COMMAND DOCS). It alters no command behaviour, reply structure, parsing, replication or persistence path, so there is nothing r
-- [redis/redis#13076](https://github.com/redis/redis/pull/13076) ([tests](tests/valkey/13076-5b9fc4652/)): Add new allocator.muzzy field to memory-stats reply schema (#13076): declined: The change only edits src/commands/memory-stats.json, adding the allocator.muzzy field to the MEMORY STATS reply schema. Reply schemas are documentation metadata compiled in only with the --with-reply-schema generator flag, not in normal builds. The runtime code emitting allocator.muzzy in
+- [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35) ([tests](tests/valkey/35-3782446a4/)): Untrademark json files (#35): 2 of 2 test(s) reached the change
+- [redis/redis#12996](https://github.com/redis/redis/pull/12996) ([tests](tests/valkey/12996-f6785df66/)): Defragger improvements around large bins (#12996): 2 of 5 test(s) reached the change, coverage 94%
+- [redis/redis#13056](https://github.com/redis/redis/pull/13056) ([tests](tests/valkey/13056-ca5cac998/)): xinfo-stream add minimum to seen-time, skip logreqres in fuzzer (#13056): declined: The change edits only metadata and test harness files: it adds a 'minimum: 0' annotation to the seen-time field in src/commands/xinfo-stream.json (documentation/schema metadata, not used by the server at runtime to compute or format replies) and adds a 'logreqres:skip' tag to tests/integra
+- [redis/redis#13062](https://github.com/redis/redis/pull/13062) ([tests](tests/valkey/13062-3c2ea1ea9/)): Fix wathced client test timing issue caused by late close (#13062): declined: The change is test-only: it fixes a flaky assertion in tests/unit/info.tcl by adding a wait_for_watched_clients_count helper (tests/support/util.tcl) and polling instead of asserting watching_clients immediately after a client close. The only change under src/ is a one-line comment fix in 
+- [redis/redis#12973](https://github.com/redis/redis/pull/12973) ([tests](tests/valkey/12973-fc3a68d8f/)): add -fno-omit-frame-pointer to default complication flags (#12973): declined: The change only adds -fno-omit-frame-pointer to the default compiler flags in src/Makefile (a build/CI change). It affects code generation for debuggability and profiling (keeping the frame pointer register) but introduces no behavioral, protocol, replication, persistence, or data-path dif
+- [redis/redis#13063](https://github.com/redis/redis/pull/13063) ([tests](tests/valkey/13063-8876d264a/)): Calculate the incremental rehash time more precisely (#13063): declined: The change only refactors how the ~1ms incremental-rehash CPU budget is measured and split across dicts in kvstoreIncrementallyRehash and databasesCron: work is now done before the time check and each call receives the remaining rather than the full budget. dictRehash/dictRehashMicrosecond
+- [redis/redis#13041](https://github.com/redis/redis/pull/13041) ([tests](tests/valkey/13041-9103ccc39/)): AOF_FSYNC_EVERYSEC higher resolution, change aof_last_fsync and aof_flush_postponed_start to use mstime (#13041): 0 of 5 test(s) reached the change, coverage 100%
+- [redis/redis#13059](https://github.com/redis/redis/pull/13059) ([tests](tests/valkey/13059-dd92dd8fb/)): redis-cli - fix sscanf incorrect return-value check warnings (#13059): declined: The change only tightens two sscanf return-value checks in redis-cli's matchNoTokenArg, which is used solely to compute the interactive linenoise syntax hint text (hintsCallback). That code runs only in interactive raw-TTY mode; with piped stdin (as in the fuzzer's tools runner) linenoise 
+- [redis/redis#12966](https://github.com/redis/redis/pull/12966) ([tests](tests/valkey/12966-50d6fe8c4/)): Add metrics for WATCH (#12966): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#13054](https://github.com/redis/redis/pull/13054) ([tests](tests/valkey/13054-c85487374/)): Minor optimization in kvstoreDictAddRaw when dict exists (#13054): declined: The change is a pure refactor with no behaviour change: createDictIfNeeded now returns the dict pointer so kvstoreDictAddRaw avoids one redundant kvstoreGetDict lookup, with identical creation condition, allocated_dicts accounting and cumulativeKeyCountAdd path. The remaining hunks are com
+- [redis/redis#13052](https://github.com/redis/redis/pull/13052) ([tests](tests/valkey/13052-063de675e/)): zunionInterDiffGenericCommand use ztrycalloc to avoid OOM panic (#13052): declined: This is an OOM-hardening change: zcalloc of the transient src table in zunionInterDiffGenericCommand (ZUNION/ZINTER/ZDIFF and *STORE/ZINTERCARD) is replaced by ztrycalloc with a NULL check returning an error instead of aborting. Its only observable difference from the parent is when that s
+- [redis/redis#13046](https://github.com/redis/redis/pull/13046) ([tests](tests/valkey/13046-c1d2ac2a7/)): Do not include gossip about receiver in cluster messages (#13046): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#13050](https://github.com/redis/redis/pull/13050) ([tests](tests/valkey/13050-e9c795e77/)): Fix loading rdb opcode RDB_OPCODE_RESIZEDB (#13050): 1 of 2 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded); crash, fixed by redis/redis#13050 (recorded)
+- [redis/redis#13049](https://github.com/redis/redis/pull/13049) ([tests](tests/valkey/13049-7ca0b84af/)): Fix loading rdb opcode RDB_OPCODE_SLOT_INFO (#13049): 1 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#13013](https://github.com/redis/redis/pull/13013) ([tests](tests/valkey/13013-676f27acb/)): Fix the failure of defrag test under 32-bit (#13013): 0 of 9 test(s) reached the change, coverage 95%
+- [redis/redis#13043](https://github.com/redis/redis/pull/13043) ([tests](tests/valkey/13043-493e31e3a/)): Add new DEBUG dict-resizing command to disable the dict resize (#13043): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#13042](https://github.com/redis/redis/pull/13042) ([tests](tests/valkey/13042-813327b23/)): Fix SORT STORE quicklist with the right options (#13042): 3 of 5 test(s) reached the change, coverage 88%
+- [redis/redis#13040](https://github.com/redis/redis/pull/13040) ([tests](tests/valkey/13040-1e8dc1da0/)): Fix crash due to merge of quicklist node introduced by #12955 (#13040): 2 of 2 test(s) reached the change, coverage 87%; crash, fixed by redis/redis#13040 (recorded)
+- [redis/redis#13038](https://github.com/redis/redis/pull/13038) ([tests](tests/valkey/13038-81666a651/)): Fix heap-use-after-free when pubsubshard_channels became NULL (#13038): 0 of 7 test(s) reached the change, coverage 100%
+- [redis/redis#12955](https://github.com/redis/redis/pull/12955) ([tests](tests/valkey/12955-1f00c951c/)): Prevent LSET command from causing quicklist plain node size to exceed 4GB (#12955): 0 of 8 test(s) reached the change, coverage 95%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-14T08:49+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 913 of 1457 tested (63%)
-- Changed-line coverage: median 100% of 946 merge(s) measured, 70 under 50%
-- Recall: 237 parents flagged of 375 fix merges
-- Claude: $648.77 in the last 24 hours, $6528.32 in the last 7 days, $10711.82 in all
+- Merges whose tests reached the change: 921 of 1470 tested (63%)
+- Changed-line coverage: median 100% of 958 merge(s) measured, 70 under 50%
+- Recall: 241 parents flagged of 381 fix merges
+- Claude: $747.20 in the last 24 hours, $6626.76 in the last 7 days, $10810.25 in all
 - Issues filed: 78
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -140,4 +140,4 @@ Updated 2026-11-14T08:49+00:00.
 
 ## Retries
 
-- [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35): attempt 0 of 3, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed (artifacts.parent acquire: FileNotFoundError)
+None.

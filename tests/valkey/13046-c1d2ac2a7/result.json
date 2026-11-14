@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c1d2ac2a733b87458697ff85d3ca396a28a0d56a",
+  "parent": "e9c795e777591a96a5e7b0d28fbda64325b27a0c",
+  "pr": 13046,
+  "pr_repo": "redis/redis",
+  "subject": "Do not include gossip about receiver in cluster messages (#13046)",
+  "date": "2024-02-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.758,
+  "findings": [],
+  "recorded": []
+}

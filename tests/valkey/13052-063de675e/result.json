@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "063de675e0e20a0d060ffc6f7f5f7b074043344a",
+  "parent": "32f44da5100607055d9f6362f42f0c22f1a26533",
+  "pr": 13052,
+  "pr_repo": "redis/redis",
+  "subject": "zunionInterDiffGenericCommand use ztrycalloc to avoid OOM panic (#13052)",
+  "date": "2024-02-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7905,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is an OOM-hardening change: zcalloc of the transient src table in zunionInterDiffGenericCommand (ZUNION/ZINTER/ZDIFF and *STORE/ZINTERCARD) is replaced by ztrycalloc with a NULL check returning an error instead of aborting. Its only observable difference from the parent is when that specific allocation fails: the parent calls the OOM handler and crashes, the change replies with an error. For every allocation that succeeds (every normal input) behavior is byte-for-byte identical, so a compared command sequence would show equal replies on both builds and never reach the change. The failure "
+}

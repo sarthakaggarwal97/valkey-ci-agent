@@ -1,0 +1,32 @@
+extends: [valkey.base]
+id: proposed.defrag-kvstore-under-writes
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: >-
+    Aggressive active defrag reallocates the kvstore dict structs (kvstoreDictLUTDefrag
+    / activeDefragKvstore) while the key-value workload grows and rehashes the hash
+    tables; no crash or sanitizer report, no acknowledged write lost, every instance
+    comes to rest. The scenario's server_config must enable activedefrag with threshold-lower
+    0 and ignore-bytes 1 and set loglevel verbose so the required defrag log line
+    appears.
+inputs:
+  properties:
+    run_s: {type: number, minimum: 1, maximum: 600, default: 20}
+components:
+- use: valkey.observer.log
+  id: defrag-logs
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.defrag.started-logged, pattern: "Starting active defrag",
+      required: true}
+    - {evidence_id: valkey.defrag.pass-done-logged, pattern: "Active defrag done in"}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [writes, defrag-logs]
+  config:
+    seconds: {$ref: inputs.run_s}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.defrag.started-logged, source: defrag-logs}

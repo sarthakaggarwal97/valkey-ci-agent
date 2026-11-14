@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 81666a651089..1e8dc1da0de0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a8c9e0472454
+seed: 811667
+experiment:
+  id: proposed.lset-quicklist-merge
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

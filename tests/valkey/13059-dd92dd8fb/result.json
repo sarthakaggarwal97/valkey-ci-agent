@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dd92dd8fb5c2cc5c9815b720128b3015382b8da4",
+  "parent": "50d6fe8c4beba95ea5572e7da98a7d4e6518a05a",
+  "pr": 13059,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli - fix sscanf incorrect return-value check warnings (#13059)",
+  "date": "2024-02-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3992,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only tightens two sscanf return-value checks in redis-cli's matchNoTokenArg, which is used solely to compute the interactive linenoise syntax hint text (hintsCallback). That code runs only in interactive raw-TTY mode; with piped stdin (as in the fuzzer's tools runner) linenoise never invokes the hints callback, so the changed path is unreachable in automated testing. The behavioural delta is confined to which cosmetic hint string is displayed for an empty input word \u2014 it affects no command sent to the server, no reply, no exit status, and no server-side behaviour, and the fixed misp"
+}

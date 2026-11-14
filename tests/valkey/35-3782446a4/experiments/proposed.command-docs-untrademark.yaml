@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.command-docs-untrademark
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS summary and complexity texts drop the Redis trademark;
+    the reworded strings must appear on the change build and differ from the parent
+    build for every affected command
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [COMMAND, DOCS, OBJECT], expect_difference: true, expect: {contains: "encoding\
+          \ of an object"}}
+    - {command: [COMMAND, DOCS, COMMAND], expect_difference: true, expect: {contains: "total\
+          \ number of commands"}}
+    - {command: [COMMAND, DOCS, CLUSTER], expect_difference: true, expect: {contains: "A\
+          \ container for Cluster commands"}}
+    - {command: [COMMAND, DOCS, READONLY], expect_difference: true, expect: {contains: "a\
+          \ Cluster replica node"}}
+    - {command: [COMMAND, DOCS, HELLO], expect_difference: true, expect: {contains: "Handshakes\
+          \ with the server"}}
+    - {command: [COMMAND, DOCS, DUMP], expect_difference: true, expect: {contains: "the\
+          \ number of objects composing the value"}}
+    - {command: [COMMAND, DOCS, MIGRATE], expect_difference: true, expect: {contains: "from\
+          \ one instance to another"}}
+    - {command: [COMMAND, DOCS, RESTORE], expect_difference: true, expect: {contains: "the\
+          \ number of objects composing the value"}}
+    - {command: [COMMAND, DOCS, RESTORE-ASKING], expect_difference: true, expect: {
+        contains: "the number of objects composing the value"}}
+    - {command: [COMMAND, DOCS, APPEND], expect_difference: true, expect: {contains: "the\
+          \ dynamic string library used by the server"}}
+    - {command: [COMMAND, DOCS, LOLWUT], expect_difference: true, expect: {contains: "computer\
+          \ art and the server version"}}
+    - {command: [COMMAND, DOCS, SHUTDOWN], expect_difference: true, expect: {contains: "shuts\
+          \ down the server"}}
+    - {command: [COMMAND, DOCS, SLAVEOF], expect_difference: true, expect: {contains: "Sets\
+          \ a server as a replica of another"}}
+    - {command: [COMMAND, DOCS, SWAPDB], expect_difference: true, expect: {contains: "Swaps\
+          \ two databases"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

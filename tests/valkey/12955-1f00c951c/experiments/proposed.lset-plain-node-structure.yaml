@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.lset-plain-node-structure
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET, LINSERT and RPUSH drive quicklist plain-node creation, node split
+    and node merge paths with a low packed threshold, checking contents and liveness
+    (no crash/leak)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ql
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, "16"], expect: {equals: OK}}
+    - {command: [RPUSH, lst, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [LSET, lst, "1", z], expect: {equals: OK}}
+    - {command: [LINDEX, lst, "1"], expect: {equals: z}}
+    - {command: [LINSERT, lst, BEFORE, c, "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+      expect: {equals: 9}}
+    - {command: [RPUSH, lst, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], expect: {
+        equals: 10}}
+    - {command: [LSET, lst, "0", "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"], expect: {
+        equals: OK}}
+    - {command: [LLEN, lst], expect: {equals: 10}}
+    - {command: [LINDEX, lst, "0"], expect: {equals: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"}}
+    - {command: [LINDEX, lst, "2"], expect: {equals: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}}
+    - {command: [LINDEX, lst, "9"], expect: {equals: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}
+    - {command: [LRANGE, lst, "3", "4"], expect: {equals: [c, d]}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [ql.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ql}

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.delkeysinslot-gossip-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: A master that loses a non-empty slot to a higher-epoch peer via gossip
+    runs delKeysInSlot, which freed the slot dict mid-iteration on the parent
+components:
+- use: valkey.action.commands
+  id: takeover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 40
+    commands:
+    - {command: [SET, "{foo}1", a], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}2", b], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 0, expect: {equals: 2}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip, expect: {contains: "BUMPED"}}
+    - {command: [CLUSTER, SETSLOT, "12182", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 0, wait_s: 30, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PING], node: 0, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [takeover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: takeover}

@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 493e31e3ad29..676f27acb0e2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-36790b37975a
+seed: 130101
+experiment:
+  id: proposed.defrag-kvstore-under-writes
+  inputs:
+    run_s: 25
+    stable_keys: 30000
+    mutable_keys: 5000
+    mutation_rate: 2000
+    value_size: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-threshold-lower: '0'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-cycle-min: '25'
+    active-defrag-cycle-max: '75'
+    hz: '100'
+    loglevel: verbose

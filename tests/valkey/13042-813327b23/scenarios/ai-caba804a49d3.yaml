@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1e8dc1da0de0..813327b231d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-caba804a49d3
+seed: 1303
+experiment:
+  id: proposed.sort-store-quicklist-options
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

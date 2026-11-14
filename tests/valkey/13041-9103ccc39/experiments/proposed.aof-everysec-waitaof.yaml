@@ -1,0 +1,31 @@
+extends: [valkey.base]
+id: proposed.aof-everysec-waitaof
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    WAITAOF numlocal=1 under appendfsync everysec must be served within the fsync
+    cadence after aof_last_fsync moved to mstime, including across appendfsync always/everysec
+    switches and an appendonly off/on toggle (stopAppendOnly/startAppendOnly restamp
+    aof_last_fsync in ms).
+components:
+- use: valkey.action.commands
+  id: waitaof
+  config:
+    timeout_s: 180
+    commands:
+    - {command: [SET, "probe:k1", v1], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 2000], expect: {equals: [1, 0]}, wait_s: 30}
+    - {command: [CONFIG, SET, appendfsync, always], expect: {equals: OK}}
+    - {command: [SET, "probe:k2", v2], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 2000], expect: {equals: [1, 0]}, wait_s: 30}
+    - {command: [CONFIG, SET, appendfsync, everysec], expect: {equals: OK}}
+    - {command: [SET, "probe:k3", v3], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 2000], expect: {equals: [1, 0]}, wait_s: 30}
+    - {command: [CONFIG, SET, appendonly, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {equals: OK}}
+    - {command: [SET, "probe:k4", v4], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 2000], expect: {equals: [1, 0]}, wait_s: 60}
+required_events: [waitaof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: waitaof}

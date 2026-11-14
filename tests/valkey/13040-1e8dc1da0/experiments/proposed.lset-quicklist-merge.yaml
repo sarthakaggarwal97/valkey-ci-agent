@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.lset-quicklist-merge
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET that splits a quicklist node and then merges a neighbor must not
+    use-after-free the merged node (uncompressed and LZF-compressed cases)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: -2}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 5K], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('del','L') redis.call('rpush','L',string.rep('x',4096))\
+          \ redis.call('lpush','L','a','b','c','d','e','f','g') redis.call('lpush','L',string.rep('y',4096))\
+          \ for i=7,3,-1 do redis.call('lset','L',i,string.rep('z',6000)) end return\
+          \ redis.call('lindex','L',1)", 0], expect_difference: true, expect: {equals: g}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 9K], expect: {equals: OK}}
+    - {command: [CONFIG, SET, list-compress-depth, 1], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('del','L') redis.call('lpush','L',string.rep('x',2000))\
+          \ redis.call('rpush','L',string.rep('y',7000)) redis.call('rpush','L','a','b','c','d','e','f','g')\
+          \ redis.call('rpush','L',string.rep('z',8000)) redis.call('lset','L',0,'h')\
+          \ for i=7,3,-1 do redis.call('lset','L',i,string.rep('q',10000)) end return\
+          \ redis.call('lindex','L',0)", 0], expect_difference: true, expect: {equals: h}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

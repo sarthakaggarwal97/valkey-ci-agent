@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ca5cac998e75..f6785df66392.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a9d646963f3e
+seed: 101
+experiment:
+  id: proposed.allocator-muzzy-stats
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

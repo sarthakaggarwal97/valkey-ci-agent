@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 886b11703103..81666a651089.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6fb54120a95c
+seed: 1
+experiment:
+  id: proposed.pubsubshard-delslots-uaf
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

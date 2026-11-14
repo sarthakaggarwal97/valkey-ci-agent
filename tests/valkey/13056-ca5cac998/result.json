@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca5cac998e75e52b73ad2794042b9165f4833020",
+  "parent": "3c2ea1ea9516724a361f38ffd2fdfb13aa0b041a",
+  "pr": 13056,
+  "pr_repo": "redis/redis",
+  "subject": "xinfo-stream add minimum to seen-time, skip logreqres in fuzzer (#13056)",
+  "date": "2024-02-20",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2329,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only metadata and test harness files: it adds a 'minimum: 0' annotation to the seen-time field in src/commands/xinfo-stream.json (documentation/schema metadata, not used by the server at runtime to compute or format replies) and adds a 'logreqres:skip' tag to tests/integration/corrupt-dump-fuzzer.tcl (a CI test configuration change). No server code path, command behavior, reply, replication, or persistence logic changed, so no scenario can reach a behavioral difference between the builds."
+}

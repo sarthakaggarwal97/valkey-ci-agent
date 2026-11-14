@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dd92dd8fb5c2..9103ccc39843.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a7fa744b7926
+seed: 105
+experiment:
+  id: proposed.aof-everysec-waitaof
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

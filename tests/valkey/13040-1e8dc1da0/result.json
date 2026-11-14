@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1e8dc1da0de0add40d56fcbab9b64a3c5e61b6dd",
+  "parent": "81666a651089938c9dbd5783481d22f064d22291",
+  "pr": 13040,
+  "pr_repo": "redis/redis",
+  "subject": "Fix crash due to merge of quicklist node introduced by #12955 (#13040)",
+  "date": "2024-02-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 7,
+    "percent": 87,
+    "uncovered": [
+      "src/quicklist.c:934"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4091,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: quicklist.c:316 'quicklist->head->recompress == 0 && quicklist->tail->recompress == 0' is not true",
+      "scenario": "ai-c531235076dc",
+      "seed": 811666,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13040",
+      "fingerprint": "3c75971cead833474e37",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: quicklist.c:316 'quicklist->head->recompress == 0 && quicklist->tail->recompress == 0' is not true",
+      "scenario": "ai-a8c9e0472454",
+      "seed": 811667,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13040",
+      "fingerprint": "3c75971cead833474e37",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

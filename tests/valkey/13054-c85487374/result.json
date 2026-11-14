@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c854873746e9515f322d805f863e839ebfcefd62",
+  "parent": "063de675e0e20a0d060ffc6f7f5f7b074043344a",
+  "pr": 13054,
+  "pr_repo": "redis/redis",
+  "subject": "Minor optimization in kvstoreDictAddRaw when dict exists (#13054)",
+  "date": "2024-02-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.253,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor with no behaviour change: createDictIfNeeded now returns the dict pointer so kvstoreDictAddRaw avoids one redundant kvstoreGetDict lookup, with identical creation condition, allocated_dicts accounting and cumulativeKeyCountAdd path. The remaining hunks are comment typo fixes and a header-only parameter rename (threshold_ms to threshold_us) that documents the existing microsecond semantics. No command reply, data path, replication or persistence behaviour differs between the builds, so there is nothing a scenario could observe."
+}

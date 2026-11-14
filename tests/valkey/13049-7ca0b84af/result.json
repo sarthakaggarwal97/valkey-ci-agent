@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7ca0b84af6129aaa1be4d78cf83222cfbd47966b",
+  "parent": "8eeece4ab3e80d2c648978ecaa3d5b10e8119117",
+  "pr": 13049,
+  "pr_repo": "redis/redis",
+  "subject": "Fix loading rdb opcode RDB_OPCODE_SLOT_INFO (#13049)",
+  "date": "2024-02-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 14.0871,
+  "findings": [],
+  "recorded": []
+}

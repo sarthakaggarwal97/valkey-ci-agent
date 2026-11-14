@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.sort-store-quicklist-options
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT STORE creates its quicklist with list-max-listpack-size and list-compress-depth
+    (valkey-io/valkey#13042); the parent stored fill -2, compress 0, so node layout,
+    final encoding and compression differ
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: sortstore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [SETRANGE, "w{t}:1", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:2", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:3", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:4", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:5", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:6", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:7", 1199, x], expect: {equals: 1200}}
+    - {command: [SETRANGE, "w{t}:8", 1199, x], expect: {equals: 1200}}
+    - {command: [RPUSH, "idx5{t}", 1, 2, 3, 4, 5], expect: {equals: 5}}
+    - {command: [RPUSH, "idx8{t}", 1, 2, 3, 4, 5, 6, 7, 8], expect: {equals: 8}}
+    - {command: [CONFIG, SET, list-max-listpack-size, -1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, list-compress-depth, 12], expect: {equals: OK}}
+    - {command: [SORT, "idx5{t}", BY, nosort, GET, "w{t}:*", STORE, "big{t}"], expect: {
+        equals: 5}}
+    - {command: [DEBUG, OBJECT, "big{t}"], expect_difference: true, expect: {contains: "ql_listpack_max:-1\
+          \ ql_compressed:1"}}
+    - {command: [LRANGE, "big{t}", 0, -1]}
+    - {command: [CONFIG, SET, list-max-listpack-size, -5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, list-compress-depth, 0], expect: {equals: OK}}
+    - {command: [SORT, "idx8{t}", BY, nosort, GET, "w{t}:*", STORE, "pack{t}"], expect: {
+        equals: 8}}
+    - {command: [OBJECT, ENCODING, "pack{t}"], expect_difference: true, expect: {
+        equals: listpack}}
+    - {command: [DEBUG, OBJECT, "pack{t}"], expect_difference: true, expect: {contains: "encoding:listpack"}}
+    - {command: [LRANGE, "pack{t}", 0, -1]}
+    - {command: [CONFIG, SET, list-max-listpack-size, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, list-compress-depth, 1], expect: {equals: OK}}
+    - {command: [RPUSH, "nums{t}", 1000000030, 1000000029, 1000000028, 1000000027,
+        1000000026, 1000000025, 1000000024, 1000000023, 1000000022, 1000000021, 1000000020,
+        1000000019, 1000000018, 1000000017, 1000000016, 1000000015, 1000000014, 1000000013,
+        1000000012, 1000000011, 1000000010, 1000000009, 1000000008, 1000000007, 1000000006,
+        1000000005, 1000000004, 1000000003, 1000000002, 1000000001], expect: {equals: 30}}
+    - {command: [SORT, "nums{t}", STORE, "snum{t}"], expect: {equals: 30}}
+    - {command: [DEBUG, OBJECT, "snum{t}"], expect_difference: true, expect: {contains: "ql_compressed:1"}}
+    - {command: [LINDEX, "snum{t}", 15], expect: {equals: 1000000016}}
+    - {command: [LRANGE, "snum{t}", 13, 16], expect: {equals: [1000000014, 1000000015,
+          1000000016, 1000000017]}}
+    - {command: [LINSERT, "snum{t}", BEFORE, 1000000016, "0000000000"], expect: {
+        equals: 31}}
+    - {command: [LSET, "snum{t}", 20, 2000000000], expect: {equals: OK}}
+    - {command: [LREM, "snum{t}", 1, "0000000000"], expect: {equals: 1}}
+    - {command: [LRANGE, "snum{t}", 0, -1]}
+    - {command: [DUMP, "snum{t}"], expect_difference: true, expect: {exists: true}}
+    - {command: [CONFIG, SET, list-max-listpack-size, -2000000000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, list-compress-depth, 2147483647], expect: {equals: OK}}
+    - {command: [SORT, "idx8{t}", BY, nosort, GET, "w{t}:*", STORE, "clamp{t}"], expect: {
+        equals: 8}}
+    - {command: [OBJECT, ENCODING, "clamp{t}"], expect_difference: true, expect: {
+        equals: listpack}}
+    - {command: [LRANGE, "clamp{t}", 0, -1]}
+    - {command: [SET, "gone{t}", x], expect: {equals: OK}}
+    - {command: [SORT, "nokey{t}", STORE, "gone{t}"], expect: {equals: 0}}
+    - {command: [EXISTS, "gone{t}"], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortstore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortstore}

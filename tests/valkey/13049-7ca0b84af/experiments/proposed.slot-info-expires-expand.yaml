@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.slot-info-expires-expand
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Loading RDB_OPCODE_SLOT_INFO must expand each slot's expires dict to expires_slot_size,
+    not slot_size. A cluster replica that full-resyncs over existing slot dicts shows
+    the per-slot expires hash table over-expanded to the slot's total key count on
+    the parent build.
+components:
+- use: valkey.action.commands
+  id: resync
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    server_config:
+      enable-debug-command: "yes"
+      repl-diskless-load: disabled
+      replica-lazy-flush: "no"
+    commands:
+    - {command: [MSET, "{t}k01", v, "{t}k02", v, "{t}k03", v, "{t}k04", v, "{t}k05",
+        v, "{t}k06", v, "{t}k07", v, "{t}k08", v, "{t}k09", v, "{t}k10", v, "{t}k11",
+        v, "{t}k12", v], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{t}ttl", v, EX, "100000"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 15, expect: {equals: 13}}
+    - {command: [DEBUG, DICT-RESIZING, "0"], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, CHANGE-REPL-ID], node: 0, expect: {equals: OK}}
+    - {command: [CLIENT, KILL, TYPE, replica], node: 0, expect: {equals: 1}}
+    - {command: [INFO, stats], node: 0, wait_s: 30, compare: skip, expect: {contains: "sync_full:2"}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 15, expect: {equals: 13}}
+    - {command: [DEBUG, HTSTATS, "0"], node: 1, expect_difference: true, expect: {
+        contains: "table size: 4"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resync.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resync}

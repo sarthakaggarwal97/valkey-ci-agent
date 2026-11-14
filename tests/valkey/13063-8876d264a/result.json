@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8876d264ac9ad132dbabf70e6d6ba8c88c583e87",
+  "parent": "9103ccc39843e16c456e459f2e64008e1cc33c1f",
+  "pr": 13063,
+  "pr_repo": "redis/redis",
+  "subject": "Calculate the incremental rehash time more precisely (#13063)",
+  "date": "2024-02-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.2253,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only refactors how the ~1ms incremental-rehash CPU budget is measured and split across dicts in kvstoreIncrementallyRehash and databasesCron: work is now done before the time check and each call receives the remaining rather than the full budget. dictRehash/dictRehashMicroseconds are untouched, and incremental rehash is transparent to commands, replication and persistence, so no reply, stored datum, or topology outcome can differ between the builds -- a compared sequence would show no difference and the fault-experiment oracles (ledger, deployment-state, liveness) have nothing to ob"
+}

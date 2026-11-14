@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "676f27acb0e2a61e96778bccfa1116e3f7eedaaf",
+  "parent": "493e31e3ad299c99cbb96b8581b7598b19b23892",
+  "pr": 13013,
+  "pr_repo": "redis/redis",
+  "subject": "Fix the failure of defrag test under 32-bit (#13013)",
+  "date": "2024-02-11",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 20,
+    "executed": 19,
+    "percent": 95,
+    "uncovered": [
+      "src/defrag.c:768"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.9272,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 5,
+    "recall": false
+  }
+}

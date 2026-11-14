@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "81666a651089938c9dbd5783481d22f064d22291",
+  "parent": "886b117031031154ecfa496fc687c16e801169a2",
+  "pr": 13038,
+  "pr_repo": "redis/redis",
+  "subject": "Fix heap-use-after-free when pubsubshard_channels became NULL (#13038)",
+  "date": "2024-02-07",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 39,
+    "executed": 39,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.4432,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

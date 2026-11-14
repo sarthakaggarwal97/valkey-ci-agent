@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.allocator-muzzy-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    MEMORY STATS gains an allocator.muzzy field (map length 27+num_dbs -> 28+num_dbs)
+    and INFO memory gains an allocator_muzzy line; the sequence also fragments small
+    bins, allocates a large bin and turns on activedefrag so the new per-bin je_mallctl
+    loop (asserted) runs in serverCron on the candidate.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: 100}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, "100000"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,99999,2 do redis.call('DEL', KEYS[1]..i) end return\
+          \ 1", "1", "key:"], expect: {equals: 1}}
+    - {command: [SETRANGE, big, "8388608", x], expect: {equals: 8388609}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000", "defragme:"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,49999,2 do redis.call('DEL', KEYS[1]..i) end return\
+          \ 1", "1", "defragme:"], expect: {equals: 1}}
+    - {command: [MEMORY, STATS], expect_difference: true, expect: {contains: allocator.muzzy}}
+    - {command: [INFO, memory], expect_difference: true, expect: {contains: "allocator_muzzy:"}}
+    - {command: [MEMORY, DOCTOR], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memstats}

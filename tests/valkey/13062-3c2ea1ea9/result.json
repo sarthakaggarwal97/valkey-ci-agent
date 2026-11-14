@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c2ea1ea9516724a361f38ffd2fdfb13aa0b041a",
+  "parent": "4e3be944fc9abd9b9638ad17589ff3c916394883",
+  "pr": 13062,
+  "pr_repo": "redis/redis",
+  "subject": "Fix wathced client test timing issue caused by late close (#13062)",
+  "date": "2024-02-20",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.245,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is test-only: it fixes a flaky assertion in tests/unit/info.tcl by adding a wait_for_watched_clients_count helper (tests/support/util.tcl) and polling instead of asserting watching_clients immediately after a client close. The only change under src/ is a one-line comment fix in networking.c (freeClientAsync happens in beforeSleep, not serverCron) with no code change. No server behavior differs between the change and its parent, so no scenario can reach anything."
+}

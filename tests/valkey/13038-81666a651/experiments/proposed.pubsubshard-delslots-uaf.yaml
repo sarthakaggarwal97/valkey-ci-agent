@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.pubsubshard-delslots-uaf
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Freeing a slot's shard-channel dict during CLUSTER DELSLOTSRANGE must
+    not touch freed memory
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardchan
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SSUBSCRIBE, shard-a], connection: sub}
+    - {command: [SSUBSCRIBE, shard-b], connection: sub}
+    - {command: [SSUBSCRIBE, shard-c], connection: sub}
+    - {command: [SSUBSCRIBE, shard-d], connection: sub}
+    - {command: [SSUBSCRIBE, shard-e], connection: sub}
+    - {command: [SSUBSCRIBE, shard-f], connection: sub}
+    - {command: [PUBSUB, SHARDCHANNELS], compare: unordered, expect: {contains: shard-a}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 16383], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardchan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardchan}

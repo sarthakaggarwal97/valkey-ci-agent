@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.lset-midnode-large-replace
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET replacing a mid-node element with a large element restructures
+    the quicklist without losing or reordering elements
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 100b], expect: {equals: OK}}
+    - {command: [RPUSH, l, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [OBJECT, ENCODING, l], compare: skip}
+    - {command: [LSET, l, 2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: OK}}
+    - {command: [LRANGE, l, 0, -1], expect_difference: true, expect: {equals: [a,
+          b, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+          d, e, f, g, h]}}
+    - {command: [LLEN, l], expect_difference: true, expect: {equals: 8}}
+    - {command: [LSET, l, 5, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy],
+      expect: {equals: OK}}
+    - {command: [LRANGE, l, 0, -1], expect_difference: true, expect: {equals: [a,
+          b, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+          d, e, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy,
+          g, h]}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 0], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lset}

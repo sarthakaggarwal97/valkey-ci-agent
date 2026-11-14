@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1f00c951c27f0332fd8e703beaf9e28cb404a0b4",
+  "parent": "0777dc7896365ff50ac402c8f65cbc826aa34c69",
+  "pr": 12955,
+  "pr_repo": "redis/redis",
+  "subject": "Prevent LSET command from causing quicklist plain node size to exceed 4GB (#12955)",
+  "date": "2024-02-06",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 21,
+    "executed": 20,
+    "percent": 95,
+    "uncovered": [
+      "src/quicklist.c:542"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.2475,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

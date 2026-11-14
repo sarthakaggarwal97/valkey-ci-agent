@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9103ccc39843e16c456e459f2e64008e1cc33c1f",
+  "parent": "dd92dd8fb5c2cc5c9815b720128b3015382b8da4",
+  "pr": 13041,
+  "pr_repo": "redis/redis",
+  "subject": "AOF_FSYNC_EVERYSEC higher resolution, change aof_last_fsync and aof_flush_postponed_start to use mstime (#13041)",
+  "date": "2024-02-18",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.7774,
+  "findings": [],
+  "recorded": []
+}

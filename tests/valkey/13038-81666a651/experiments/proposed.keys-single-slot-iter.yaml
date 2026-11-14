@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.keys-single-slot-iter
+deployment:
+  modes: [standalone]
+metadata:
+  description: KEYS with a single-slot (non-wildcard) pattern iterates one slot's
+    dict in cluster mode
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 15
+    commands:
+    - {command: [SET, "{foo}1", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}2", b], expect: {equals: OK}}
+    - {command: [SET, "{foo}3", c], expect: {equals: OK}}
+    - {command: [KEYS, "{foo}2"], compare: unordered, expect: {equals: ["{foo}2"]}}
+    - {command: [KEYS, "{foo}nope"], expect: {equals: []}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

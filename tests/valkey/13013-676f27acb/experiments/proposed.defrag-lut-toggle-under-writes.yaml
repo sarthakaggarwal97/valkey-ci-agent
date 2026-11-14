@@ -1,0 +1,45 @@
+extends: [valkey.base]
+id: proposed.defrag-lut-toggle-under-writes
+deployment:
+  modes: [standalone, cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Toggle activedefrag under heavy write churn and a replica kill; the
+    new kvstore LUT defrag must not crash, corrupt the rehashing list, or lose acknowledged
+    writes
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+    config_changes: {type: integer, minimum: 0, maximum: 20, default: 12}
+components:
+- use: valkey.workload.config-churn
+  id: defrag-churn
+  config:
+    changes: {$ref: inputs.config_changes}
+    keys:
+      activedefrag: ["yes", "no"]
+      active-defrag-cycle-min: ["1", "75"]
+      active-defrag-cycle-max: ["99"]
+      active-defrag-threshold-lower: ["0"]
+      active-defrag-ignore-bytes: ["1"]
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, defrag-churn, kill-replica]
+  config: {seconds: 3}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}

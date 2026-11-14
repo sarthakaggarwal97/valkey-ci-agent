@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "813327b231d4abbe2f5f9394b005680b1712f04b",
+  "parent": "1e8dc1da0de0add40d56fcbab9b64a3c5e61b6dd",
+  "pr": 13042,
+  "pr_repo": "redis/redis",
+  "subject": "Fix SORT STORE quicklist with the right options (#13042)",
+  "date": "2024-02-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 8,
+    "percent": 88,
+    "uncovered": [
+      "src/rdb.c:1865"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.216,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6a5b2b0a8996",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sortstore' returned ERROR: expectations both builds violate alike, so they are not about the change: 27 (LRANGE snum{t} 13 16)"
+    },
+    {
+      "scenario": "ai-d6f748c65b37",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sortstore' returned ERROR: expectations both builds violate alike, so they are not about the change: 27 (LRANGE snum{t} 13 16)"
+    },
+    {
+      "scenario": "ai-caba804a49d3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sortstore' returned ERROR: expectations both builds violate alike, so they are not about the change: 27 (LRANGE snum{t} 13 16)"
+    },
+    {
+      "scenario": "ai-0a53bb1ff698",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'check-rdb' returned ERROR: the candidate build has no valkey-check-rdb beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-check-rdb"
+    }
+  ]
+}

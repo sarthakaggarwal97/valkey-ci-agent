@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e9c795e777591a96a5e7b0d28fbda64325b27a0c",
+  "parent": "7ca0b84af6129aaa1be4d78cf83222cfbd47966b",
+  "pr": 13050,
+  "pr_repo": "redis/redis",
+  "subject": "Fix loading rdb opcode RDB_OPCODE_RESIZEDB (#13050)",
+  "date": "2024-02-12",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.6646,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in loadAppendOnlyFiles",
+      "scenario": "ai-d6b3a264ca06",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "9d45e3f08da69313d579",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in loadAppendOnlyFiles",
+      "scenario": "ai-d6b3a264ca06",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#13050",
+      "fingerprint": "b503eb41219018395165",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.list-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: Build a quicklist-encoded list, SAVE it and restart so it is reloaded
+    from RDB, on the change build and its parent
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: 4, list-compress-depth: 1}
+    timeout_s: 20
+    commands:
+    - {command: [RPUSH, biglist, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9], expect: {
+        equals: 10}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [LLEN, biglist], expect: {equals: 10}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [a0, a1, a2, a3, a4, a5,
+          a6, a7, a8, a9]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

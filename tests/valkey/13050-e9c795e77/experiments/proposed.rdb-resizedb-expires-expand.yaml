@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.rdb-resizedb-expires-expand
+deployment:
+  modes: [standalone]
+metadata:
+  description: RDB_OPCODE_RESIZEDB must size the expires table from expires_size,
+    not db_size, when an RDB is loaded over an existing database (DEBUG LOADAOF reloads
+    the AOF's RDB base)
+components:
+- use: valkey.action.commands
+  id: resizedb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      appendonly: "yes"
+      enable-debug-command: "yes"
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, "10000"], expect: {equals: OK}}
+    - {command: [SET, e1, v1, EX, "10000"], expect: {equals: OK}}
+    - {command: [SET, e2, v2, EX, "10000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 10002}}
+    - {command: [BGREWRITEAOF], compare: skip}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [DEBUG, DICT-RESIZING, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, LOADAOF], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "table\
+          \ size: 4"}}
+    - {command: [DBSIZE], expect: {equals: 10002}}
+    - {command: [GET, e1], expect: {equals: v1}}
+    - {command: [TTL, e1], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resizedb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resizedb}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc3a68d8fb6c8f87485dd670f7af81feadd66635",
+  "parent": "6df42df2917622cfe791b0f563fa82053965820f",
+  "pr": 12973,
+  "pr_repo": "redis/redis",
+  "subject": "add -fno-omit-frame-pointer to default complication flags (#12973)",
+  "date": "2024-02-19",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2133,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds -fno-omit-frame-pointer to the default compiler flags in src/Makefile (a build/CI change). It affects code generation for debuggability and profiling (keeping the frame pointer register) but introduces no behavioral, protocol, replication, persistence, or data-path difference that a scenario could observe; any oracle comparison between the two builds would see identical behavior by design."
+}

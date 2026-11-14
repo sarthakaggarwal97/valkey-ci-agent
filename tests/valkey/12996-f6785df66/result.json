@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f6785df663928d6614030e93aaeafa4a3b24ae3f",
+  "parent": "ca5cac998e75e52b73ad2794042b9165f4833020",
+  "pr": 12996,
+  "pr_repo": "redis/redis",
+  "subject": "Defragger improvements around large bins (#12996)",
+  "date": "2024-02-20",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 36,
+    "executed": 34,
+    "percent": 94,
+    "uncovered": [
+      "src/zmalloc.c:698",
+      "src/zmalloc.c:699"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.3399,
+  "findings": [],
+  "recorded": []
+}

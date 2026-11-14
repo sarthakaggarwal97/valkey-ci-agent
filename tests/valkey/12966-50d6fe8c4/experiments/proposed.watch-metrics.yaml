@@ -1,0 +1,147 @@
+extends: [valkey.liveness]
+id: proposed.watch-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: watching_clients and total_watched_keys in INFO clients and watch=
+    in CLIENT INFO/LIST stay exact across WATCH, re-WATCH, UNWATCH, EXEC, DISCARD,
+    dirty-CAS early return, touched keys, FLUSHALL, RESET and disconnect, with no
+    drift or unsigned underflow
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: watch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:0\r\
+          \n"}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: " watch=0 "}}
+    - {command: [WATCH, key], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:1\r\
+          \n"}}
+    - {command: [WATCH, key], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:1\r\
+          \n"}}
+    - {command: [CLIENT, INFO], connection: w1, expect_difference: true, expect: {
+        contains: " watch=1 "}}
+    - {command: [WATCH, key2, key3, key2], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:2\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:3\r\
+          \n"}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: " watch=2 "}}
+    - {command: [CLIENT, LIST], expect_difference: true, expect: {contains: " watch=2 "}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [WATCH, key2], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:2\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:4\r\
+          \n"}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: " watch=3 "}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:1\r\
+          \n"}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [WATCH, key], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:2\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:1\r\
+          \n"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EXEC], expect: {equals: []}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [MULTI], connection: w1, expect: {equals: OK}}
+    - {command: [DISCARD], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:0\r\
+          \n"}}
+    - {command: [WATCH, key], connection: w1, expect: {equals: OK}}
+    - {command: [DISCARD], connection: w1, expect: {error: "without MULTI"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [WATCH, x], expect: {error: "inside MULTI"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [SET, key, v1], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:0\r\
+          \n"}}
+    - {command: [CLIENT, INFO], connection: w1, expect_difference: true, expect: {
+        contains: " watch=0 "}}
+    - {command: [WATCH, other], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [MULTI], connection: w1, expect: {equals: OK}}
+    - {command: [EXEC], connection: w1, expect: {equals: null}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [SET, fk, 1], expect: {equals: OK}}
+    - {command: [WATCH, fk], connection: w2, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:1\r\
+          \n"}}
+    - {command: [CLIENT, INFO], connection: w2, expect_difference: true, expect: {
+        contains: " watch=1 "}}
+    - {command: [UNWATCH], connection: w2, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [WATCH, rk], connection: w2, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [RESET], connection: w2, expect: {equals: RESET}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [WATCH, dk, dk2], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:2\r\
+          \n"}}
+    - {command: [QUIT], connection: w1, expect: {equals: OK}}
+    - {command: [INFO, clients], wait_s: 5, expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:0\r\
+          \n"}}
+    - {command: [WATCH, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: " watch=10 "}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "total_watched_keys:10\r\
+          \n"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:1\r\
+          \n"}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "watching_clients:0\r\
+          \n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [watch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watch}
