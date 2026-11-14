@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a9e73c00bc10..fe3630634031.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-733ef196b6e9
+seed: 7101
+experiment:
+  id: valkey.snapshot-equivalence
+  inputs:
+    operations: 40000
+    mutable_keys: 10000
+    stable_keys: 120000
+    mutation_rate: 5000
+    value_size: 32
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    hz: 100

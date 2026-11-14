@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ef1ca6c8822201307b279420777333f153565f90",
+  "parent": "dedbf99a80b2ae3447877f2abb7520f1285c82ea",
+  "pr": 12793,
+  "pr_repo": "redis/redis",
+  "subject": "add some file level comments and copyright (#12793)",
+  "date": "2023-11-22",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2468,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (PR #12793) only adds file-level descriptive comments and BSD copyright headers to cluster.c and cluster_legacy.c and rewords an existing comment block. Every added or removed line in the diff is a comment or blank line; no executable code, config, build rule, or tool behaviour changes, so there is nothing a fuzzer scenario could reach or detect."
+}

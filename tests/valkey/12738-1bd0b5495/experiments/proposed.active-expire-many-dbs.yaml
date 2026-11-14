@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.active-expire-many-dbs
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Active expiration reaches expired keys in high-numbered databases when databases
+    far exceeds 16: the parent cycles 16 consecutive DBs per cron call, mostly empty,
+    so expired keys in sparse high DBs linger for the whole rotation; the changed
+    build counts only DBs that hold expires, so it reclaims them within a cron call
+    or two.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, enum: [1, 10], default: 1}
+    wait_s: {type: number, minimum: 5, maximum: 60, default: 20}
+    replica_check: {type: boolean, default: false}
+    faults_check: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: expire-sweep
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      databases: 16384
+      hz: {$ref: inputs.hz}
+      dynamic-hz: "no"
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    checks:
+      replica: {$ref: inputs.replica_check}
+      faults: {$ref: inputs.faults_check}
+    commands:
+    - {command: [SELECT, 1000], expect: {equals: OK}}
+    - {command: [SET, k1000, v, PX, 100], expect: {equals: OK}}
+    - {command: [SELECT, 5000], expect: {equals: OK}}
+    - {command: [SET, k5000, v, PX, 100], expect: {equals: OK}}
+    - {command: [SELECT, 9000], expect: {equals: OK}}
+    - {command: [SET, k9000, v, PX, 100], expect: {equals: OK}}
+    - {command: [SELECT, 13000], expect: {equals: OK}}
+    - {command: [SET, k13000, v, PX, 100], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - command: [EVAL, "local t = 0 for i = 1, #ARGV do redis.call('select', ARGV[i])\
+          \ t = t + redis.call('dbsize') end return t", 0, 1000, 5000, 9000, 13000]
+      wait_s: {$ref: inputs.wait_s}
+      expect: {equals: 0}
+      expect_difference: true
+required_events: [expire-sweep.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expire-sweep}

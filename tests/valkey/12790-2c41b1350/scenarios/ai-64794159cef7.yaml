@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4278ed8de5c5..2c41b1350521.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64794159cef7
+seed: 1002
+experiment:
+  id: proposed.debug-populate-blocked-while-loading
+  inputs:
+    resp: 3
+    repl_diskless_sync: 'yes'
+    repl_diskless_load: on-empty-db
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

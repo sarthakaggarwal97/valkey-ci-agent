@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "157e5d47b5326b27064955d30a694daf8f3b12cd",
+  "parent": "463476933c47541c307eca47fd85e0ed4cb4f3e9",
+  "pr": 12800,
+  "pr_repo": "redis/redis",
+  "subject": "util.c: Don't leak directory handle if recursive call to dirRemove fails (#12800)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4174,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds closedir() on an error path of dirRemove() in util.c to avoid leaking a directory handle when a recursive removal fails. dirRemove has no callers anywhere in the Valkey source (only its declaration in util.h), so the code is unreachable from any command, persistence, or replication path; and even with a caller, the fix only frees a file descriptor on a failure path that requires an externally induced filesystem error, with no observable change in replies, data, or control flow. No fuzzer scenario can reach or observe this fix."
+}

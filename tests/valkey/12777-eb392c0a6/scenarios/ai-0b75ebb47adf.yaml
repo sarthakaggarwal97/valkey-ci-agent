@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6013122c8e09..eb392c0a6f24.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b75ebb47adf
+seed: 12777
+experiment:
+  id: proposed.volatile-eviction-slot-lookup
+  inputs:
+    policy: volatile-lru
+    cluster: true
+    lazyfree: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

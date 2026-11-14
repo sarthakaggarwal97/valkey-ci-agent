@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.dbexpand-cluster-populate-2k
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Same slot-dict sizing check at a larger populate count, so the per-slot
+    over-allocation on the parent is larger
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, POPULATE, 2000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2000}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "number\
+          \ of elements: 2000"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

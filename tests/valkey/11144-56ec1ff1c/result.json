@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "56ec1ff1cec53fc8d0709060c70ba311e07d402a",
+  "parent": "2e854bccc61c85146dd8aa487dc7516895d96d0a",
+  "pr": 11144,
+  "pr_repo": "redis/redis",
+  "subject": "Call signalModifiedKey after the key modification is completed (#11144)",
+  "date": "2023-11-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.1005,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7c2ed9a18d72",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-6cac075b49f6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-a9c4f42b658f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-16bcf67b716b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

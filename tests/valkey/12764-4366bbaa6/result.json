@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4366bbaa616c9043ca4b44e63affc31dfcb6ab24",
+  "parent": "fe3630634031bde9c2b8a9cc8a3ab4e94ad8f680",
+  "pr": 12764,
+  "pr_repo": "redis/redis",
+  "subject": "Empty rehashing list in emptyDbStructure (#12764)",
+  "date": "2023-11-15",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.5294,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6f37493958d8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Command # 757 (SET vf:writes:stable:75756 s75756:qcKTskQmAKvbMePsekMLbPMAvzyTbpEGReclDf83dXCPBmKJRz963CL9UE6wOylkpj9AcEACweoY9YSLww8r0DY032IgURWkOmr8XuV2cg08mKezhAteUdwh0YxnDutU8l9bK1uQVbcAn"
+    }
+  ]
+}

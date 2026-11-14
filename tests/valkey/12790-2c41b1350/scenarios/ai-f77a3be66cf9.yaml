@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4278ed8de5c5..2c41b1350521.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f77a3be66cf9
+seed: 90137
+experiment:
+  id: proposed.debug-populate-loading-resync
+  inputs:
+    resp: 3
+    diskless_load: disabled
+    diskless_sync: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

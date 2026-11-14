@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5e403099bdce..2e854bccc61c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-596a7581972d
+seed: 1
+experiment:
+  id: proposed.stacktrace-threads-signal
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    io-threads: 128

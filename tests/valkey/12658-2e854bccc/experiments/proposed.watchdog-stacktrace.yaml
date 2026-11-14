@@ -1,0 +1,58 @@
+extends: [valkey.base]
+id: proposed.watchdog-stacktrace
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Arm the software watchdog and block the main thread, so SIGALRM drives
+    the rewritten async-signal-safe stacktrace path (pipe, getdents64 /proc walk,
+    threads manager spin-wait) repeatedly under writes; the server must stay alive,
+    answer afterwards, and log complete stack traces without handler errors
+inputs:
+  properties:
+    watchdog_period_ms: {type: integer, minimum: 50, maximum: 1000, default: 100}
+    sleep_s: {type: number, minimum: 0.2, maximum: 3, default: 1}
+startup_overlays:
+- overlay_id: debug-cmd
+  server_config:
+    enable-debug-command: "yes"
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 1}
+- use: valkey.action.commands
+  id: watchdog
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, {$ref: inputs.watchdog_period_ms}],
+      expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, watchdog-period, 0], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [watchdog]
+  config: {seconds: 2}
+- use: valkey.observer.log
+  id: trace-log
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.watchdog.fired, pattern: "WATCHDOG TIMER EXPIRED", required: true}
+    - {evidence_id: valkey.stacktrace.written, pattern: "STACK TRACE", required: true}
+    forbidden:
+    - {pattern: "setupStacktracePipe failed"}
+    - {pattern: "failed to open /proc/"}
+    - {pattern: "failed to find SigBlk or/and SigIgn"}
+    - {pattern: "Crashed running signal handler"}
+    - {pattern: "waiting threads timed out|waiting for threads' output timed out"}
+    - {pattern: "Failed to get the process's threads"}
+    - {pattern: "ThreadsManager g_callback is NULL"}
+required_events: [watchdog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchdog}

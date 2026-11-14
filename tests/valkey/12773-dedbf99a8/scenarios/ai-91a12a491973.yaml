@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 58cb30252600..dedbf99a80b2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-91a12a491973
+seed: 1002
+experiment:
+  id: proposed.dbexpand-cluster-populate-2k
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7100
+  replicas_per_primary: 0

@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.stacktrace-threads-signal
+deployment:
+  modes: [standalone]
+metadata:
+  description: Software watchdog SIGALRM fires the async-signal-safe multi-thread
+    stack-trace collection repeatedly; the server must survive with no crash or sanitizer
+    report
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: trace
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, "100"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [trace.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trace}

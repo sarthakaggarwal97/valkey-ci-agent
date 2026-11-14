@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.aof-rewrite-empty-db-select
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    AOF rewrite with aof-use-rdb-preamble no skips SELECT for empty databases: an
+    empty dataset now rewrites to a zero-byte base AOF, and a sparse multi-DB dataset
+    emits SELECT only for non-empty DBs. The server must restart cleanly from both
+    and restore every key into the right database.
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+    timeout_s: 15
+    commands:
+    - {command: [BGREWRITEAOF], expect: {contains: "rewriting"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "aof_base_size:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [SET, kx, vx, EX, 10000], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [RPUSH, l3, a, b, c], expect: {equals: 3}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SET, k9, v9], expect: {equals: OK}}
+    - {command: [HSET, h9, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [BGREWRITEAOF], expect: {contains: "rewriting"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [GET, k0], expect: {equals: v0}}
+    - {command: [GET, kx], expect: {equals: vx}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [LRANGE, l3, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [HGET, h9, f1], expect: {equals: v1}}
+    - {command: [HGET, h9, f2], expect: {equals: v2}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "aof_enabled:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

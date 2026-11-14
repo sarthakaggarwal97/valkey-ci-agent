@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9b6dded421cbd0eed78c4da28196de7ef5adb6e8",
+  "parent": "4366bbaa616c9043ca4b44e63affc31dfcb6ab24",
+  "pr": 12770,
+  "pr_repo": "redis/redis",
+  "subject": "Fix empty rehashing list in swapdb mode (#12770)",
+  "date": "2023-11-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.4368,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-8bdc37c3f0da",
+      "seed": 71001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12770",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-b34a3a4f1869",
+      "seed": 71002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12770",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

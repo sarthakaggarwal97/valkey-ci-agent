@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.dbexpand-cluster-populate-1k
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: DEBUG POPULATE on a single-node cluster must size each slot dict by
+    db_size/slots, not db_size per slot
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, POPULATE, 1000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1000}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "number\
+          \ of elements: 1000"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

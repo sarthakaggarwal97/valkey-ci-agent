@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.cluster-api-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER subcommands, slot accounting, and MOVED/ASK/TRYAGAIN/CROSSSLOT
+    redirects compared between the refactored cluster-API build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cluster-api
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, ''], expect: {equals: 0}}
+    - {command: [CLUSTER, KEYSLOT, '{}'], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, '{foo}suffix'], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT], expect: {error: true}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16384], expect: {error: "Invalid slot"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, -1], expect: {error: "Invalid slot"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 9223372036854775807], expect: {error: "Invalid\
+          \ slot"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, notaslot], expect: {error: true}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], expect: {equals: [foo]}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, -1], expect: {error: true}}
+    - {command: [CLUSTER, DOESNOTEXIST], expect: {error: true}}
+    - {command: [CLUSTER, MYID], node: 0}
+    - {command: [CLUSTER, SLOTS]}
+    - {command: [CLUSTER, SHARDS], compare: skip}
+    - {command: [CLUSTER, NODES], compare: skip}
+    - {command: [CLUSTER, INFO], compare: skip}
+    - {command: [MGET, foo, bar], expect: {error: CROSSSLOT}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, '<node.1.id>'], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, '<node.0.id>'], node: 1, expect: {
+        equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [GET, '{foo}missing'], expect: {error: ASK}}
+    - {command: [MGET, foo, '{foo}missing'], expect: {error: TRYAGAIN}}
+    - {command: [GET, foo], node: 1, expect: {error: MOVED}}
+    - {command: [ASKING], node: 1, expect: {equals: OK}}
+    - {command: [GET, '{foo}missing'], node: 1, expect: {error: false}}
+    - {command: [DEL, foo], expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, '<node.1.id>'], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, '<node.1.id>'], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, expect: {error: MOVED}}
+    - {command: [SET, foo, bar2], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, SLOTS], node: 0}
+    - {command: [CLUSTER, REPLICATE, '<node.0.id>'], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICAS, '<node.2.id>'], node: 0, wait_s: 30, expect: {
+        error: "not a master"}}
+    - {command: [CLUSTER, SLAVES, '<node.1.id>'], node: 0, expect: {equals: []}}
+    - {command: [CLUSTER, REPLICAS, '<node.0.id>'], node: 0, compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: cluster-disabled
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, NODES], expect: {error: "cluster support disabled"}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {error: "cluster support disabled"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {error: "cluster support disabled"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cluster-api.completed, cluster-disabled.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cluster-api}
+- {evidence_id: valkey.command.sequence, source: cluster-disabled}

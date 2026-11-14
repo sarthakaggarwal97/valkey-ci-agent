@@ -1,0 +1,27 @@
+extends: [valkey.base]
+id: proposed.watchdog-asyncsafe-liveness
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the software watchdog's all-thread stack-trace dump repeatedly
+    under a concurrent key/value workload; the server must stay alive and responsive,
+    which the parent's async-unsafe handler path can deadlock or crash.
+components:
+- use: valkey.action.commands
+  id: watchdog
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, watchdog-period, "100"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [watchdog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchdog}

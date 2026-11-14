@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4366bbaa616c..9b6dded421cb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8751e0ad8aeb
+seed: 1001
+experiment:
+  id: proposed.cluster-flush-rehashing
+  inputs:
+    resp: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7000

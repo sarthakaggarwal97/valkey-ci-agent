@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fe3630634031bde9c2b8a9cc8a3ab4e94ad8f680",
+  "parent": "a9e73c00bc1056eae4db98ca4bd1c126d994889d",
+  "pr": 12757,
+  "pr_repo": "redis/redis",
+  "subject": "Fix DB iterator not resetting pauserehash causing dict being unable to rehash (#12757)",
+  "date": "2023-11-14",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 2,
+  "hunted": 9,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 14,
+    "percent": 87,
+    "uncovered": [
+      "src/aof.c:2336",
+      "src/rdb.c:1375"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.3132,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-66de75477a6b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Command # 460 (SET vf:writes:stable:25459 s25459:DxW19rPGal20rw1SvQrJrEpzcjtjYCx07pdlwZmnnmUkfeAhLezAZF1Pqs6UBV9r8MaOU4ZVWDtI9WWBCmRWMLqhdsf13l7NFjOpnNQzhY7BC0Mtn8s5aSlvhMoKCAwcxAnMXvPAZr9pa"
+    }
+  ]
+}

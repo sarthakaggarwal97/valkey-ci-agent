@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2e854bccc61c..56ec1ff1cec5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2071ebfcb943
+seed: 37
+experiment:
+  id: valkey.cluster-chaos
+  inputs:
+    command_rate: 800
+    waves:
+    - - op: failover
+        shard: 0
+    - - op: kill
+        target: replica
+    - - op: failover
+        shard: 1
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-user-del: 'yes'

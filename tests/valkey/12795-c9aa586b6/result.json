@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c9aa586b6bf99ac51b2118484fab98006d59dfc5",
+  "parent": "ae09d4d3ef56bcd390ba433cfb36135b4d723ae1",
+  "pr": 12795,
+  "pr_repo": "redis/redis",
+  "subject": "rdb.c: Avoid potential file handle leak (Coverity 404720) (#12795)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3411,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens a guard from `rdb_fd > 0` to `rdb_fd >= 0` when re-opening the RDB file after a successful load to queue a background close/page-cache-reclaim job. It differs from the parent only when open() returns fd 0, which requires the server's stdin to already be closed \u2014 a state the fuzzer's servers never reach \u2014 and even then the parent's only defect is one leaked descriptor and a skipped page-cache reclaim hint, with no observable effect on replies, data, persistence, replication, or crash behavior. No scenario can reach or distinguish this path, so no test is proposed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1f91ffa180ad109917ef35d75dea5569b3022d5",
+  "parent": "5a1f4b9aec4b6351b6102a2d2057a319ead9d76a",
+  "pr": 12751,
+  "pr_repo": "redis/redis",
+  "subject": "Add an explanation for URI with -u in redis-cli --help (#12751)",
+  "date": "2023-11-19",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.232,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords the usage/help text strings in redis-cli and redis-benchmark (explaining the -u URI format and adding an example line). No code path, option parsing, or server behaviour changes; it is documentation-only, so no scenario is needed."
+}

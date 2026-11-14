@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5e403099bdce..2e854bccc61c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-691644eff35b
+seed: 1005
+experiment:
+  id: proposed.watchdog-asyncsafe-liveness
+  inputs:
+    stable_keys: 500
+    mutable_keys: 1000
+    mutation_rate: 2000
+    value_size: 16384
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400
+  server_config:
+    enable-debug-command: 'yes'
+    hz: '100'
+    io-threads: '4'

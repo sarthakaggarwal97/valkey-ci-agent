@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T21:23+00:00.
+Updated 2026-11-14T21:36+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2439 | 102 | #12738 (2023-11-27) | 270 | 236.3 |
+| valkey-io/valkey | 2461 | 80 | #12758 (2023-11-13) | 292 | 239.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.6 |
 | valkey-io/valkey-search | 691 | 0 | f8106e72e984 (2024-11-27) | 9 | 30.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-14T21:23+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-14T19:27:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43625621113): 20 merge(s) tested, 3 without a code change.
+[2026-11-14T21:36:33+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43632223968): 20 merge(s) tested, 2 without a code change.
 
-- [redis/redis#12847](https://github.com/redis/redis/pull/12847) ([tests](tests/valkey/12847-15b993f1e/)): Optimize dictExpand of empty dict (#12847): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12823](https://github.com/redis/redis/pull/12823) ([tests](tests/valkey/12823-826b39e01/)): Align server.lastsave and server.rdb_save_time_last by removing multiple calls to time(NULL) (#12823): declined: The change is a timekeeping consistency refactor in backgroundSaveDoneHandler: one time(NULL) sample at handler entry now sets both server.lastsave and server.rdb_save_time_last, instead of two separate calls. No control flow, persistence format, replication behavior, or reply shape change
-- [redis/redis#12843](https://github.com/redis/redis/pull/12843) ([tests](tests/valkey/12843-f2d59c4f9/)): Avoid unnecessary slot computing in KEYS command. (#12843): declined: The change only moves the patternHashSlot computation in keysCommand behind the existing server.cluster_enabled guard. pslot is initialized to -1 and is now assigned only when cluster_enabled && !allkeys, so the new condition `pslot != -1` selects the single-slot iterator under exactly the
-- [redis/redis#12839](https://github.com/redis/redis/pull/12839) ([tests](tests/valkey/12839-8e11f84de/)): Fix replica node cannot expand dicts when loading legacy RDB (#12839): declined: The change is a hash-table pre-sizing optimization on a cold path with no externally observable behavior change, so no fuzzer scenario can drive it meaningfully. The only edit is the divisor used by dbExpand in cluster mode: getMyClusterSlotCount() (a replica's own numslots, always 0) beco
-- [redis/redis#12244](https://github.com/redis/redis/pull/12244) ([tests](tests/valkey/12244-2f6d4daba/)): Fix outdated LFU comments to eliminate confusion (#12244): declined: The change edits only comments in src/evict.c (correcting the LFU field description from 'last decr time' to 'last access time' and describing the current decay-by-one behavior). No executable code, replies, configs, or data paths change, so no scenario can observe any difference and none 
-- [redis/redis#12840](https://github.com/redis/redis/pull/12840) ([tests](tests/valkey/12840-b730404c2/)): Fix multi dbs donot dbExpand when loading RDB (#12840): declined: The change only flips when rdbLoadRioWithLoadingCtx pre-sizes a database's hash tables during RDB load: the old code armed should_expand_db once at entry, so only the first database in a multi-DB RDB got its dbExpand() and every subsequent SELECTDB's RESIZEDB hint was ignored; the fix re-a
-- [redis/redis#12781](https://github.com/redis/redis/pull/12781) ([tests](tests/valkey/12781-9ee1cc33a/)): Make the sampling logic in eviction clearer (#12781): 0 of 7 test(s) reached the change, coverage 100%
-- [redis/redis#12754](https://github.com/redis/redis/pull/12754) ([tests](tests/valkey/12754-991aff1c0/)): Optimize KEYS when pattern includes hashtag and implies a single slot. (#12754): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12799](https://github.com/redis/redis/pull/12799) ([tests](tests/valkey/12799-35c8d616c/)): Only rebuild server when src or deps are modified (#12799): declined: The change edits only src/mkreleasehdr.sh, narrowing the GIT_DIRTY check to `git diff -- src deps` so that modifications outside src/ and deps/ no longer mark the build dirty and force a rebuild. This is purely a build/CI convenience change: it does not alter any server behavior, command r
-- [redis/redis#12829](https://github.com/redis/redis/pull/12829) ([tests](tests/valkey/12829-764838d66/)): Check whether the client is NULL in luaCreateFunction (#12829): declined: The change only adds a NULL-client guard in luaCreateFunction's shebang-error path (src/eval.c). Both callers in this tree, evalGenericCommand (eval.c:512) and SCRIPT LOAD (eval.c:626), always pass a non-NULL client, and the old NULL-client caller (script reload from the RDB 'lua' aux fiel
-- [redis/redis#12726](https://github.com/redis/redis/pull/12726) ([tests](tests/valkey/12726-8a4ccb01b/)): Fix clusterLoadConfig aux_argv minor memory leak (#12726): declined: The change only adds sdsfreesplitres(aux_argv, ...) on error paths in clusterLoadConfig that immediately 'goto fmterr', which logs and calls exit(1). The memory being freed was reclaimed by process exit anyway, so there is no observable behaviour change on either build: the paths are reach
-- [redis/redis#12786](https://github.com/redis/redis/pull/12786) ([tests](tests/valkey/12786-91309f798/)): Fix compilation warning in KeySpace_ServerEventCallback and add CFLAGS=-Werror flag for module CI (#12786): declined: The change is a CI/build change plus a cosmetic fix in a test module: it adds CFLAGS=-Werror to the module-API test steps in the GitHub workflows and fixes a RedisModule_Log format specifier (%ld -> %llu with a cast) in tests/modules/postnotifications.c. No server code, command reply, repl
-- [redis/redis#12641](https://github.com/redis/redis/pull/12641) ([tests](tests/valkey/12641-e216c8390/)): Change addReplyErrorFormat to addReplyError when there is no format (#12641): declined: The change swaps addReplyErrorFormat for addReplyError at four call sites whose message is a plain literal with no % conversion specifiers and no newlines. Both functions emit the identical error reply (addReplyErrorLength + afterErrorReply with flags 0); addReplyErrorFormat only adds a pr
-- [redis/redis#12818](https://github.com/redis/redis/pull/12818) ([tests](tests/valkey/12818-423565f78/)): Optimize CPU cache efficiency on dict while rehashing in dictTwoPhaseUnlinkFind (#12818): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12815](https://github.com/redis/redis/pull/12815) ([tests](tests/valkey/12815-22cc9b512/)): Use CLZ in _dictNextExp to get the next power of two (#12815): declined: The change replaces the shift loop in the static helper _dictNextExp (src/dict.c) with a __builtin_clzl computation. The new expression 8*sizeof(long) - clzl(size-1) equals the old loop's result (the smallest e >= 2 with 2^e >= size) for every input: sizes 0-4 hit the new DICT_HT_INITIAL_E
-- [redis/redis#12768](https://github.com/redis/redis/pull/12768) ([tests](tests/valkey/12768-bdceaf50e/)): Fix the check for new RDB_OPCODE_SLOT_INFO in redis-check-rdb (#12768): 0 of 3 test(s) reached the change, coverage 0%
-- [redis/redis#7351](https://github.com/redis/redis/pull/7351) ([tests](tests/valkey/7351-3431b1f15/)): format cpu config as redis style (#7351): 2 of 2 test(s) reached the change
-- [redis/redis#12802](https://github.com/redis/redis/pull/12802) ([tests](tests/valkey/12802-a1c5171c1/)): Fix resize hash tables stuck on the last non-empty slot (#12802): 3 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#12811](https://github.com/redis/redis/pull/12811) ([tests](tests/valkey/12811-095d05786/)): clarify the comment of findSlotByKeyIndex function (#12811): declined: The change (#12811) only edits comments in src/db.c: it clarifies the doc comment of findSlotByKeyIndex and expands the inline comment explaining why the +1 and -1 adjustments cancel out. No executable code is modified, so there is no behaviour change to exercise and no scenario is needed.
-- [redis/redis#12809](https://github.com/redis/redis/pull/12809) ([tests](tests/valkey/12809-d6f19539d/)): Un-register notification and server event when RedisModule_OnLoad fails (#12809): declined: The change fixes a real use-after-free in moduleLoad()'s OnLoad-failure branch (dangling keyspace-notification subscribers, server-event callbacks, command filters, and authenticated clients after the module struct is freed; moduleUnload() itself is only refactored, no behavior change). Bu
+- [redis/redis#12738](https://github.com/redis/redis/pull/12738) ([tests](tests/valkey/12738-1bd0b5495/)): Optimize the efficiency of active expiration when databases exceeds 16. (#12738): 3 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#11144](https://github.com/redis/redis/pull/11144) ([tests](tests/valkey/11144-56ec1ff1c/)): Call signalModifiedKey after the key modification is completed (#11144): 1 of 6 test(s) reached the change, coverage 100%
+- [redis/redis#12658](https://github.com/redis/redis/pull/12658) ([tests](tests/valkey/12658-2e854bccc/)): Fix async safety in signal handlers (#12658): 0 of 15 test(s) reached the change, coverage 74%; [crash, appeared after redis/redis#12658](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164)
+- [redis/redis#12636](https://github.com/redis/redis/pull/12636) ([tests](tests/valkey/12636-5e403099b/)): Fix misleading error message in redis.log when loglevel is invalid (#12636): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12795](https://github.com/redis/redis/pull/12795) ([tests](tests/valkey/12795-c9aa586b6/)): rdb.c: Avoid potential file handle leak (Coverity 404720) (#12795): declined: The change only widens a guard from `rdb_fd > 0` to `rdb_fd >= 0` when re-opening the RDB file after a successful load to queue a background close/page-cache-reclaim job. It differs from the parent only when open() returns fd 0, which requires the server's stdin to already be closed — a st
+- [redis/redis#12797](https://github.com/redis/redis/pull/12797) ([tests](tests/valkey/12797-ae09d4d3e/)): redis-check-aof.c: Avoid leaking file handle if file is zero bytes (#12797): declined: This is a pure resource-leak fix: redis-check-aof.c now calls fclose(fp) before returning AOF_CHECK_EMPTY for a zero-byte AOF file. The tool's observable behavior (exit status, stdout, stderr) is byte-identical on both builds for every input: an empty file is reported 'is empty' and the to
+- [redis/redis#12796](https://github.com/redis/redis/pull/12796) ([tests](tests/valkey/12796-1c48d3dab/)): config.c: Avoid leaking file handle if redis_fstat() fails (#12796): declined: The change only adds fclose(fp) on an error path in rewriteConfigReadOldFile() that is taken when redis_fstat() fails on a file descriptor that was just successfully opened via fopen(). That failure cannot be provoked without syscall-level fault injection, which the fuzzer does not have: C
+- [redis/redis#12800](https://github.com/redis/redis/pull/12800) ([tests](tests/valkey/12800-157e5d47b/)): util.c: Don't leak directory handle if recursive call to dirRemove fails (#12800): declined: The change adds closedir() on an error path of dirRemove() in util.c to avoid leaking a directory handle when a recursive removal fails. dirRemove has no callers anywhere in the Valkey source (only its declaration in util.h), so the code is unreachable from any command, persistence, or rep
+- [redis/redis#12789](https://github.com/redis/redis/pull/12789) ([tests](tests/valkey/12789-463476933/)): Optimize dict expand check, move allow check after the thresholds check (#12789): declined: The change only reorders two pure checks in _dictExpandIfNeeded (dict.c): the dictTypeExpandAllowed call moves from before the size-threshold checks to inside the branch taken when an expand is due. The only expandAllowed implementation (dictExpandAllowed -> overMaxmemoryAfterAlloc) is sid
+- [redis/redis#12793](https://github.com/redis/redis/pull/12793) ([tests](tests/valkey/12793-ef1ca6c88/)): add some file level comments and copyright (#12793): declined: The change (PR #12793) only adds file-level descriptive comments and BSD copyright headers to cluster.c and cluster_legacy.c and rewords an existing comment block. Every added or removed line in the diff is a comment or blank line; no executable code, config, build rule, or tool behaviour 
+- [redis/redis#12773](https://github.com/redis/redis/pull/12773) ([tests](tests/valkey/12773-dedbf99a8/)): Fix dbExpand not dividing by slots, resulting in consuming slots times the dictExpand (#12773): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12742](https://github.com/redis/redis/pull/12742) ([tests](tests/valkey/12742-58cb30252/)): Cluster refactor, common API for different implementations (#12742): 0 of 6 test(s) reached the change, coverage 69%
+- [redis/redis#12790](https://github.com/redis/redis/pull/12790) ([tests](tests/valkey/12790-2c41b1350/)): Block DEBUG POPULATE in loading and async-loading (#12790): 2 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#12735](https://github.com/redis/redis/pull/12735) ([tests](tests/valkey/12735-4278ed8de/)): redis-cli --bigkeys ,--hotkeys and --memkeys to replica in cluster mode (#12735): 2 of 2 test(s) reached the change, coverage 83%
+- [redis/redis#12751](https://github.com/redis/redis/pull/12751) ([tests](tests/valkey/12751-a1f91ffa1/)): Add an explanation for URI with -u in redis-cli --help (#12751): declined: The change only rewords the usage/help text strings in redis-cli and redis-benchmark (explaining the -u URI format and adding an example line). No code path, option parsing, or server behaviour changes; it is documentation-only, so no scenario is needed.
+- [redis/redis#12777](https://github.com/redis/redis/pull/12777) ([tests](tests/valkey/12777-eb392c0a6/)): replace calculateKeySlot with known slot in evictionPoolPopulate (#12777): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12775](https://github.com/redis/redis/pull/12775) ([tests](tests/valkey/12775-6013122c8/)): check dbSize when rewrite AOF, in case unnecessary SELECT (#12775): 1 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12770](https://github.com/redis/redis/pull/12770) ([tests](tests/valkey/12770-9b6dded42/)): Fix empty rehashing list in swapdb mode (#12770): 0 of 5 test(s) reached the change, coverage 100%; crash, fixed by redis/redis#12770 (recorded)
+- [redis/redis#12764](https://github.com/redis/redis/pull/12764) ([tests](tests/valkey/12764-4366bbaa6/)): Empty rehashing list in emptyDbStructure (#12764): 0 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12757](https://github.com/redis/redis/pull/12757) ([tests](tests/valkey/12757-fe3630634/)): Fix DB iterator not resetting pauserehash causing dict being unable to rehash (#12757): 2 of 10 test(s) reached the change, coverage 87%
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-14T21:23+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 957 of 1533 tested (62%)
-- Changed-line coverage: median 100% of 1014 merge(s) measured, 78 under 50%
-- Recall: 252 parents flagged of 397 fix merges
-- Claude: $803.58 in the last 24 hours, $6133.37 in the last 7 days, $11265.01 in all
-- Issues filed: 80
+- Merges whose tests reached the change: 965 of 1546 tested (62%)
+- Changed-line coverage: median 100% of 1027 merge(s) measured, 78 under 50%
+- Recall: 256 parents flagged of 402 fix merges
+- Claude: $904.67 in the last 24 hours, $6234.46 in the last 7 days, $11366.10 in all
+- Issues filed: 81
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -88,6 +88,7 @@ Updated 2026-11-14T21:23+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/156
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42

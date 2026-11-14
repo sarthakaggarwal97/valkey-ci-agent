@@ -1,0 +1,43 @@
+extends: [valkey.base]
+id: proposed.sigterm-shutdown-logging
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGTERM an instance under writes; sigShutdownHandler's rewritten serverLogRawFromHandler
+    path must log the shutdown, the shutdown must stay clean, and after the restart
+    no acknowledged write may be lost
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+components:
+- use: valkey.fault.process-signal
+  id: sigterm
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: SIGTERM
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, sigterm]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+- use: valkey.observer.log
+  id: shutdown-log
+  config:
+    instances: {$ref: inputs.target}
+    expect:
+    - {evidence_id: valkey.shutdown.sigterm-logged, pattern: "Received SIGTERM scheduling\
+        \ shutdown", required: true}
+    forbidden:
+    - {pattern: "Crashed running signal handler"}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: sigterm}

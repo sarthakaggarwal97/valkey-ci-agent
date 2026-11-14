@@ -1,0 +1,140 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2e854bccc61c85146dd8aa487dc7516895d96d0a",
+  "parent": "5e403099bdce75e81843a17ee0bd29502f773aad",
+  "pr": 12658,
+  "pr_repo": "redis/redis",
+  "subject": "Fix async safety in signal handlers (#12658)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 15,
+  "proven": 0,
+  "hunted": 15,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 231,
+    "executed": 171,
+    "percent": 74,
+    "uncovered": [
+      "src/debug.c:1803",
+      "src/debug.c:1853",
+      "src/debug.c:2225",
+      "src/debug.c:2359",
+      "src/debug.c:2430",
+      "src/debug.c:2495",
+      "src/debug.c:2509",
+      "src/debug.c:2510",
+      "src/debug.c:2529",
+      "src/debug.c:2570",
+      "src/debug.c:2571",
+      "src/debug.c:2572",
+      "src/debug.c:2596",
+      "src/debug.c:2597",
+      "src/server.c:183",
+      "src/server.c:206",
+      "src/server.c:210",
+      "src/server.c:211",
+      "src/server.c:212",
+      "src/server.c:214",
+      "src/server.c:215",
+      "src/server.c:6395",
+      "src/server.c:6426",
+      "src/threads_mngr.c:131",
+      "src/threads_mngr.c:156",
+      "src/threads_mngr.c:159",
+      "src/util.c:566",
+      "src/util.c:1203",
+      "src/util.c:1230",
+      "src/util.c:1234",
+      "src/util.c:1235",
+      "src/util.c:1236",
+      "src/util.c:1244",
+      "src/util.c:1249",
+      "src/util.c:1250",
+      "src/util.c:1252",
+      "src/util.c:1253",
+      "src/util.c:1254",
+      "src/util.c:1255",
+      "src/util.c:1256",
+      "src/util.c:1257",
+      "src/util.c:1258",
+      "src/util.c:1259",
+      "src/util.c:1260",
+      "src/util.c:1261",
+      "src/util.c:1262",
+      "src/util.c:1263",
+      "src/util.c:1264",
+      "src/util.c:1265",
+      "src/util.c:1266"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.5529,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: ------ STACK TRACE DONE ------",
+      "scenario": "ai-d9a4c777ec55",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12658",
+      "fingerprint": "0052acac1d11f1174a0d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164"
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: ------ STACK TRACE DONE ------",
+      "scenario": "ai-24fca6bfa955",
+      "seed": 7002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12658",
+      "fingerprint": "0052acac1d11f1174a0d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164"
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: ------ STACK TRACE DONE ------",
+      "scenario": "ai-bd9caee9a794",
+      "seed": 7003,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12658",
+      "fingerprint": "0052acac1d11f1174a0d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164"
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: ------ STACK TRACE DONE ------",
+      "scenario": "ai-5544f8f8643a",
+      "seed": 7004,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12658",
+      "fingerprint": "0052acac1d11f1174a0d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/164"
+    }
+  ],
+  "recorded": [],
+  "recall_round": {
+    "tests": 5,
+    "recall": false
+  }
+}

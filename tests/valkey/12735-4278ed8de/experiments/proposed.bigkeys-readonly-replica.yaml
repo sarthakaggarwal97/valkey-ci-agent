@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.bigkeys-readonly-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --bigkeys/--memkeys/--hotkeys now send READONLY before scanning;
+    standalone and cluster servers must still scan cleanly, and a denied READONLY
+    must abort only the changed build
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.tools
+  id: cli-scan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: {$ref: inputs.cluster}
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, bigstr, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, keys, ''], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, RPUSH, biglist, a, b, c], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, SADD, bigset, m1, m2], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, HSET, fields, f1, v1, f2, v2], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, ZADD, bigzset, 1, m1, 2, m2], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, XADD, bigstream, 1-1, f, v], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --bigkeys], compare: skip, expect: {exit: {
+          equals: 0}, stdout: {contains: "Sampled 7 keys in the keyspace!"}}}
+    - {tool: valkey-cli, args: [-p, $port, --memkeys], compare: skip, expect: {exit: {
+          equals: 0}, stdout: {contains: "Sampled 7 keys in the keyspace!"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-policy, allkeys-lfu],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys], compare: skip, expect: {exit: {
+          equals: 0}, stdout: {contains: "Sampled 7 keys in the keyspace!"}}}
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, default, -readonly], expect: {
+        exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, --bigkeys], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: NOPERM}}}
+    - {tool: valkey-cli, args: [-p, $port, --memkeys], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: NOPERM}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: NOPERM}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-scan}

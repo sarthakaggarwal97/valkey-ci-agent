@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c48d3dab29ae0ef9f3c1df4c69b59cfd1a90e09",
+  "parent": "157e5d47b5326b27064955d30a694daf8f3b12cd",
+  "pr": 12796,
+  "pr_repo": "redis/redis",
+  "subject": "config.c: Avoid leaking file handle if redis_fstat() fails (#12796)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.252,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds fclose(fp) on an error path in rewriteConfigReadOldFile() that is taken when redis_fstat() fails on a file descriptor that was just successfully opened via fopen(). That failure cannot be provoked without syscall-level fault injection, which the fuzzer does not have: CONFIG REWRITE succeeds identically on both builds and the function's return value and all observable behaviour are unchanged on every reachable path. The fix is a pure resource-leak cleanup on an unreachable-in-practice branch, so no scenario can exercise the changed code."
+}

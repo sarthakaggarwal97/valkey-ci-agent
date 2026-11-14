@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.lrem-lset-signal-after-modify
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    LREM (shrink and key-emptying branches) and successful LSET now call signalModifiedKey
+    after the modification completes: a RESP3 observer with CLIENT TRACKING ON and
+    a __keyspace@ subscription sees the invalidate push after the lrem/del keyspace
+    messages (before them on the parent), and a WATCHing client still has its EXEC
+    aborted on both paths.
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+    lmls: {type: integer, default: 4}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    server_config:
+      notify-keyspace-events: KEA
+      list-max-listpack-size: {$ref: inputs.lmls}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, l, a, b, a, b, a, b], expect: {equals: 6}}
+    - {connection: obs, command: [CLIENT, TRACKING, ON]}
+    - {connection: obs, command: [SUBSCRIBE, "__keyspace@0__:l"]}
+    - {connection: obs, command: [LRANGE, l, 0, -1], expect: {equals: [a, b, a, b,
+          a, b]}}
+    - {command: [LREM, l, 0, a], expect: {equals: 3}}
+    - {connection: obs, read: true, expect_difference: true, expect: {equals: [["message",
+            "__keyspace@0__:l", "lrem"], ["invalidate", ["l"]]]}}
+    - {connection: obs, command: [LRANGE, l, 0, -1], expect: {equals: [b, b, b]}}
+    - {connection: w, command: [WATCH, l], expect: {equals: OK}}
+    - {command: [LREM, l, -9223372036854775807, b], expect: {equals: 3}}
+    - {command: [EXISTS, l], expect: {equals: 0}}
+    - {connection: obs, read: true, expect_difference: true, expect: {equals: [["message",
+            "__keyspace@0__:l", "lrem"], ["message", "__keyspace@0__:l", "del"], [
+            "invalidate", ["l"]]]}}
+    - {connection: w, command: [MULTI], expect: {equals: OK}}
+    - {connection: w, command: [SET, sentinel, v], expect: {equals: QUEUED}}
+    - {connection: w, command: [EXEC], expect: {equals: null}}
+    - {command: [RPUSH, l3, a, b, c], expect: {equals: 3}}
+    - {connection: obs, command: [SUBSCRIBE, "__keyspace@0__:l3"]}
+    - {connection: obs, command: [LRANGE, l3, 0, -1], expect: {equals: [a, b, c]}}
+    - {connection: w, command: [WATCH, l3], expect: {equals: OK}}
+    - {command: [LSET, l3, -1, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz],
+      expect: {equals: OK}}
+    - {connection: obs, read: true, expect: {equals: [["invalidate", ["l3"]], ["message",
+            "__keyspace@0__:l3", "lset"]]}}
+    - {command: [LRANGE, l3, 2, 2], expect: {contains: zzzz}}
+    - {connection: w, command: [MULTI], expect: {equals: OK}}
+    - {connection: w, command: [SET, sentinel2, v], expect: {equals: QUEUED}}
+    - {connection: w, command: [EXEC], expect: {equals: null}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

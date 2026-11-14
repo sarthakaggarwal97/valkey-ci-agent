@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a1f91ffa180a..4278ed8de5c5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2afc660cdc18
+seed: 12736
+experiment:
+  id: proposed.bigkeys-readonly-replica
+  inputs:
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

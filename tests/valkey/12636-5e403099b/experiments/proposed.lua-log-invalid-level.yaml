@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.lua-log-invalid-level
+deployment:
+  modes: [standalone]
+metadata:
+  description: redis.log()/server.log() with an out-of-range level raises "Invalid
+    log level." (parent said "Invalid debug level."); valid-level and other-argument-error
+    paths unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lualog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "redis.log(4, 'too high')", 0], expect_difference: true, expect: {
+        error: "Invalid log level"}}
+    - {command: [EVAL, "redis.log(-1, 'too low')", 0], expect_difference: true, expect: {
+        error: "Invalid log level"}}
+    - {command: [EVAL, "server.log(9223372036854775807, 'huge')", 0], expect_difference: true,
+      expect: {error: "Invalid log level"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=loglib\nredis.register_function('badlog',\
+          \ function() redis.log(100, 'x') end)"], expect: {equals: loglib}}
+    - {command: [FCALL, badlog, 0], expect_difference: true, expect: {error: "Invalid\
+          \ log level"}}
+    - {command: [EVAL, "redis.log(redis.LOG_WARNING, 'fine'); return 1", 0], expect: {
+        equals: 1}}
+    - {command: [EVAL, "redis.log(3.5, 'truncated'); return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "redis.log('warning', 'x')", 0], expect: {error: "First argument\
+          \ must be a number"}}
+    - {command: [EVAL, "redis.log(1)", 0], expect: {error: "requires two arguments"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lualog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lualog}

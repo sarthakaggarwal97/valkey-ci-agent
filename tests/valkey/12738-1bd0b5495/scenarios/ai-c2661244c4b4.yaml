@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 56ec1ff1cec5..1bd0b54957ea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c2661244c4b4
+seed: 102
+experiment:
+  id: proposed.active-expire-many-dbs
+  inputs:
+    resp: 3
+    hz: 10
+    wait_s: 20
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

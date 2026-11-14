@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6013122c8e094e67891017ee1321d47d54363549",
+  "parent": "9b6dded421cbd0eed78c4da28196de7ef5adb6e8",
+  "pr": 12775,
+  "pr_repo": "redis/redis",
+  "subject": "check dbSize when rewrite AOF, in case unnecessary SELECT (#12775)",
+  "date": "2023-11-17",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.6089,
+  "findings": [],
+  "recorded": []
+}

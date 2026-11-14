@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5e403099bdce..2e854bccc61c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b75ee5b1a87
+seed: 7006
+experiment:
+  id: proposed.sigterm-shutdown-logging
+  inputs:
+    target: primary
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7500

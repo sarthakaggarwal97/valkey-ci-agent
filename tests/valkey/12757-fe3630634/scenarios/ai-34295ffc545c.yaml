@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a9e73c00bc10..fe3630634031.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-34295ffc545c
+seed: 12758
+experiment:
+  id: proposed.dbiter-pauserehash-leak
+  inputs:
+    resp: 3
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

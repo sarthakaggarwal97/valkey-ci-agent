@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ae09d4d3ef56bcd390ba433cfb36135b4d723ae1",
+  "parent": "1c48d3dab29ae0ef9f3c1df4c69b59cfd1a90e09",
+  "pr": 12797,
+  "pr_repo": "redis/redis",
+  "subject": "redis-check-aof.c: Avoid leaking file handle if file is zero bytes (#12797)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5786,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure resource-leak fix: redis-check-aof.c now calls fclose(fp) before returning AOF_CHECK_EMPTY for a zero-byte AOF file. The tool's observable behavior (exit status, stdout, stderr) is byte-identical on both builds for every input: an empty file is reported 'is empty' and the tool proceeds/exits the same way. The leaked descriptor is reclaimed at process exit and only becomes visible under file-descriptor exhaustion, which requires an impractical, environment-dependent number of empty INCR files and is non-deterministic. A compared valkey.action.tools run cannot distinguish the buil"
+}

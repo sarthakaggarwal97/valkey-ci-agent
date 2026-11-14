@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4278ed8de5c5c3c023b28c34330ef45aaab75446",
+  "parent": "a1f91ffa180ad109917ef35d75dea5569b3022d5",
+  "pr": 12735,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli --bigkeys ,--hotkeys and --memkeys to replica in cluster mode (#12735)",
+  "date": "2023-11-20",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 10,
+    "percent": 83,
+    "uncovered": [
+      "src/redis-cli.c:9096",
+      "src/redis-cli.c:9097"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.8165,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5e403099bdce75e81843a17ee0bd29502f773aad",
+  "parent": "c9aa586b6bf99ac51b2118484fab98006d59dfc5",
+  "pr": 12636,
+  "pr_repo": "redis/redis",
+  "subject": "Fix misleading error message in redis.log when loglevel is invalid (#12636)",
+  "date": "2023-11-23",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3361,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b3a149385373",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'lualog' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL server.log(9223372036854775807, 'huge') 0)"
+    },
+    {
+      "scenario": "ai-b3a149385373",
+      "build": "unstable",
+      "seed": 12636,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3a149385373",
+      "build": "unstable",
+      "seed": 12637,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3a149385373",
+      "build": "unstable",
+      "seed": 12638,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d5317af5f6d9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'lualog' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL server.log(9223372036854775807, 'huge') 0)"
+    },
+    {
+      "scenario": "ai-d5317af5f6d9",
+      "build": "unstable",
+      "seed": 12637,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d5317af5f6d9",
+      "build": "unstable",
+      "seed": 12638,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d5317af5f6d9",
+      "build": "unstable",
+      "seed": 12639,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

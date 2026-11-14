@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "463476933c47541c307eca47fd85e0ed4cb4f3e9",
+  "parent": "ef1ca6c8822201307b279420777333f153565f90",
+  "pr": 12789,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize dict expand check, move allow check after the thresholds check (#12789)",
+  "date": "2023-11-22",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5353,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reorders two pure checks in _dictExpandIfNeeded (dict.c): the dictTypeExpandAllowed call moves from before the size-threshold checks to inside the branch taken when an expand is due. The only expandAllowed implementation (dictExpandAllowed -> overMaxmemoryAfterAlloc) is side-effect-free, and expansion still happens exactly when both the thresholds pass and the allow check passes, so the expand decision is identical on both builds. This is a performance-only refactor with no observable behaviour change to test."
+}

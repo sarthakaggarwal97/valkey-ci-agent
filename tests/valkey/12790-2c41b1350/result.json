@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2c41b135052125490a76c0d1cca968f86b10570a",
+  "parent": "4278ed8de5c5c3c023b28c34330ef45aaab75446",
+  "pr": 12790,
+  "pr_repo": "redis/redis",
+  "subject": "Block DEBUG POPULATE in loading and async-loading (#12790)",
+  "date": "2023-11-21",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.6095,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c5f4b5305908",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (GET gate on node 1), 4 (DEBUG POPULATE 1 on node 1)"
+    },
+    {
+      "scenario": "ai-64794159cef7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (GET gate on node 1), 4 (DEBUG POPULATE 1 on node 1)"
+    }
+  ]
+}

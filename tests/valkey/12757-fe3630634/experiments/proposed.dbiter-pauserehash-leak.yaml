@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.dbiter-pauserehash-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    On the parent build, KEYS (db.c dbReleaseIterator path) never resets the db iterator's
+    safe dict iterator, leaking pauserehash on the dict it iterated. The last SET
+    pushes the main dict over the resize threshold so it is mid-rehash when KEYS runs;
+    on the parent the dict then can never finish rehashing (lookups and cron are both
+    blocked), while the fixed build converges. DEBUG HTSTATS (dbGetStats release path)
+    exposes the difference: the fixed build shows one main table with all 41 elements,
+    the parent stays stuck with a rehashing-target table. BGREWRITEAOF with aof-use-rdb-preamble
+    no also drives the rewriteAppendOnlyFileRio release path over a non-empty DB.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: leak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    server_config:
+      enable-debug-command: "yes"
+      activerehashing: "no"
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+    commands:
+    - {command: [SET, alice, a], expect: {equals: OK}}
+    - {command: [EXPIRE, alice, 100000], expect: {equals: 1}}
+    - {command: [SET, "{foo}1", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}2", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}3", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}4", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}5", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}6", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}7", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}8", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}9", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}10", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}11", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}12", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}13", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}14", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}15", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}16", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}17", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}18", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}19", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}20", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}21", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}22", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}23", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}24", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}25", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}26", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}27", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}28", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}29", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}30", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}31", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}32", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}33", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}34", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}35", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}36", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}37", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}38", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}39", a], expect: {equals: OK}}
+    - {command: [SET, "{foo}40", a], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 41}}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [MGET, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5", "{foo}6",
+        "{foo}7", "{foo}8", "{foo}9", "{foo}10", "{foo}11", "{foo}12", "{foo}13",
+        "{foo}14", "{foo}15", "{foo}16", "{foo}17", "{foo}18", "{foo}19", "{foo}20"]}
+    - {command: [MGET, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5", "{foo}6",
+        "{foo}7", "{foo}8", "{foo}9", "{foo}10", "{foo}11", "{foo}12", "{foo}13",
+        "{foo}14", "{foo}15", "{foo}16", "{foo}17", "{foo}18", "{foo}19", "{foo}20"]}
+    - {command: [MGET, "{foo}21", "{foo}22", "{foo}23", "{foo}24", "{foo}25", "{foo}26",
+        "{foo}27", "{foo}28", "{foo}29", "{foo}30", "{foo}31", "{foo}32", "{foo}33",
+        "{foo}34", "{foo}35", "{foo}36", "{foo}37", "{foo}38", "{foo}39", "{foo}40"]}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 10, expect_difference: true, expect: {
+        contains: "number of elements: 41"}}
+    - {command: [BGREWRITEAOF], expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 15, expect: {contains: "aof_rewrite_in_progress:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leak}

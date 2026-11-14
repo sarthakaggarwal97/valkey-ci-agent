@@ -1,0 +1,127 @@
+extends: [valkey.liveness]
+id: proposed.volatile-eviction-slot-lookup
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Under volatile-lru/volatile-lfu maxmemory pressure, keys sampled from db->expires[slot]
+    are looked up in db->dict[slot] (known slot instead of calculateKeySlot). Drive
+    evictions on a cluster-mode server with TTL keys spread across many slots and
+    compare against the parent build; a wrong slot would make dictFind return NULL
+    and dictGetVal crash.
+inputs:
+  properties:
+    policy: {type: string, enum: [volatile-lru, volatile-lfu], default: volatile-lru}
+    cluster: {type: boolean, default: true}
+    lazyfree: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 180
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+      lazyfree-lazy-eviction: {$ref: inputs.lazyfree}
+      maxmemory-samples: 10
+    commands:
+    - {command: [SETRANGE, s1, 99999, x], expect: {equals: 100000}}
+    - {command: [SETRANGE, s2, 99999, x], expect: {equals: 100000}}
+    - {command: [SETRANGE, s3, 99999, x], expect: {equals: 100000}}
+    - {command: [SETRANGE, v01, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v01, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v02, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v02, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v03, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v03, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v04, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v04, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v05, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v05, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v06, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v06, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v07, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v07, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v08, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v08, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v09, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v09, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v10, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v10, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v11, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v11, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v12, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v12, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v13, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v13, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v14, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v14, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v15, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v15, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v16, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v16, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v17, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v17, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v18, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v18, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v19, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v19, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v20, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v20, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v21, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v21, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v22, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v22, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v23, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v23, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v24, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v24, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, v25, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, v25, 10000], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 28}}
+    - {command: [CONFIG, SET, maxmemory, 8mb], expect: {equals: OK}}
+    - {command: [SETRANGE, p01, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p01, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p02, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p02, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p03, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p03, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p04, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p04, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p05, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p05, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p06, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p06, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p07, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p07, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p08, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p08, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p09, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p09, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p10, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p10, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p11, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p11, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p12, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p12, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p13, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p13, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p14, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p14, 10000], expect: {equals: 1}}
+    - {command: [SETRANGE, p15, 399999, x], expect: {equals: 400000}}
+    - {command: [EXPIRE, p15, 10000], expect: {equals: 1}}
+    - {command: [DBSIZE], compare: skip, wait_s: 30, expect: {max: 38, min: 4}}
+    - {command: [EXISTS, s1, s2, s3], expect: {equals: 3}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

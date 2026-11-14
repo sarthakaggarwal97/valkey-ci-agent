@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b6dded421cb..6013122c8e09.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b14044949a7d
+seed: 101
+experiment:
+  id: proposed.aof-rewrite-empty-db-select
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

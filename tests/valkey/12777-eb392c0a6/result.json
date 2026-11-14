@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eb392c0a6f247d507df07ca39386bf2b5d895424",
+  "parent": "6013122c8e094e67891017ee1321d47d54363549",
+  "pr": 12777,
+  "pr_repo": "redis/redis",
+  "subject": "replace calculateKeySlot with known slot in evictionPoolPopulate (#12777)",
+  "date": "2023-11-17",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9955,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0b75ebb47adf",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 86 (EXISTS s1 s2 s3)"
+    },
+    {
+      "scenario": "ai-7504a6c82173",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 86 (EXISTS s1 s2 s3)"
+    }
+  ]
+}

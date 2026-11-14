@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a9e73c00bc10..fe3630634031.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e7c82f6866b6
+seed: 12760
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutable_keys: 800
+    stable_keys: 1000
+    mutation_rate: 1500
+    value_size: 1024
+    run_before_crash_s: 4
+    run_after_crash_s: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300
+  server_config:
+    aof-use-rdb-preamble: 'no'
+    auto-aof-rewrite-percentage: '1'
+    auto-aof-rewrite-min-size: 4kb

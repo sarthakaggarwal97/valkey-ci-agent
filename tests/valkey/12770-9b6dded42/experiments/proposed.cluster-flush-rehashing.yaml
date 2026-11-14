@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flush-rehashing
+deployment:
+  modes: [cluster]
+metadata:
+  description: FLUSHALL/FLUSHDB on a populated cluster main DB empties the per-subdict
+    rehashing list
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [DEBUG, POPULATE, 300000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [DEBUG, POPULATE, 300000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}
