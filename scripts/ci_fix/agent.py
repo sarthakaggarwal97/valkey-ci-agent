@@ -612,6 +612,13 @@ the tags and setup it needs, and exactly one `test`), named in
 fails sends the change back with your reasoning; one that passes is noted.
 When you reject, say what change you would approve."""
 
+# Once a counterexample has sent the fix back in this run, a further one is
+# run and noted, but cannot send it back alone (scripts/factory/review.py).
+_REVIEW_AFTER_COUNTEREXAMPLE = """
+A counterexample has already sent this change back once in this run. Approve
+it, or name a concrete defect in the diff: a further counterexample is run and
+noted, but on its own it no longer sends the change back."""
+
 _REVIEW_PROMPT = """\
 You are reviewing a proposed fix for {what} in the repository at your
 current working directory, which holds the fix. {stance}
@@ -687,12 +694,19 @@ def adversarial_review(
     job_log: str,
     context: FixContext | None = None,
     timeout: int | None = None,
+    *,
+    after_rejection: bool = False,
 ) -> Review:
     """A read-only session's verdict on a fix the bot wrote from an issue, with the counterexample it may have written.
 
-    The caller runs the counterexample; a review session cannot.
+    The caller runs the counterexample; a review session cannot. With
+    ``after_rejection``, a counterexample has already sent the fix back in
+    this run, and the reviewer is told that another cannot on its own.
     """
-    return _review(candidate, repo_dir, job_log, context or FixContext(), timeout, adversarial=True)
+    return _review(
+        candidate, repo_dir, job_log, context or FixContext(), timeout, adversarial=True,
+        after_rejection=after_rejection,
+    )
 
 
 def _review(
@@ -703,6 +717,7 @@ def _review(
     timeout: int | None,
     *,
     adversarial: bool,
+    after_rejection: bool = False,
 ) -> Review:
     with _log_dir(repo_dir, "ci-fix-review-log-") as log_dir:
         log_path = Path(log_dir) / "job.log"
@@ -729,6 +744,9 @@ def _review(
         checked = candidate.verification or context.verification
         verification = f"What code checked:\n{checked}\n" if checked else ""
         ported = candidate.action is CandidateAction.PORT
+        stance = _REVIEW_A_PORT if ported else _REVIEW_ADVERSARIALLY if adversarial else _REVIEW_A_PATCH
+        if adversarial and not ported and after_rejection:
+            stance += _REVIEW_AFTER_COUNTEREXAMPLE
         guide = ""
         # The repository's conventions are for a change written here, not for one it already merged.
         if context.guide and not ported:
@@ -745,7 +763,7 @@ def _review(
                 "The issue, as it was when a committer asked for a fix, and the output of the test the fix is "
                 "judged by are at:" if adversarial else "The exact failed-job log is at:"
             ),
-            stance=_REVIEW_A_PORT if ported else _REVIEW_ADVERSARIALLY if adversarial else _REVIEW_A_PATCH,
+            stance=stance,
             log_path=log_path, failing_check=candidate.failing_check,
             root_cause=candidate.root_cause or "(not given)", reasoning=candidate.reasoning or "(not given)",
             notes=candidate.validation or "(none)", patch=candidate.patch,
