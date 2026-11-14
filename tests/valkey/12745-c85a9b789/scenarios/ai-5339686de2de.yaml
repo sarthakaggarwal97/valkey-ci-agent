@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 62419c01db44..c85a9b7896b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5339686de2de
+seed: 303
+experiment:
+  id: proposed.slot-purge-replicated-effects
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.swapdb-field-consistency
+deployment:
+  modes: [standalone]
+metadata:
+  description: SWAPDB repeatedly swaps two populated databases (keys and expires)
+    and the data, sizes and TTLs follow the swap with no crash or leak
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: swap
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MSET, a1, v1, a2, v2, a3, v3, a4, v4, a5, v5, a6, v6, a7, v7, a8,
+        v8], expect: {equals: OK}}
+    - {command: [SET, ax, x, EX, 100000], expect: {equals: OK}}
+    - {command: [SET, ay, y, EX, 100000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 10}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [MSET, b1, w1, b2, w2, b3, w3], expect: {equals: OK}}
+    - {command: [SET, bx, z, EX, 200000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [GET, b1], expect: {equals: w1}}
+    - {command: [TTL, bx], expect: {min: 1}}
+    - {command: [EXISTS, a1], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 10}}
+    - {command: [GET, a1], expect: {equals: v1}}
+    - {command: [TTL, ax], expect: {min: 1}}
+    - {command: [EXISTS, b1], expect: {equals: 0}}
+    - {command: [SWAPDB, 1, 0], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, a1], expect: {equals: v1}}
+    - {command: [TTL, ax], expect: {min: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, b1], expect: {equals: w1}}
+    - {command: [SWAPDB, 0, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 7], expect: {equals: OK}}
+    - {command: [SWAPDB, 7, 15], expect: {equals: OK}}
+    - {command: [SWAPDB, 15, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 7], expect: {equals: OK}}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    - {command: [GET, a1], expect: {equals: v1}}
+    - {command: [SWAPDB, 7, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 99999], expect: {error: "out of range"}}
+    - {command: [SWAPDB, 0, 2147483647], expect: {error: "out of range"}}
+    - {command: [SWAPDB, -1, 0], expect: {error: "out of range"}}
+    - {command: [SWAPDB, "", 1], expect: {error: true}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 10}}
+    - {command: [GET, a8], expect: {equals: v8}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: swap}

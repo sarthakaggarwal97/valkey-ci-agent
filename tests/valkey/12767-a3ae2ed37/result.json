@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a3ae2ed37bee8158c25cc8707c5c2cdfc1e974d7",
+  "parent": "7410d985bca8a12d5f72a3bf4dde0eb0510b4446",
+  "pr": 12767,
+  "pr_repo": "redis/redis",
+  "subject": "Remove dead code around should_expand_db (#12767)",
+  "date": "2023-12-10",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3415,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor with no behavior change. In src/rdb.c it removes error-handling branches after dbExpand(..., try_expand=0) calls that were unreachable dead code: dbExpand only returns C_ERR on paths guarded by `try_expand && result == DICT_ERR`, and with try_expand=0 it always returns C_OK (dictExpand allocates via zmalloc, which aborts on OOM rather than failing). In src/db.c it only rewords two log message strings. No command reply, RDB loading outcome, replication, or persistence path can differ between the parent and the change, so there is nothing a scenario could observe."
+}

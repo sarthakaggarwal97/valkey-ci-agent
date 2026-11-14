@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.cli-ipv4-ipv6-options
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli -4/-6 DNS-preference options parse, are mutually exclusive,
+    appear in --help, and drive anetResolve's family preference and fallback in --cluster
+    add-node, compared against the parent build where -4/-6 are unrecognized
+components:
+- use: valkey.action.tools
+  id: cli-options
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-4, -p, $port, PING], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-6, -p, $port, PING], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-4, -6, -p, $port, PING], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Options -4 and -6 are mutually\
+            \ exclusive"}}}
+    - {tool: valkey-cli, args: [-4, -h, localhost, -p, $port, PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [--help], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "Prefer IPv4 over IPv6 on DNS lookup"}}}
+- use: valkey.action.tools
+  id: cli-cluster4
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [-4, --cluster, info, 'localhost:$port'], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "16384 slots"}}}
+    - {tool: valkey-cli, args: [-4, --cluster-yes, --cluster, add-node, 'localhost:$port',
+        '127.0.0.1:$port'], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "New node added correctly"}}}
+- use: valkey.action.tools
+  id: cli-cluster6
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [-6, --cluster, check, '127.0.0.1:$port'], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [-6, --cluster-yes, --cluster, add-node, 'localhost:$port',
+        '127.0.0.1:$port'], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "New node added correctly"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-options}
+- {evidence_id: valkey.tool.runs, source: cli-cluster4}
+- {evidence_id: valkey.tool.runs, source: cli-cluster6}

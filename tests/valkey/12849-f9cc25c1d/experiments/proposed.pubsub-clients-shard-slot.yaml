@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-clients-shard-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    pubsub_clients decrements when CLUSTER DELSLOTS drops the slot of a shard channel
+    and pubsubShardUnsubscribeAllClients moves its subscribers out of pubsub mode;
+    a redundant SUNSUBSCRIBE afterwards must not underflow the unsigned counter, and
+    a subscriber that still holds a regular channel must stay counted
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shard-slot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-require-full-coverage: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "pubsub_clients:0\r\
+          \n"}}
+    - {command: [SSUBSCRIBE, foo], connection: sub1}
+    - {command: [SSUBSCRIBE, foo], connection: sub2}
+    - {command: [SUBSCRIBE, other-chan], connection: sub2}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "pubsub_clients:2\r\
+          \n"}}
+    - {command: [CLUSTER, DELSLOTS, 12182], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "pubsub_clients:1\r\
+          \n"}}
+    - {command: [SUNSUBSCRIBE, foo], connection: sub1}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "pubsub_clients:1\r\
+          \n"}}
+    - {command: [RESET], connection: sub2}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "pubsub_clients:0\r\
+          \n"}}
+    - {command: [CLUSTER, ADDSLOTS, 12182], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shard-slot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shard-slot}

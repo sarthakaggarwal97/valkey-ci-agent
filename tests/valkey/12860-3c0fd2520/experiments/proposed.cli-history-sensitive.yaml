@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.cli-history-sensitive
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli's interactive repl classifies ACL DELUSER and CONFIG SET tls-key-file-pass
+    / tls-client-key-file-pass as sensitive (the history classifier at isSensitiveCommand),
+    driven by piping a script into a bare valkey-cli so repl() runs without a tty;
+    the same script makes the private server's slowlog show the server-side SENSITIVE_CONFIG
+    and ACL DELUSER redaction, which differs from the parent build.
+components:
+- use: valkey.action.tools
+  id: cli-repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: |
+        config set slowlog-log-slower-than 0
+        acl deluser fuzzer-ghost-user fuzzer-second-ghost
+        config set tls-key-file-pass hunter2-server-key-pass
+        config set tls-client-key-file-pass hunter3-client-key-pass
+        config set slowlog-log-slower-than -1
+        slowlog get -1
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "(redacted)"}
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: |
+        ACL DELUSER upper-case-ghost
+        2 config set tls-key-file-pass repeated-pass
+        CONFIG SET TLS-CLIENT-KEY-FILE-PASS mixed-case-pass
+        config set maxmemory 0 tls-key-file-pass later-pair-pass
+        ping
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: PONG}
+    - tool: valkey-cli
+      args: [-s, $socket]
+      stdin: |
+        acl deluser socket-ghost
+        config set tls-key-file-pass socket-key-pass
+        config set tls-client-key-file-pass socket-client-pass
+        ping
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: PONG}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-repl}

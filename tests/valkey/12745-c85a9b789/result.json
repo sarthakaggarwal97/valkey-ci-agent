@@ -1,0 +1,169 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c85a9b7896b9727709b71fed414bf8a117436d71",
+  "parent": "62419c01db4499e52ddcb689726cfa732a9736a6",
+  "pr": 12745,
+  "pr_repo": "redis/redis",
+  "subject": "Fix delKeysInSlot server events are not executed inside an execution unit (#12745)",
+  "date": "2023-12-11",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.247,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-44ee43be9dbb",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12745",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in RM_FreeCallReply",
+      "scenario": "ai-44ee43be9dbb",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates redis/redis#12745, since fixed",
+      "fingerprint": "8207ef5cbef718f2035c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-18470a0a32e8",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12745",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in RM_FreeCallReply",
+      "scenario": "ai-18470a0a32e8",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates redis/redis#12745, since fixed",
+      "fingerprint": "8207ef5cbef718f2035c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-a08244bc446e",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12745",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in RM_FreeCallReply",
+      "scenario": "ai-a08244bc446e",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates redis/redis#12745, since fixed",
+      "fingerprint": "8207ef5cbef718f2035c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-58a138c6099a",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12745",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in RM_FreeCallReply",
+      "scenario": "ai-58a138c6099a",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates redis/redis#12745, since fixed",
+      "fingerprint": "8207ef5cbef718f2035c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-1f8c2856553d",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after redis/redis#12745",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in RM_FreeCallReply",
+      "scenario": "ai-1f8c2856553d",
+      "seed": 202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates redis/redis#12745, since fixed",
+      "fingerprint": "8207ef5cbef718f2035c",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

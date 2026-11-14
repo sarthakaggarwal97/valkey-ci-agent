@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e95a5d483133..967fb3c6e812.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-53f4147253c6
+seed: 120102
+experiment:
+  id: proposed.rax-module-timer-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

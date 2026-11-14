@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.acl-config-slowlog-redaction
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    ACL GETUSER/DELUSER usernames and tls-key-file-pass / tls-client-key-file-pass
+    values are redacted in the slowlog; the parent build still records them in cleartext.
+    Error paths (DELUSER default, unknown and duplicate CONFIG SET parameters) must
+    still redact, and the redaction loop over many repeated DELUSER arguments must
+    not crash or change the command's reply.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: redact
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    server_config: {slowlog-max-len: 128, slowlog-log-slower-than: -1}
+    commands:
+    - {command: [ACL, SETUSER, hushuser, on, '>topsecretpw', '~*', '+@all'], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, 0], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, hushuser], expect: {error: false}}
+    - {command: [ACL, GETUSER, ""], expect: {equals: null}}
+    - {command: [ACL, DELUSER, nouser, nouser, nouser, nouser, nouser, nouser, nouser,
+        nouser], expect: {equals: 0}}
+    - {command: [ACL, DELUSER, hushuser, missing-user-1, missing-user-2], expect: {
+        equals: 1}}
+    - {command: [ACL, DELUSER, default, hushuser], expect: {error: "cannot be removed"}}
+    - {command: [CONFIG, SET, tls-key-file-pass, tls-pass-secret-A], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-client-key-file-pass, tls-pass-secret-B], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, tls-key-file-pass, leak-on-error-1, unknown-param-xyz,
+        v], expect: {error: true}}
+    - {command: [CONFIG, SET, tls-key-file-pass, leak-on-error-2, tls-key-file-pass,
+        leak-on-error-3], expect: {error: true}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, -1], expect: {equals: OK}}
+    - {command: [SLOWLOG, GET, -1], expect_difference: true, expect: {contains: "(redacted)"}}
+    - {command: [CONFIG, GET, tls-key-file-pass], expect: {contains: tls-pass-secret-A}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [redact.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redact}

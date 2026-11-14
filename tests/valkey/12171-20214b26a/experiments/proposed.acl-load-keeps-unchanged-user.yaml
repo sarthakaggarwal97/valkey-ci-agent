@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-keeps-unchanged-user
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD no longer disconnects an authenticated non-pubsub client whose
+    user is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    files:
+      users.acl: |
+        user default on nopass ~* &* +@all
+        user alice on >alicepass ~* &* +@all
+    commands:
+    - {connection: c1, command: [AUTH, alice, alicepass], expect: {equals: OK}}
+    - {connection: c1, command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {connection: c1, command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {connection: c1, command: [ACL, WHOAMI], expect_difference: true, expect: {
+        equals: alice}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclload}

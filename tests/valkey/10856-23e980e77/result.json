@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "23e980e77a8e3d9e1f1f0a108106f3648c7b674a",
+  "parent": "5dc631d880eea750d394651d70822ffabe13caae",
+  "pr": 10856,
+  "pr_repo": "redis/redis",
+  "subject": "Move cliVersion to cli_common and add --version support for redis-check-aof (#10856)",
+  "date": "2023-12-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 23,
+    "executed": 16,
+    "percent": 69,
+    "uncovered": [
+      "src/cli_common.c:422",
+      "src/redis-check-aof.c:519",
+      "src/redis-check-aof.c:520",
+      "src/redis-check-aof.c:521",
+      "src/redis-check-aof.c:522",
+      "src/redis-check-aof.c:523",
+      "src/redis-check-rdb.c:416"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.8589,
+  "findings": [],
+  "recorded": []
+}

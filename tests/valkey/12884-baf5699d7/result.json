@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "baf5699d77e8573ccf5a2be17ee1dad9f4afe44f",
+  "parent": "71f31da66f26f38f87dbc435779d3b53cbba8aec",
+  "pr": 12884,
+  "pr_repo": "redis/redis",
+  "subject": "fix comment of aeProcessEvents (#12884)",
+  "date": "2023-12-25",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.203,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a comment-only fix in src/ae.c, correcting the documentation of aeProcessEvents' event ordering. No executable code, behaviour, reply, or configuration changes, so there is nothing to test."
+}

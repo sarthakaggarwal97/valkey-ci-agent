@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.checkers-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-aof and valkey-check-rdb -v/--version print the server-style
+    version and exit 0; a plain AOF check still works
+components:
+- use: valkey.action.tools
+  id: checkers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      appendonly.aof: "*2\r\n$6\r\nSELECT\r\n$1\r\n0\r\n*3\r\n$3\r\nSET\r\n$1\r\n\
+        k\r\n$1\r\nv\r\n"
+    runs:
+    - {tool: valkey-check-aof, args: [-v], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "redis-check-aof v="}}}
+    - {tool: valkey-check-aof, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "redis-check-aof v="}}}
+    - {tool: valkey-check-rdb, args: [-v], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "redis-check-rdb v="}}}
+    - {tool: valkey-check-rdb, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "redis-check-rdb v="}}}
+    - {tool: valkey-check-aof, args: [appendonly.aof], expect: {exit: {equals: 0},
+        stdout: {contains: "is valid"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: checkers}

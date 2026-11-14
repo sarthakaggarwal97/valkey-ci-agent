@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fa751f9bef390a0e6de3687f61204d7a2df73d96",
+  "parent": "bef5715374a2fe9700b690f152f314d15aa6eacd",
+  "pr": 12828,
+  "pr_repo": "redis/redis",
+  "subject": "config.c: Avoid leaking file handle if file is 0 bytes (#12828)",
+  "date": "2023-12-27",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.663,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a resource-leak fix: rewriteConfigReadOldFile (reached only via CONFIG REWRITE) now fcloses the file handle when the config file is exactly 0 bytes instead of leaking one FILE* per call. It changes no reply, no persisted data, and no replication/failover/persistence behavior -- both builds return the same result and rewrite the same content. The leak is a single heap FILE structure per rewrite, not a crash or corruption, so liveness/ledger/deployment-state oracles cannot see it in a short run. More fundamentally the trigger is unreachable: the bug fires only when the server's own confi"
+}

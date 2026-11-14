@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "adbb534f034f94453c619b106029500823f34cf6",
+  "parent": "d8a21c5767b29d53e72c4f52c00c6bd15d8648ec",
+  "pr": 12862,
+  "pr_repo": "redis/redis",
+  "subject": "Always keep an in-memory history of all commands in redis-cli (#12862)",
+  "date": "2023-12-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2469,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only affects valkey-cli's interactive line-editing history, and every changed code path is gated on isatty(fileno(stdin)) being true (redis-cli.c:3366-3375 sets history/historyfile only on a real terminal; FAKETTY only fakes stdout's tty at redis-cli.c:9907). The fuzzer's valkey.action.tools feeds tools stdin over a pipe with no pseudo-terminal, so in any run it can produce, history stays 0, historyfile stays NULL, and linenoiseHistoryAdd/Save/Load are never called on either build: the two builds are byte-identical in output, exit status, and files written, making every expect_diffe"
+}

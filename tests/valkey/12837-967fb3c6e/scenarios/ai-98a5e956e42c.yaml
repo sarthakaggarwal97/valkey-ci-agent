@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e95a5d483133..967fb3c6e812.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-98a5e956e42c
+seed: 108
+experiment:
+  id: proposed.rax-stream-pel-resync
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7700
+  server_config:
+    repl-diskless-sync: 'no'
+    repl-diskless-load: disabled

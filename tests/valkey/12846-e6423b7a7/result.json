@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e6423b7a7e64af3d6622d8078415d81aace13074",
+  "parent": "a3ae2ed37bee8158c25cc8707c5c2cdfc1e974d7",
+  "pr": 12846,
+  "pr_repo": "redis/redis",
+  "subject": "Fix rehashingStarted miscalculating bucket_count in dict initialization (#12846)",
+  "date": "2023-12-10",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.5305,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-keeps-unchanged-pubsub
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD keeps a pub/sub client whose user's channel permissions are
+    unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    files:
+      users.acl: |
+        user default on nopass ~* &* +@all
+        user doug on >dougpass resetchannels &test +@all ~*
+    commands:
+    - {connection: sub, command: [AUTH, doug, dougpass], expect: {equals: OK}}
+    - {connection: sub, command: [SUBSCRIBE, test], expect: {exists: true}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [PUBLISH, test, hello], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclload}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 09e0d338f550..20214b26a413.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3de50f4530ba
+seed: 2
+experiment:
+  id: proposed.acl-load-keeps-unchanged-pubsub
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

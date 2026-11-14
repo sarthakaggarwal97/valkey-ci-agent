@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3c0fd2520128..e95a5d483133.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fa3b716690ed
+seed: 2
+experiment:
+  id: proposed.sort-cluster-by-get-slot
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

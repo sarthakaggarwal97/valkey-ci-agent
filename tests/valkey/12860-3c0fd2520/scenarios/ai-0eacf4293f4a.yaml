@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f9cc25c1dde7..3c0fd2520128.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0eacf4293f4a
+seed: 12860
+experiment:
+  id: proposed.cli-history-sensitive
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

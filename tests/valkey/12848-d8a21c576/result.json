@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d8a21c5767b29d53e72c4f52c00c6bd15d8648ec",
+  "parent": "967fb3c6e812ed3ff4259b499a4a8401fe37b0fd",
+  "pr": 12848,
+  "pr_repo": "redis/redis",
+  "subject": "Unified db rehash method for both standalone and cluster (#12848)",
+  "date": "2023-12-15",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 61,
+    "executed": 61,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.4808,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-63e0abc2375d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-ee5d2ffcec70",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-fc974525e3ec",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    }
+  ]
+}

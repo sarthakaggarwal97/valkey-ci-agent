@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.delkeysinslot-execution-unit
+deployment:
+  modes: [standalone]
+metadata:
+  description: Losing a slot that still holds keys runs delKeysInSlot with module
+    keyspace notifications inside one execution unit per key; the del and the module's
+    replicated counter reach the replica atomically and nothing crashes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: slotdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {lazyfree-lazy-server-del: {$ref: inputs.lazyfree}}
+    timeout_s: 15
+    commands:
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [SET, "a{4oi}", payload-a], expect: {equals: OK}}
+    - {command: [SET, "b{4oi}", payload-b], expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [READONLY], node: 2, expect: {equals: OK}}
+    - {command: [GET, "count_dels_{4oi}"], node: 2, wait_s: 30, expect: {equals: "1"}}
+    - {command: [DEL, "count_dels_{4oi}"], expect: {equals: 1}}
+    - {command: [keyspace.get_dels], expect: {equals: 1}}
+    - {command: [keyspace.get_dels], node: 2, wait_s: 30, expect: {equals: 1}}
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, SETSLOT, 16382, NODE, "<node.1.id>"], node: 1, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [keyspace.get_dels], wait_s: 30, expect: {equals: 2}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16382], wait_s: 30, expect: {equals: 0}}
+    - {command: [keyspace.get_dels], node: 2, wait_s: 30, expect: {equals: 2}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [slotdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotdel}

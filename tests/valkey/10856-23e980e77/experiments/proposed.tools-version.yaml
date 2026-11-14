@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.tools-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: redis-check-aof gains -v/--version, redis-check-rdb switches to the
+    shared getVersion format, and redis-cli/redis-benchmark version output is unchanged
+components:
+- use: valkey.action.tools
+  id: version
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      appendonly.aof: !!binary 'KjMNCiQzDQpTRVQNCiQzDQpmb28NCiQzDQpiYXINCg=='
+    ignore: [' \(git:[0-9a-f]+(-dirty)?\)']
+    timeout_s: 30
+    runs:
+    - {tool: valkey-check-aof, args: [-v], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: 'sha='}}}
+    - {tool: valkey-check-aof, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: 'sha='}}}
+    - {tool: valkey-check-rdb, args: [-v], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: 'sha='}}}
+    - {tool: valkey-check-rdb, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: 'sha='}}}
+    - {tool: valkey-check-aof, args: [appendonly.aof], expect: {exit: {equals: 0},
+        stdout: {contains: 'is valid'}}}
+    - {tool: valkey-check-aof, args: [], expect: {exit: {equals: 1}, stdout: {contains: 'Usage'}}}
+    - {tool: valkey-cli, args: [-v], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [--version], expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-v], expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [--version], expect: {exit: {equals: 0}}}
+- use: valkey.action.tools
+  id: shadow
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      -v: !!binary 'KjMNCiQzDQpTRVQNCiQzDQpmb28NCiQzDQpiYXINCg=='
+    ignore: [' \(git:[0-9a-f]+(-dirty)?\)']
+    timeout_s: 30
+    runs:
+    - {tool: valkey-check-aof, args: [-v], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: 'sha='}}}
+required_events: [version.completed, shadow.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: version}
+- {evidence_id: valkey.tool.runs, source: shadow}

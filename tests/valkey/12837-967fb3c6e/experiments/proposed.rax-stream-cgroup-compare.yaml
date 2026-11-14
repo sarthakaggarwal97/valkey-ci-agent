@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.rax-stream-cgroup-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Stream consumer-group PEL rax lookups (XACK, XCLAIM, XREADGROUP reassignment,
+    COPY, RDB reload) compared across the rax API change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    stream_node_max_entries: {type: integer, default: 100}
+components:
+- use: valkey.action.commands
+  id: streams
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {stream-node-max-entries: {$ref: inputs.stream_node_max_entries}}
+    timeout_s: 30
+    commands:
+    - {command: [XADD, s, "1-1", f, a], expect: {equals: "1-1"}}
+    - {command: [XADD, s, "1-2", f, b], expect: {equals: "1-2"}}
+    - {command: [XADD, s, "2-1", f, c], expect: {equals: "2-1"}}
+    - {command: [XGROUP, CREATE, s, g1, "0"], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g1, "0"], expect: {error: BUSYGROUP}}
+    - {command: [XGROUP, CREATE, s, g2, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, "2", STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, c2, COUNT, "1", STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XREADGROUP, GROUP, nosuchgroup, c1, COUNT, "1", STREAMS, s, ">"],
+      expect: {error: NOGROUP}}
+    - {command: [XPENDING, s, g1], expect: {exists: true}}
+    - {command: [XACK, s, g1, "1-1"], expect: {equals: 1}}
+    - {command: [XACK, s, g1, "1-1"], expect: {equals: 0}}
+    - {command: [XACK, s, g1, "99-1"], expect: {equals: 0}}
+    - {command: [XCLAIM, s, g1, c1, "0", "2-1", JUSTID], expect: {equals: ["2-1"]}}
+    - {command: [XCLAIM, s, g1, c1, "0", "5-5"], expect: {equals: []}}
+    - {command: [XADD, s, "3-1", f, d], expect: {equals: "3-1"}}
+    - {command: [XCLAIM, s, g1, c2, "0", "3-1", FORCE, JUSTID], expect: {equals: [
+          "3-1"]}}
+    - {command: [XREADGROUP, GROUP, g1, c9, COUNT, "5", STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XCLAIM, s, g1, c2, "0", "99-9", FORCE, JUSTID], expect: {equals: []}}
+    - {command: [XDEL, s, "2-1"], expect: {equals: 1}}
+    - {command: [XCLAIM, s, g1, c2, "0", "2-1", JUSTID], expect: {equals: []}}
+    - {command: [XPENDING, s, g1], expect: {exists: true}}
+    - {command: [XGROUP, CREATECONSUMER, s, g2, cX], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g2, cX], expect: {equals: 0}}
+    - {command: [XGROUP, DELCONSUMER, s, g2, cX], expect: {equals: 0}}
+    - {command: [XGROUP, DELCONSUMER, s, g2, missing], expect: {equals: 0}}
+    - {command: [COPY, s, s2], expect: {equals: 1}}
+    - {command: [XINFO, GROUPS, s2], expect: {exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, "10", STREAMS, s2, "0"], expect: {
+        exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [XPENDING, s, g1], expect: {exists: true}}
+    - {command: [XPENDING, s2, g1], expect: {exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, "10", STREAMS, s, "0"], expect: {
+        exists: true}}
+    - {command: [XACK, s, g1, "1-2"], expect: {equals: 1}}
+    - {command: [XCLAIM, s, g1, c1, "0", "3-1", JUSTID], expect: {equals: ["3-1"]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [streams.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: streams}

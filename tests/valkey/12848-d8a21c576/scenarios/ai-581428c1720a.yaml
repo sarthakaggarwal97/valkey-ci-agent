@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 967fb3c6e812..d8a21c5767b2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-581428c1720a
+seed: 102
+experiment:
+  id: proposed.flush-swap-under-rehash
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    hz: '500'
+    activerehashing: 'yes'
+    lazyfree-lazy-user-flush: 'yes'
+    lazyfree-lazy-expire: 'yes'

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bucket-count
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster bucket_count after a large first-init dict expansion, read
+    via MEMORY STATS overhead.hashtable.main, compared across builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    populate: {type: integer, default: 100000}
+components:
+- use: valkey.action.commands
+  id: buckets
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, {$ref: inputs.populate}], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - command: [EVAL, "local s=redis.call('MEMORY','STATS'); for i=1,#s,2 do if s[i]=='db.0'\
+          \ then local d=s[i+1]; for j=1,#d,2 do if d[j]=='overhead.hashtable.main'\
+          \ then return d[j+1] end end end end return -1", 0]
+      expect_difference: true
+      expect: {min: 200000}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [buckets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: buckets}

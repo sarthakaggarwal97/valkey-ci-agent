@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c0fd2520128a69a7d5826e18a2b834fb2bcef3d",
+  "parent": "f9cc25c1dde7da159819380d8397aef25797409b",
+  "pr": 12860,
+  "pr_repo": "redis/redis",
+  "subject": "Redact ACL username information and mark *-key-file-pass configs as sensitive (#12860)",
+  "date": "2023-12-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.1537,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e2ea5863094f",
+      "build": "unstable",
+      "seed": 128601,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e2ea5863094f",
+      "build": "unstable",
+      "seed": 128602,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e2ea5863094f",
+      "build": "unstable",
+      "seed": 128603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9ea47ddb0e59",
+      "build": "unstable",
+      "seed": 128603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9ea47ddb0e59",
+      "build": "unstable",
+      "seed": 128604,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9ea47ddb0e59",
+      "build": "unstable",
+      "seed": 128605,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.rax-stream-pel-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed a stream with a consumer group and pending entries, kill a replica
+    under writes, and let the full resync RDB transfer exercise the changed stream-PEL
+    raxFind in rdbLoadObject
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: seed-stream.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: seed-stream
+  depends_on: [writes, kill-replica]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [XADD, pelstream, "1-1", f, a], expect: {equals: "1-1"}}
+    - {command: [XADD, pelstream, "1-2", f, b], expect: {equals: "1-2"}}
+    - {command: [XADD, pelstream, "2-1", f, c], expect: {equals: "2-1"}}
+    - {command: [XGROUP, CREATE, pelstream, g, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, "2", STREAMS, pelstream, ">"], expect: {
+        exists: true}}
+    - {command: [XREADGROUP, GROUP, g, c2, COUNT, "1", STREAMS, pelstream, ">"], expect: {
+        exists: true}}
+    - {command: [XCLAIM, pelstream, g, c2, "0", "1-1", JUSTID], expect: {equals: [
+          "1-1"]}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [seed-stream]
+  config: {seconds: 6}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed-stream.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: seed-stream}

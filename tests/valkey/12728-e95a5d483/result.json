@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e95a5d483133366be4180792fae75f64601826b8",
+  "parent": "3c0fd2520128a69a7d5826e18a2b834fb2bcef3d",
+  "pr": 12728,
+  "pr_repo": "redis/redis",
+  "subject": "Support by/get options for sort(_ro) in cluster mode when pattern implies slot. (#12728)",
+  "date": "2023-12-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.7164,
+  "findings": [],
+  "recorded": []
+}

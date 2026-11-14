@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e6423b7a7e64..62419c01db44.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-80df7127eb83
+seed: 7001
+experiment:
+  id: proposed.swapdb-field-consistency
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

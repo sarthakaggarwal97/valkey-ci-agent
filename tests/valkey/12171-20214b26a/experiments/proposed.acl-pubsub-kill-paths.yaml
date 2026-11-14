@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.acl-pubsub-kill-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL SETUSER and ACL LOAD disconnect only the pub/sub clients whose
+    channels were revoked
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {aclfile: "users.acl"}
+    files:
+      users.acl: "user default on nopass ~* &* +@all\nuser keeper on >keeperpass resetchannels\
+        \ &keepchan +@all ~*\nuser victim on >victimpass resetchannels +@all ~*\n"
+    commands:
+    - {command: [ACL, SETUSER, subu, on, ">subpass", resetchannels, "&sc*", "&ss*",
+        "+@all", "~*"], expect: {equals: OK}}
+    - {connection: su_pat, command: [AUTH, subu, subpass], expect: {equals: OK}}
+    - {connection: su_pat, command: [PSUBSCRIBE, "sc*"]}
+    - {connection: su_shard, command: [AUTH, subu, subpass], expect: {equals: OK}}
+    - {connection: su_shard, command: [SSUBSCRIBE, ss1]}
+    - {connection: su_chan, command: [AUTH, subu, subpass], expect: {equals: OK}}
+    - {connection: su_chan, command: [SUBSCRIBE, sc1]}
+    - {command: [ACL, SETUSER, subu, "+@read"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, subu, resetchannels], expect: {equals: OK}}
+    - {connection: su_pat, read: true, expect: {exists: false}}
+    - {connection: su_shard, read: true, expect: {exists: false}}
+    - {connection: su_chan, read: true, expect: {exists: false}}
+    - {command: [ACL, SETUSER, victim, on, ">victimpass", resetchannels, "&victimchan",
+        "+@all", "~*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, ghost, on, ">ghostpass", "&*", "+@all", "~*"], expect: {
+        equals: OK}}
+    - {connection: keep, command: [AUTH, keeper, keeperpass], expect: {equals: OK}}
+    - {connection: keep, command: [SUBSCRIBE, keepchan]}
+    - {connection: vic, command: [AUTH, victim, victimpass], expect: {equals: OK}}
+    - {connection: vic, command: [SUBSCRIBE, victimchan]}
+    - {connection: ghost, command: [AUTH, ghost, ghostpass], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [PUBLISH, keepchan, hello], expect_difference: true, expect: {equals: 1}}
+    - {connection: vic, read: true, expect: {exists: false}}
+    - {connection: ghost, read: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

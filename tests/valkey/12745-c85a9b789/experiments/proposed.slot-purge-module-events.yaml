@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.slot-purge-module-events
+deployment:
+  modes: [standalone]
+metadata:
+  description: A node that loses a slot to a higher-epoch peer purges the slot's keys
+    through delKeysInSlot, each key's module keyspace notification and its replicated
+    effects inside one execution unit
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: purge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {lazyfree-lazy-server-del: {$ref: inputs.lazyfree}}
+    timeout_s: 15
+    commands:
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [DEL, "count_dels_{4oi}"], expect: {equals: 1}}
+    - {command: [keyspace.get_dels], expect: {equals: 1}}
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [SET, "count_dels_b{4oi}", 2], expect: {equals: OK}}
+    - {command: [SET, "other{4oi}", x], expect: {equals: OK}}
+    - {command: [SET, "other{4oi}_copy", y], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16382], expect: {equals: 4}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, SETSLOT, 16382, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16382], wait_s: 30, expect: {equals: 0}}
+    - {command: [keyspace.get_dels], wait_s: 10, expect: {equals: 3}}
+    - {command: [EXISTS, "other{4oi}_copy"], node: 1, expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [purge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: purge}

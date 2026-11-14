@@ -1,0 +1,43 @@
+id: proposed.flush-swap-under-rehash
+extends: [valkey.liveness]
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FLUSHALL (sync and ASYNC), FLUSHDB and SWAPDB issued while the main and expires
+    dicts are mid-rehash: the unified global rehashing list must drop the emptied
+    dicts' nodes (no dangling node for serverCron's incrementallyRehash to dereference),
+    survive SWAPDB moving rehashing dicts between DBs, and leave DBSIZE correct after
+    every flush and swap.
+components:
+- use: valkey.action.commands
+  id: rehash-churn
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,70000 do redis.call('set','k'..i,'v','px',3600000)\
+          \ end return 'OK'", "0"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 70000}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EVAL, "for i=1,70000 do redis.call('set','k'..i,'v','px',3600000)\
+          \ end return 'OK'", "0"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EVAL, "for i=1,70000 do redis.call('set','k'..i,'v','px',3600000)\
+          \ end return 'OK'", "0"], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 70000}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 70000}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EVAL, "for i=1,70000 do redis.call('set','k'..i,'v','px',3600000)\
+          \ end return 'OK'", "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DBSIZE], expect: {equals: 70000}}
+required_events: [rehash-churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rehash-churn}

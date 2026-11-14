@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.rax-module-serverinfo-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: RM_ServerInfoGetField, FieldC, Signed, Unsigned and Double rax lookups
+    (found and missing fields) compared across the rax API change and its parent,
+    each build loading its own infotest.so
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: infotest
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [info.gets, replication, role], expect: {equals: master}}
+    - {command: [info.getc, replication, role], expect: {equals: master}}
+    - {command: [info.geti, stats, expired_keys], expect: {equals: 0}}
+    - {command: [info.getu, stats, expired_keys], expect: {equals: 0}}
+    - {command: [info.getd, stats, expired_stale_perc], expect: {exists: true}}
+    - {command: [info.geti, infotest, infotest_global], expect: {equals: -2}}
+    - {command: [info.getu, infotest, infotest_uglobal], expect: {equals: -2}}
+    - {command: [info.gets, infotest_spanish, infotest_uno], expect: {equals: one}}
+    - {command: [info.geti, infotest_italian, infotest_due], expect: {equals: 2}}
+    - {command: [info.gets, stats, no_such_field], expect: {error: "not found"}}
+    - {command: [info.geti, stats, no_such_field], expect: {error: "not found"}}
+    - {command: [info.getu, stats, no_such_field], expect: {error: "not found"}}
+    - {command: [info.getd, stats, no_such_field], expect: {error: "not found"}}
+    - {command: [info.gets, badsection, role], expect: {error: "not found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [infotest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: infotest}

@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a3ae2ed37bee..e6423b7a7e64.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f1aa77376231
+seed: 101
+experiment:
+  id: proposed.cluster-bucket-count
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+    populate: 100000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "27a8e3b04e645e0c614c597668355e9bc945c408",
+  "parent": "baf5699d77e8573ccf5a2be17ee1dad9f4afe44f",
+  "pr": 12878,
+  "pr_repo": "redis/redis",
+  "subject": "fix missing comments (#12878)",
+  "date": "2023-12-25",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.213,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in src/quicklist.h, documenting the existing dont_compress bit-field and correcting the spare-bit count from 10 to 9. No code, struct layout, or behaviour changes, so there is nothing a scenario could exercise."
+}

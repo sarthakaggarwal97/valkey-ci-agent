@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09e0d338f5504f7ba82c9500effde0dc4e3f9509",
+  "parent": "23e980e77a8e3d9e1f1f0a108106f3648c7b674a",
+  "pr": 11315,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli adds -4 / -6 options to determine IPV4 / IPV6 priority in DNS lookup (#11315)",
+  "date": "2023-12-24",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 22,
+    "percent": 84,
+    "uncovered": [
+      "src/redis-cli.c:7087",
+      "src/redis-cli.c:7088",
+      "src/redis-cli.c:7089",
+      "src/redis-cli.c:7090"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7625,
+  "findings": [],
+  "recorded": []
+}

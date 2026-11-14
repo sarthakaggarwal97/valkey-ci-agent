@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "71f31da66f26f38f87dbc435779d3b53cbba8aec",
+  "parent": "20214b26a4136836904e9231ac23508f15fca3b8",
+  "pr": 12885,
+  "pr_repo": "redis/redis",
+  "subject": "Add restart option to create-cluster script (#12885)",
+  "date": "2023-12-25",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2199,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a 'restart' option to utils/create-cluster/create-cluster, a developer convenience shell script for spinning up local test clusters, and updates its usage text. No server code, command, tool binary (valkey-cli, valkey-benchmark, valkey-check-rdb/aof), replication, persistence, or cluster-bus behaviour is touched; the script is not shipped in the builds the fuzzer runs, so no experiment or scenario can reach it. No test is needed."
+}

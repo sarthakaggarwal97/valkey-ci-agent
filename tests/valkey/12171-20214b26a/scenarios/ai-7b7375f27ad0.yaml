@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 09e0d338f550..20214b26a413.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7b7375f27ad0
+seed: 4
+experiment:
+  id: proposed.acl-load-selective-disconnect
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7300

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c85a9b7896b9..f9cc25c1dde7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-35c32fa8d3d5
+seed: 14
+experiment:
+  id: proposed.pubsub-clients-shard-slot
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

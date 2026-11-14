@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7410d985bca8a12d5f72a3bf4dde0eb0510b4446",
+  "parent": "15b993f1ef6ec436c1c2f411232b27d150a6c168",
+  "pr": 12784,
+  "pr_repo": "redis/redis",
+  "subject": "Remove overhead.hashtable.slot-to-keys from memory-stats reply_schema (#12784)",
+  "date": "2023-12-10",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3159,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes a stale entry (overhead.hashtable.slot-to-keys) from memory-stats.json's reply_schema and a blank line in object.c. No code in the checkout emits that field (grep for slot-to-keys finds nothing in src/), so the MEMORY STATS reply is byte-identical on both builds; reply schemas are doc/test metadata not compiled into normal builds. This is a documentation/schema cleanup with no behavior change, so no scenario can observe a difference."
+}

@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.rax-module-timer-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module timer API (RM_CreateTimer, RM_StopTimer, RM_GetTimerInfo) over
+    the refactored raxFind, compared across builds; an EVAL script captures the nondeterministic
+    timer id to drive the found-timer paths, and a tight creation loop drives the
+    expiretime-collision probe
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [test.createtimer, 100, fired], compare: skip, expect: {min: 1}}
+    - {command: [GET, fired], wait_s: 15, expect: {equals: "1"}}
+    - {command: [test.gettimer, 0], expect: {exists: false}}
+    - {command: [test.stoptimer, 0], expect: {equals: 0}}
+    - {command: [test.stoptimer, -1], expect: {equals: 0}}
+    - {command: [test.stoptimer, 9223372036854775807], expect: {equals: 0}}
+    - command:
+      - EVAL
+      - "local id = redis.call('test.createtimer', 60000, KEYS[1]) local info = redis.call('test.gettimer',\
+        \ id) local s1 = redis.call('test.stoptimer', id) local s2 = redis.call('test.stoptimer',\
+        \ id) local g2 = redis.call('test.gettimer', id) local r = {info[1], s1, s2}\
+        \ if g2 == false then r[4] = 'gone' end return r"
+      - "1"
+      - tkey
+      expect: {equals: [tkey, 1, 0, gone]}
+    - command:
+      - EVAL
+      - "local ids = {} for i=1,400 do ids[i] = redis.call('test.createtimer', 60000,\
+        \ 'ck') end local stopped = 0 for i=1,400 do stopped = stopped + redis.call('test.stoptimer',\
+        \ ids[i]) end return stopped"
+      - "0"
+      expect: {equals: 400}
+    - {command: [EXISTS, tkey, ck], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [timers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timers}

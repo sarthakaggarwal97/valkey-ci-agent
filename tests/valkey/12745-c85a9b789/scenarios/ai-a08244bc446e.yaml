@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 62419c01db44..c85a9b7896b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a08244bc446e
+seed: 3
+experiment:
+  id: proposed.delkeysinslot-execution-unit
+  inputs:
+    resp: 2
+    lazyfree: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7200

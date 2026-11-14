@@ -1,0 +1,100 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "967fb3c6e812ed3ff4259b499a4a8401fe37b0fd",
+  "parent": "e95a5d483133366be4180792fae75f64601826b8",
+  "pr": 12837,
+  "pr_repo": "redis/redis",
+  "subject": "Extend rax usage by allowing any long long value (#12837)",
+  "date": "2023-12-14",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 0,
+  "hunted": 11,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 72,
+    "executed": 50,
+    "percent": 69,
+    "uncovered": [
+      "src/module.c:9133",
+      "src/module.c:9173",
+      "src/module.c:9174",
+      "src/module.c:9175",
+      "src/module.c:9176",
+      "src/module.c:9192",
+      "src/module.c:9193",
+      "src/module.c:9194",
+      "src/module.c:9195",
+      "src/module.c:9963",
+      "src/module.c:9964",
+      "src/module.c:9965",
+      "src/module.c:9966",
+      "src/tracking.c:76",
+      "src/tracking.c:77",
+      "src/tracking.c:78",
+      "src/tracking.c:162",
+      "src/tracking.c:168",
+      "src/tracking.c:250",
+      "src/tracking.c:256",
+      "src/tracking.c:384",
+      "src/tracking.c:385"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.129,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6b3ba6345fab",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6b3ba6345fab",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6b3ba6345fab",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ee0e1b6b3894",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ee0e1b6b3894",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ee0e1b6b3894",
+      "build": "unstable",
+      "seed": 108,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-46856a616d6c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'timers' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (test.createtimer 100 fired), 1 (GET fired), 2 (test.gettimer 0), 3 (test.stoptimer 0), 4 (test.stoptimer -1), 5 (test.stoptimer 9223372"
+    },
+    {
+      "scenario": "ai-53f4147253c6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'timers' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (test.createtimer 100 fired), 1 (GET fired), 2 (test.gettimer 0), 3 (test.stoptimer 0), 4 (test.stoptimer -1), 5 (test.stoptimer 9223372"
+    }
+  ]
+}

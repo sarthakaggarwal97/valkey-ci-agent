@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "62419c01db4499e52ddcb689726cfa732a9736a6",
+  "parent": "e6423b7a7e64af3d6622d8078415d81aace13074",
+  "pr": 12763,
+  "pr_repo": "redis/redis",
+  "subject": "Handle missing fields in dbSwapDatabases and swapMainDbWithTempDb (#12763)",
+  "date": "2023-12-10",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.2846,
+  "findings": [],
+  "recorded": []
+}

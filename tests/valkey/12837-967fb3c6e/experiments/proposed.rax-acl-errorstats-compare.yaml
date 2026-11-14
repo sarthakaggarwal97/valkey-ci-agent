@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.rax-acl-errorstats-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL Users rax, command-id rax, errorstats rax and clients_index rax
+    lookups compared across the rax API change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, alice, on, ">pw1", "~key:*", "+get", "+set"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, alice, "+del", "+del", "+del"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, alice], expect: {exists: true}}
+    - {command: [ACL, GETUSER, ghost]}
+    - {command: [ACL, DELUSER, alice], expect: {equals: 1}}
+    - {command: [ACL, DELUSER, alice], expect: {equals: 0}}
+    - {command: [ACL, SETUSER, alice, on, ">pw2"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, "", on], expect: {exists: true}}
+    - {command: [ACL, GETUSER, ""], expect: {exists: true}}
+    - {command: [ACL, SETUSER, bob, "+nosuchcommand"], expect: {error: true}}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    - {command: [ACL, SETUSER, carol, on, ">secret", "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, carol, wrong], expect: {error: true}}
+    - {command: [AUTH, carol, secret], expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect: {equals: carol}}
+    - {command: [GET, "key:1"], expect: {error: true}}
+    - {command: [AUTH, missinguser, pw], expect: {error: true}}
+    - {command: [AUTH, default, anything], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [GET], expect: {error: true}}
+    - {command: [GET], expect: {error: true}}
+    - {command: [SET, sk, v], expect: {equals: OK}}
+    - {command: [LPUSH, sk, x], expect: {error: WRONGTYPE}}
+    - {command: [INFO, errorstats], expect: {contains: "errorstat_ERR:count=3"}}
+    - {command: [INFO, errorstats], expect: {contains: "errorstat_WRONGTYPE:count=1"}}
+    - {command: [CLIENT, KILL, ID, "4294967296"], expect: {equals: 0}}
+    - {command: [CLIENT, KILL, ID, "9223372036854775807"], expect: {equals: 0}}
+    - {command: [CLIENT, LIST, ID, "123456789"]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

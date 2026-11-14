@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "20214b26a4136836904e9231ac23508f15fca3b8",
+  "parent": "09e0d338f5504f7ba82c9500effde0dc4e3f9509",
+  "pr": 12171,
+  "pr_repo": "redis/redis",
+  "subject": "Don't disconnect all clients in ACL LOAD (#12171)",
+  "date": "2023-12-24",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 67,
+    "executed": 63,
+    "percent": 94,
+    "uncovered": [
+      "src/acl.c:1963",
+      "src/acl.c:2026",
+      "src/acl.c:2486",
+      "src/adlist.c:80"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 11.7381,
+  "findings": [],
+  "recorded": []
+}

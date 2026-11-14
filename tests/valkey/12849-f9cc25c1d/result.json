@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f9cc25c1dde7da159819380d8397aef25797409b",
+  "parent": "c85a9b7896b9727709b71fed414bf8a117436d71",
+  "pr": 12849,
+  "pr_repo": "redis/redis",
+  "subject": "Add metric to INFO CLIENTS: pubsub_clients. (#12849)",
+  "date": "2023-12-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 24,
+    "executed": 17,
+    "percent": 70,
+    "uncovered": [
+      "src/pubsub.c:576",
+      "src/pubsub.c:577",
+      "src/pubsub.c:598",
+      "src/pubsub.c:611",
+      "src/pubsub.c:612",
+      "src/pubsub.c:760",
+      "src/pubsub.c:761"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.9607,
+  "findings": [],
+  "recorded": []
+}

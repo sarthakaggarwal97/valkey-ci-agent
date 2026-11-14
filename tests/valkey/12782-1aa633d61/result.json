@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1aa633d61bc22ad5f8865977ac9e5ec581c6f3c2",
+  "parent": "27a8e3b04e645e0c614c597668355e9bc945c408",
+  "pr": 12782,
+  "pr_repo": "redis/redis",
+  "subject": "Implement TCP Keep-Alives across most Unix-like systems (#12782)",
+  "date": "2023-12-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5048,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites anetKeepAlive in src/anet.c for cross-platform portability (Solaris, macOS, BSDs, AIX). On Linux, where the fuzzer's servers run, the preprocessor selects code identical to the old #ifdef __linux__ branch: the same setsockopt calls (SO_KEEPALIVE, TCP_KEEPIDLE=interval, TCP_KEEPINTVL=interval/3 min 1, TCP_KEEPCNT=3) with the same error handling, so the compiled binary's behaviour is unchanged. All new code paths are compiled out on Linux and unreachable by any scenario. Keep-alive also changes no command reply, config, replication or persistence behaviour; its only effe"
+}

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-selective-disconnect
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD drops a client of a removed user while keeping a subscriber
+    of an unchanged user
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    files:
+      users.acl: |
+        user default on nopass ~* &* +@all
+        user alice on >alicepass resetchannels &achan +@all ~*
+    commands:
+    - {command: [ACL, SETUSER, doug, on, ">dougpass", resetchannels, "&dchan", "+@all",
+        "~*"], expect: {equals: OK}}
+    - {connection: a, command: [AUTH, alice, alicepass], expect: {equals: OK}}
+    - {connection: a, command: [SUBSCRIBE, achan], expect: {exists: true}}
+    - {connection: d, command: [AUTH, doug, dougpass], expect: {equals: OK}}
+    - {connection: d, command: [SUBSCRIBE, dchan], expect: {exists: true}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [PUBLISH, achan, m1], expect_difference: true, expect: {equals: 1}}
+    - {command: [PUBLISH, dchan, m2], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclload}

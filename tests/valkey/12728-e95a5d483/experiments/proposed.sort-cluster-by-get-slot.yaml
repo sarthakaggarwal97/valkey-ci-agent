@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.sort-cluster-by-get-slot
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: SORT/SORT_RO BY and GET patterns in cluster mode are allowed when a
+    hash tag implies the sort key's slot, denied otherwise, compared across builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortseq
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [RPUSH, "{a}mylist", "3", "1", "2"], expect: {equals: 3}}
+    - {command: [SET, "{a}w_1", "10"], expect: {equals: OK}}
+    - {command: [SET, "{a}w_2", "20"], expect: {equals: OK}}
+    - {command: [SET, "{a}w_3", "30"], expect: {equals: OK}}
+    - {command: [SET, "{a}d_1", v1], expect: {equals: OK}}
+    - {command: [SET, "{a}d_2", v2], expect: {equals: OK}}
+    - {command: [SET, "{a}d_3", v3], expect: {equals: OK}}
+    - {command: [SORT, "{a}mylist", BY, "{a}w_*"], expect_difference: true, expect: {
+        equals: ["1", "2", "3"]}}
+    - {command: [SORT, "{a}mylist", BY, "w_*"], expect_difference: true, expect: {
+        error: "different slots"}}
+    - {command: [SORT, "{a}mylist", BY, "{b}w_*"], expect_difference: true, expect: {
+        error: "different slots"}}
+    - {command: [SORT, "{a}mylist", BY, "{a}w_*", GET, "{a}d_*"], expect_difference: true,
+      expect: {equals: [v1, v2, v3]}}
+    - {command: [SORT, "{a}mylist", BY, "{a}w_*", GET, "d_*"], expect_difference: true,
+      expect: {error: "different slots"}}
+    - {command: [SORT_RO, "{a}mylist", BY, "{a}w_*"], expect_difference: true, expect: {
+        equals: ["1", "2", "3"]}}
+    - {command: [SORT_RO, "{a}mylist", BY, "w_*"], expect_difference: true, expect: {
+        error: "different slots"}}
+    - {command: [SORT, "{a}mylist", BY, "{a}w_*", STORE, "{a}dest"], expect_difference: true,
+      expect: {equals: 3}}
+    - {command: [LRANGE, "{a}dest", "0", "-1"], expect_difference: true, expect: {
+        equals: ["1", "2", "3"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortseq}

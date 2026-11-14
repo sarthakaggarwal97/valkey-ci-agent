@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.slot-purge-replicated-effects
+deployment:
+  modes: [standalone]
+metadata:
+  description: The module side effects delKeysInSlot propagates from inside its execution
+    unit reach a replica of the purging node intact
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: purge-repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [DEL, "count_dels_{4oi}"], expect: {equals: 1}}
+    - {command: [keyspace.get_dels], expect: {equals: 1}}
+    - {command: [keyspace.get_dels], node: 2, wait_s: 10, expect: {equals: 1}}
+    - {command: [SET, "count_dels_{4oi}", 1], expect: {equals: OK}}
+    - {command: [SET, "count_dels_b{4oi}", 2], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, SETSLOT, 16382, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16382], wait_s: 30, expect: {equals: 0}}
+    - {command: [keyspace.get_dels], wait_s: 10, expect: {equals: 3}}
+    - {command: [keyspace.get_dels], node: 2, wait_s: 30, expect: {equals: 3}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [purge-repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: purge-repl}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T18:13+00:00.
+Updated 2026-11-14T18:15+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2394 | 146 | #12804 (2023-12-27) | 249 | 237.9 |
+| valkey-io/valkey | 2416 | 124 | #12847 (2023-12-08) | 271 | 241.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
 | valkey-io/valkey-search | 691 | 0 | f8106e72e984 (2024-11-27) | 10 | 33.3 |
@@ -13,28 +13,28 @@ Updated 2026-11-14T18:13+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-14T16:08:06+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43599271117): 20 merge(s) tested, 5 without a code change.
+[2026-11-14T18:15:49+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43613936860): 20 merge(s) tested, 2 without a code change.
 
-- [redis/redis#12950](https://github.com/redis/redis/pull/12950) ([tests](tests/valkey/12950-f81c3fd89/)): Optimize dictTypeResizeAllowed to avoid mistaken OOM judgement. (#12950): declined: This is a memory-management micro-optimization with no observable behavioral change. dictTypeResizeAllowed now receives the resize target as a parameter; the expand call site passes the identical value as before (d->ht_used[0] + 1), and only the shrink call site changes (d->ht_used[0] inst
-- [redis/redis#12906](https://github.com/redis/redis/pull/12906) ([tests](tests/valkey/12906-bb2b6e292/)): fix scripts access wrong slot if they disagree with pre-declared keys (#12906): 4 of 4 test(s) reached the change, coverage 72%
-- [redis/redis#12943](https://github.com/redis/redis/pull/12943) ([tests](tests/valkey/12943-284ef21ea/)): Fix fd check in memtest_test_linux_anonymous_maps (#12943): declined: The change fixes an error-path fd check (-1 vs 0) in memtest_test_linux_anonymous_maps, which runs only inside the crash report handler (doFastMemoryTest after SIGSEGV/SIGBUS) and only when open() on the logfile fails at crash time. No command, replication, persistence or tool path reaches
-- [redis/redis#12897](https://github.com/redis/redis/pull/12897) ([tests](tests/valkey/12897-87786342a/)): Correct bytes_per_key computing. (#12897): 1 of 1 test(s) reached the change, coverage 100%
-- [redis/redis#12930](https://github.com/redis/redis/pull/12930) ([tests](tests/valkey/12930-964f4a457/)): Avoid double free of cluster link (#12930): 3 of 3 test(s) reached the change, coverage 100%; crash, fixed by redis/redis#12930 (recorded)
-- [redis/redis#12824](https://github.com/redis/redis/pull/12824) ([tests](tests/valkey/12824-b3aaa0a13/)): When one shard, sole primary node marks potentially failed replica as FAIL instead of PFAIL (#12824): 0 of 2 test(s) reached the change, coverage 75%
-- [redis/redis#12924](https://github.com/redis/redis/pull/12924) ([tests](tests/valkey/12924-f7b1d0287/)): Fix possible corruption in sdsResize (CVE-2023-41056) (#12924): declined: no proposed test validated
-- [redis/redis#12919](https://github.com/redis/redis/pull/12919) ([tests](tests/valkey/12919-14e4a9835/)): Fix minor fd leak in rdbSaveToSlavesSockets (#12919): declined: The change adds one close(server.rdb_child_exit_pipe) solely in the parent's fork-failure branch of rdbSaveToSlavesSockets (rdb.c:3639, the childpid == -1 cleanup). The successful diskless-replication path already manages that fd correctly (kept open, then closed by backgroundSaveDoneHandl
-- [redis/redis#12914](https://github.com/redis/redis/pull/12914) ([tests](tests/valkey/12914-50b8b9976/)): Re-indent code and reduce code being complied on Solaris for anetKeepAlive (#12914): declined: The change is a re-indentation and comment reformat of src/anet.c plus a restructuring of the Solaris-only (#ifdef __sun) section of anetKeepAlive from an '#if ... return' followed by always-compiled fallback code into an #if/#else/#endif. The previously always-compiled fallback was unreac
-- [redis/redis#12838](https://github.com/redis/redis/pull/12838) ([tests](tests/valkey/12838-c452e414a/)): Optimize performance when many clients [p|s]unsubscribe simultaneously (#12838): 0 of 7 test(s) reached the change, coverage 95%; crash, introduced and since fixed (recorded); check, not reproduced (recorded)
-- [redis/redis#12917](https://github.com/redis/redis/pull/12917) ([tests](tests/valkey/12917-4730563e9/)): Change destination key's key-spec flag from RW to OW for SINTERSTORE command (#12917): 2 of 2 test(s) reached the change
-- [redis/redis#12832](https://github.com/redis/redis/pull/12832) ([tests](tests/valkey/12832-5b0c6a825/)): Fix CLUSTER SHARDS crash in 7.0/7.2 mixed clusters where shard ids are not sync (#12832): 0 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#12905](https://github.com/redis/redis/pull/12905) ([tests](tests/valkey/12905-ca1f67af8/)): Make RM_Yield thread-safe (#12905): 0 of 4 test(s) reached the change, coverage 90%
-- [redis/redis#12805](https://github.com/redis/redis/pull/12805) ([tests](tests/valkey/12805-4cae66f5e/)): Use shard-id of the master if the replica does not support shard-id (#12805): declined: The only behavioral addition fires exclusively when a gossiping peer omits the shard-id ping extension, i.e. a pre-7.2 node that does not support shard-id. Both builds the fuzzer runs (the change at 4cae66f and its parent at 38f0234) emit the shard-id extension unconditionally (cluster_leg
-- [redis/redis#12857](https://github.com/redis/redis/pull/12857) ([tests](tests/valkey/12857-068051e37/)): Handle recursive serverAsserts and provide more information for recursive segfaults (#12857): declined: The change only affects crash-report/diagnostic output in src/debug.c: it labels recursive asserts/panics, avoids a duplicate printCrashReport, and prints a reduced stack trace instead of aborting on a recursive segfault. This code runs only after a crash or assertion has already happened 
-- [redis/redis#12178](https://github.com/redis/redis/pull/12178) ([tests](tests/valkey/12178-c3f8b542e/)): Manage number of new connections per cycle (#12178): 2 of 5 test(s) reached the change, coverage 100%
-- [redis/redis#12895](https://github.com/redis/redis/pull/12895) ([tests](tests/valkey/12895-9d0158bf8/)): Reorder signalModifiedKey in xaddCommand. (#12895): 1 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#12627](https://github.com/redis/redis/pull/12627) ([tests](tests/valkey/12627-12b611b37/)): WAITAOF: Try to wake blocked clients ASAP in the next beforeSleep (#12627): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12896](https://github.com/redis/redis/pull/12896) ([tests](tests/valkey/12896-99c468c38/)): Fix crash caused by pubsubShardUnsubscribeAllChannelsInSlot not deleting the client (#12896): 2 of 3 test(s) reached the change, coverage 100%; crash, fixed by redis/redis#12896 (recorded)
-- [redis/redis#12892](https://github.com/redis/redis/pull/12892) ([tests](tests/valkey/12892-5b1fe925f/)): Adjust redis-cli --cluster create arity from -2 to -1 (#12892): 1 of 1 test(s) reached the change
+- [redis/redis#12804](https://github.com/redis/redis/pull/12804) ([tests](tests/valkey/12804-852795959/)): Replace slots_to_channels radix tree with slot specific dictionaries for shard channels. (#12804): 0 of 4 test(s) reached the change, coverage 44%
+- [redis/redis#12828](https://github.com/redis/redis/pull/12828) ([tests](tests/valkey/12828-fa751f9be/)): config.c: Avoid leaking file handle if file is 0 bytes (#12828): declined: This is a resource-leak fix: rewriteConfigReadOldFile (reached only via CONFIG REWRITE) now fcloses the file handle when the config file is exactly 0 bytes instead of leaking one FILE* per call. It changes no reply, no persisted data, and no replication/failover/persistence behavior -- bot
+- [redis/redis#12782](https://github.com/redis/redis/pull/12782) ([tests](tests/valkey/12782-1aa633d61/)): Implement TCP Keep-Alives across most Unix-like systems (#12782): declined: The change only rewrites anetKeepAlive in src/anet.c for cross-platform portability (Solaris, macOS, BSDs, AIX). On Linux, where the fuzzer's servers run, the preprocessor selects code identical to the old #ifdef __linux__ branch: the same setsockopt calls (SO_KEEPALIVE, TCP_KEEPIDLE=inter
+- [redis/redis#12878](https://github.com/redis/redis/pull/12878) ([tests](tests/valkey/12878-27a8e3b04/)): fix missing comments (#12878): declined: The change edits only a comment in src/quicklist.h, documenting the existing dont_compress bit-field and correcting the spare-bit count from 10 to 9. No code, struct layout, or behaviour changes, so there is nothing a scenario could exercise.
+- [redis/redis#12884](https://github.com/redis/redis/pull/12884) ([tests](tests/valkey/12884-baf5699d7/)): fix comment of aeProcessEvents (#12884): declined: The change is a comment-only fix in src/ae.c, correcting the documentation of aeProcessEvents' event ordering. No executable code, behaviour, reply, or configuration changes, so there is nothing to test.
+- [redis/redis#12885](https://github.com/redis/redis/pull/12885) ([tests](tests/valkey/12885-71f31da66/)): Add restart option to create-cluster script (#12885): declined: The change adds a 'restart' option to utils/create-cluster/create-cluster, a developer convenience shell script for spinning up local test clusters, and updates its usage text. No server code, command, tool binary (valkey-cli, valkey-benchmark, valkey-check-rdb/aof), replication, persisten
+- [redis/redis#12171](https://github.com/redis/redis/pull/12171) ([tests](tests/valkey/12171-20214b26a/)): Don't disconnect all clients in ACL LOAD (#12171): 7 of 7 test(s) reached the change, coverage 94%
+- [redis/redis#11315](https://github.com/redis/redis/pull/11315) ([tests](tests/valkey/11315-09e0d338f/)): redis-cli adds -4 / -6 options to determine IPV4 / IPV6 priority in DNS lookup (#11315): 1 of 1 test(s) reached the change, coverage 84%
+- [redis/redis#10856](https://github.com/redis/redis/pull/10856) ([tests](tests/valkey/10856-23e980e77/)): Move cliVersion to cli_common and add --version support for redis-check-aof (#10856): 2 of 2 test(s) reached the change, coverage 69%
+- [redis/redis#12862](https://github.com/redis/redis/pull/12862) ([tests](tests/valkey/12862-adbb534f0/)): Always keep an in-memory history of all commands in redis-cli (#12862): declined: The change only affects valkey-cli's interactive line-editing history, and every changed code path is gated on isatty(fileno(stdin)) being true (redis-cli.c:3366-3375 sets history/historyfile only on a real terminal; FAKETTY only fakes stdout's tty at redis-cli.c:9907). The fuzzer's valkey
+- [redis/redis#12848](https://github.com/redis/redis/pull/12848) ([tests](tests/valkey/12848-d8a21c576/)): Unified db rehash method for both standalone and cluster (#12848): 0 of 7 test(s) reached the change, coverage 100%
+- [redis/redis#12837](https://github.com/redis/redis/pull/12837) ([tests](tests/valkey/12837-967fb3c6e/)): Extend rax usage by allowing any long long value (#12837): 0 of 11 test(s) reached the change, coverage 69%
+- [redis/redis#12728](https://github.com/redis/redis/pull/12728) ([tests](tests/valkey/12728-e95a5d483/)): Support by/get options for sort(_ro) in cluster mode when pattern implies slot. (#12728): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12860](https://github.com/redis/redis/pull/12860) ([tests](tests/valkey/12860-3c0fd2520/)): Redact ACL username information and mark *-key-file-pass configs as sensitive (#12860): 3 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12849](https://github.com/redis/redis/pull/12849) ([tests](tests/valkey/12849-f9cc25c1d/)): Add metric to INFO CLIENTS: pubsub_clients. (#12849): 2 of 2 test(s) reached the change, coverage 70%
+- [redis/redis#12745](https://github.com/redis/redis/pull/12745) ([tests](tests/valkey/12745-c85a9b789/)): Fix delKeysInSlot server events are not executed inside an execution unit (#12745): 0 of 6 test(s) reached the change, coverage 100%; [crash, appeared after redis/redis#12745](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162); crash, predates redis/redis#12745, since fixed (recorded)
+- [redis/redis#12763](https://github.com/redis/redis/pull/12763) ([tests](tests/valkey/12763-62419c01d/)): Handle missing fields in dbSwapDatabases and swapMainDbWithTempDb (#12763): 0 of 6 test(s) reached the change, coverage 100%
+- [redis/redis#12846](https://github.com/redis/redis/pull/12846) ([tests](tests/valkey/12846-e6423b7a7/)): Fix rehashingStarted miscalculating bucket_count in dict initialization (#12846): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12767](https://github.com/redis/redis/pull/12767) ([tests](tests/valkey/12767-a3ae2ed37/)): Remove dead code around should_expand_db (#12767): declined: The change is a pure refactor with no behavior change. In src/rdb.c it removes error-handling branches after dbExpand(..., try_expand=0) calls that were unreachable dead code: dbExpand only returns C_ERR on paths guarded by `try_expand && result == DICT_ERR`, and with try_expand=0 it alway
+- [redis/redis#12784](https://github.com/redis/redis/pull/12784) ([tests](tests/valkey/12784-7410d985b/)): Remove overhead.hashtable.slot-to-keys from memory-stats reply_schema (#12784): declined: The change only removes a stale entry (overhead.hashtable.slot-to-keys) from memory-stats.json's reply_schema and a blank line in object.c. No code in the checkout emits that field (grep for slot-to-keys finds nothing in src/), so the MEMORY STATS reply is byte-identical on both builds; re
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-14T18:13+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 948 of 1514 tested (63%)
-- Changed-line coverage: median 100% of 996 merge(s) measured, 76 under 50%
-- Recall: 249 parents flagged of 393 fix merges
-- Claude: $701.16 in the last 24 hours, $6237.33 in the last 7 days, $11103.92 in all
-- Issues filed: 79
+- Merges whose tests reached the change: 955 of 1526 tested (63%)
+- Changed-line coverage: median 100% of 1008 merge(s) measured, 77 under 50%
+- Recall: 251 parents flagged of 395 fix merges
+- Claude: $799.88 in the last 24 hours, $6336.04 in the last 7 days, $11202.64 in all
+- Issues filed: 80
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -87,6 +87,7 @@ Updated 2026-11-14T18:13+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/153
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/156
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/157
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/162
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
