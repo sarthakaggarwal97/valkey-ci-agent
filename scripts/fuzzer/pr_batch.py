@@ -184,7 +184,18 @@ sudo dpkg -i "${deb}"
         # references sd_* nothing resolves), though the module, a shared library, links fine: a build.sh that
         # still fails falls back to the module's own target. Before #80 (fc55e14) renamed the module to
         # libsearch.so, that target and its file are valkeysearch: the file is copied to the recipe's name.
-        build="""export NINJA_TOOL=ninja
+        # build.sh builds the unit tests too, and GCC 15 (the ubuntu-26.04 runners) takes about 2.8 GB for each
+        # test file: ninja's default of nproc + 2 jobs ran a 4-core, 16 GB runner out of memory until GitHub lost
+        # it (walk runs 43535775954 and 43553099941). A ninja first on PATH runs one job per 3.5 GB, at most nproc.
+        build="""if [ -r /proc/meminfo ] && ninja=$(command -v ninja); then
+  jobs=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 3670016 ))
+  jobs=$(( jobs < 1 ? 1 : jobs > $(nproc) ? $(nproc) : jobs ))
+  bin=$(mktemp -d)
+  printf '#!/bin/sh\\nexec %s -j%s "$@"\\n' "${ninja}" "${jobs}" > "${bin}/ninja"
+  chmod +x "${bin}/ninja"
+  export PATH="${bin}:${PATH}"
+fi
+export NINJA_TOOL=ninja
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
 deps=/opt/valkey-search-deps
 export CMAKE_PREFIX_PATH="${deps}/lib/cmake/protobuf:${deps}/lib/cmake/absl:${deps}/lib/cmake/grpc:\

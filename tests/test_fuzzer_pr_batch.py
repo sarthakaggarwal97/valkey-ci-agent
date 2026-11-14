@@ -202,6 +202,25 @@ def test_valkey_search_build_defines_ninja_tool_for_the_483_window(tmp_path):
     assert (src / "tool").read_text().strip() == "ninja"
 
 
+@pytest.mark.skipif(not os.path.exists("/proc/meminfo"), reason="the cap reads /proc/meminfo")
+def test_valkey_search_build_runs_one_ninja_job_per_3_5_gb_at_most_nproc(tmp_path):
+    """build.sh builds the unit tests too, and GCC 15 takes about 2.8 GB for each test file: ninja's default of
+    nproc + 2 jobs ran a 4-core, 16 GB runner out of memory until GitHub lost it (walk runs 43535775954 and
+    43553099941). The recipe's ninja runs one job per 3.5 GB of memory, at most one per core."""
+    src, bin_dir = tmp_path / "src", tmp_path / "bin"
+    src.mkdir()
+    bin_dir.mkdir()
+    (src / "build.sh").write_text("#!/bin/bash\nninja -C .build-release > jobs\n")
+    (src / "build.sh").chmod(0o755)
+    (bin_dir / "ninja").write_text('#!/bin/bash\necho "$1"\n')
+    (bin_dir / "ninja").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, env=env, check=True, capture_output=True, text=True)
+    kib = int(next(line.split()[1] for line in open("/proc/meminfo") if line.startswith("MemTotal:")))
+    assert (src / "jobs").read_text().strip() == f"-j{max(1, min(kib // 3670016, len(os.sched_getaffinity(0))))}"
+
+
 def test_valkey_search_build_lets_cmake_4_configure_the_older_vendored_c_ares(tmp_path):
     """Older valkey-search commits vendor a c-ares whose cmake_minimum_required CMake 4 rejects."""
     src = tmp_path / "src"
@@ -227,7 +246,9 @@ def test_valkey_search_build_builds_the_grpc_header_after_the_pre_172_race(tmp_p
                                   'echo "$@" > built\n')
     (src / "build.sh").chmod(0o755)
     # A stand-in for ninja: only the gRPC target makes the header.
-    (bin_dir / "ninja").write_text(f'#!/bin/bash\n[ "$*" == "-C .build-release coordinator_grpc_proto" ] || exit 1\n'
+    # The recipe's own ninja, first on PATH, runs this one with a -j before the arguments.
+    (bin_dir / "ninja").write_text(f'#!/bin/bash\n[ "${{1#-j}}" != "$1" ] && shift\n'
+                                   f'[ "$*" == "-C .build-release coordinator_grpc_proto" ] || exit 1\n'
                                    f'mkdir -p $(dirname {header}) && touch {header}\n')
     (bin_dir / "ninja").chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
@@ -287,9 +308,10 @@ def test_valkey_search_build_falls_back_to_the_module_target_and_takes_its_old_n
     # A stand-in for the old build.sh: its test binaries never link.
     (src / "build.sh").write_text("#!/bin/bash\nmkdir -p .build-release\nexit 1\n")
     (src / "build.sh").chmod(0o755)
-    # A stand-in for ninja: no libsearch target, and only the valkeysearch target makes the module.
+    # A stand-in for ninja: no libsearch target, and only the valkeysearch target makes the module. The
+    # recipe's own ninja, first on PATH, runs it with a -j before the arguments.
     (bin_dir / "ninja").write_text(
-        '#!/bin/bash\n[ "$3" == "coordinator_grpc_proto" ] && exit 0\n'
+        '#!/bin/bash\n[ "${1#-j}" != "$1" ] && shift\n[ "$3" == "coordinator_grpc_proto" ] && exit 0\n'
         '[ "$3" == "valkeysearch" ] || exit 1\ntouch .build-release/valkeysearch.so\n')
     (bin_dir / "ninja").chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
