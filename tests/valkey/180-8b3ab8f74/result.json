@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8b3ab8f74fe7cfc45f6e97b0f702210afada776d",
+  "parent": "f753db514166c1e2cbb63a6cbbf4c5f3722204e2",
+  "pr": 180,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisAtomic to serverAtomic (#180)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2436,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a mechanical identifier rename: the redisAtomic macro becomes serverAtomic, with the same expansion (#define serverAtomic / #define serverAtomic _Atomic) and every declaration site renamed in lockstep. No behaviour, reply, data format, or concurrency semantics change; an incomplete rename would be a compile-time error, not a runtime bug, so there is nothing for a scenario to exercise."
+}

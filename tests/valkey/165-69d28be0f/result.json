@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "69d28be0f1939683d63546ef88ab949ee2e2847d",
+  "parent": "730174445b72bb04c446c635d4c34041270b596b",
+  "pr": 165,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redis to valkey in create-cluster script (#165)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2401,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/create-cluster/create-cluster, a developer helper shell script, replacing the redis-server/redis-cli binary names with valkey-server/valkey-cli and updating its usage text. No server, valkey-cli, valkey-benchmark, or check-tool code changes; the script is not shipped behaviour the fuzzer can reach (the fuzzer starts servers itself and never runs this script). There is no command reply, replication, cluster, or persistence behaviour to test, so no scenario is needed."
+}

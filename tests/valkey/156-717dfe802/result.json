@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "717dfe80221463e78cd5033c24ca71c1c582957c",
+  "parent": "98892bb5c37c181199a66ea7cb85d47f87a357cd",
+  "pr": 156,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisDb to serverDb (#156)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3677,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a mechanical rename of the internal typedef redisDb to serverDb across the source tree. Every changed line in the diff touches only that identifier (type declarations, function prototypes, local variables); no function body logic, struct field, config, command, reply, or on-wire/on-disk format is altered, and the type is not exposed through the module API. It is a compile-time refactor with no observable behavior change, so no scenario can distinguish the two builds and none is needed."
+}

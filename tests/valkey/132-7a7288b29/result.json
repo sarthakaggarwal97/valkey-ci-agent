@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a7288b2922231a38fb02238b299525c074d9dc7",
+  "parent": "c0a83c00583ed2959079ae34ed8ca4cf7f90a264",
+  "pr": 132,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log unused module configuration entries that cause redis to abort (#132)",
+  "date": "2024-04-02",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4497,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds serverLog lines enumerating unused module config names immediately before a pre-existing exit(1) at startup; the abort behavior, exit path, and all runtime behavior are unchanged. The path fires only when a config file names a module config without its loadmodule directive, which makes the server die at startup \u2014 a configuration the harness skips as unsupported \u2014 and no fuzzer oracle observes startup log text of an intentionally aborting process. MODULE LOAD is refused in compared sequences, so the state cannot be reached from a running server either. This is a log-only di"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "730174445b72bb04c446c635d4c34041270b596b",
+  "parent": "cbbaf69d1de08c92c415a64e241ee8d79dac682d",
+  "pr": 157,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisOpArray to serverOpArray (#157)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2351,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor: it renames the type redisOpArray to serverOpArray and the functions redisOpArrayAppend/redisOpArrayFree to serverOpArrayAppend/serverOpArrayFree in server.c and server.h, updating the two call sites (alsoPropagate, propagatePendingCommands) and a comment. The struct layout, function bodies, and all runtime behavior are identical; the names are internal C symbols not visible to clients, replication, AOF, or modules. Compilation itself proves the rename is consistent, so no fuzzer scenario can distinguish the change from its parent."
+}

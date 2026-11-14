@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb496c7d58b7..74b083139289.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9c9b879f026c
+seed: 7001
+experiment:
+  id: proposed.script-timeout-throttled-primary-demote
+  inputs:
+    busy_threshold_ms: 50
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    repl-throttling-enabled: 'yes'
+    busy-reply-threshold: '50'
+    client-output-buffer-limit: replica 256kb 128kb 2
+    repl-backlog-size: '131072'

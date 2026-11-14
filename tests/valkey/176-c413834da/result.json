@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c413834da1183a85ea8a8e1447428a47a62c2be2",
+  "parent": "25122b140e8fb6a6b93e1f49f22e8fd522b754bc",
+  "pr": 176,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisTLSContextConfig to serverTLSContextConfig (#176)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2225,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the typedef redisTLSContextConfig to serverTLSContextConfig in server.h and tls.c (including a comment). The struct's fields, layout, and all logic are untouched, so the compiled behaviour is identical on both builds. It is a pure refactor with no testable behaviour change, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1736018aa92b3d635248b2730bf3ebb498778b57",
+  "parent": "1629e28f86c598bf8663c1a0ede81b68bc04a8c2",
+  "pr": 29,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove trademarked wording on configuration file and individual configs (#29)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6723,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: it renames the example config template redis.conf to valkey.conf, rewords comments in src/*.c/.h, updates the --help usage strings in server.c, and touches Tcl test-harness and utils/ scripts. No config directive, command, reply, replication, persistence, or cluster behavior changes; the only compiled difference is help-text wording, which no oracle or compared sequence can meaningfully test. No scenario is needed."
+}

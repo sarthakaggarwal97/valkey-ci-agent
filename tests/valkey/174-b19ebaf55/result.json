@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b19ebaf551de6b8b4aa35e1d054aece8dd8b900f",
+  "parent": "a236fc8ef0cd9094adda29b7a8d4859c2e36ee77",
+  "pr": 174,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisCommand to serverCommand (#174)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3523,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a mechanical rename of the internal C struct 'redisCommand' to 'serverCommand': all 340 changed lines in the diff contain the old or new type name, and none alters a string literal, reply, error message, config, protocol byte, or module-API symbol. It is a compile-time refactor with no observable behavior change on any build, so no runtime scenario can distinguish the change from its parent and none is needed."
+}

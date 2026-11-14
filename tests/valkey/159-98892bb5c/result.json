@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98892bb5c37c181199a66ea7cb85d47f87a357cd",
+  "parent": "7a7288b2922231a38fb02238b299525c074d9dc7",
+  "pr": 159,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisMemOverhead to serverMemOverhead (#159)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2391,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure source-level rename of the C struct redisMemOverhead to serverMemOverhead across its declaration in server.h and its uses in object.c and server.c. No struct field, logic, command reply, config or wire format changes; any missed reference would be a compile error, not a runtime bug. There is no runtime behaviour to test, so no scenario is needed."
+}

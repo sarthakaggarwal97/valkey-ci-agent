@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "edee864b34b8bd1b08f864aff909af96dfd8bf19",
+  "parent": "8b3ab8f74fe7cfc45f6e97b0f702210afada776d",
+  "pr": 181,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "rename redisOp to serverOp (#181)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2334,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the typedef redisOp to serverOp in src/server.h and updates the three references in src/server.c (serverOpArrayAppend, serverOpArrayFree, propagatePendingCommands). A C typedef rename is purely a compile-time identifier change: struct layout, sizeof, allocation, and all logic are identical, so no command reply, propagation, replication, or persistence behaviour can differ. It is a pure refactor with no behaviour change, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "add5f5615cd3206dc859476b13a81a3b4da287ee",
+  "parent": "1736018aa92b3d635248b2730bf3ebb498778b57",
+  "pr": 178,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename some redis structs to server (#178)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2357,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames internal C struct typedefs (redisFunctionSym, redisSortObject, redisSortOperation) to server-prefixed names and updates their use sites in sort.c and the build-static-symbols.tcl generator. Struct layouts, logic, and all behaviour are identical; it is a pure refactor with no observable effect on commands, replication, persistence, or tooling, so no scenario is needed."
+}

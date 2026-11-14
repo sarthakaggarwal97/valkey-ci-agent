@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a236fc8ef0cd9094adda29b7a8d4859c2e36ee77",
+  "parent": "99bdcc0ed0df95843de02422c98b76e2b72c6e98",
+  "pr": 173,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisCommandProc, redisGetKeysProc to server prefix (#173)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2776,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure identifier rename: the typedefs redisCommandProc and redisGetKeysProc become serverCommandProc and serverGetKeysProc, with the three references in server.h, db.c and networking.c updated to match. The function signatures, struct fields and all runtime logic are unchanged, so the compiled behavior is identical on both builds and there is no path a scenario could distinguish. This is a compile-time refactor that needs no test."
+}

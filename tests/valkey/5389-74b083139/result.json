@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "parent": "bb496c7d58b7c0c93497bc78219002047adff1f0",
+  "pr": 5389,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't queue a throttled primary when a timed-out script ends (#5389)",
+  "date": "2026-11-13",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.5192,
+  "findings": [],
+  "recorded": []
+}

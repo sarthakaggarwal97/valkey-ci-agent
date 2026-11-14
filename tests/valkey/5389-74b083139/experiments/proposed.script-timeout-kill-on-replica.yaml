@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.script-timeout-kill-on-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: A timed-out no-write script killed on a replica with a live primary
+    link reaches exitScriptTimedOutMode's primary-queue guard and must not crash the
+    replica
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: script-kill
+  config:
+    instances: replica
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"}}
+    - {raw: "EVAL \"while true do end\" 0\r\n", connection: script}
+    - {command: [SCRIPT, KILL], expect: {equals: OK}}
+    - {read: true, connection: script, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [INFO, replication], expect: {contains: "master_link_status:up"}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: script-kill}

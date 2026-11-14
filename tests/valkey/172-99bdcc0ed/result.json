@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99bdcc0ed0df95843de02422c98b76e2b72c6e98",
+  "parent": "def09488aa2787038a2e8047a836dd2e76763a7c",
+  "pr": 172,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisCommandGroup to serverCommandGroup (#172)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2316,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the typedef redisCommandGroup to serverCommandGroup and updates two comments referencing it; the enum values, COMMAND_GROUP_STR contents, struct redisCommand layout and all runtime behaviour are unchanged, so the compiled binaries are behaviourally identical and no scenario can reach a difference."
+}

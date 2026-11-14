@@ -1,0 +1,36 @@
+extends: [valkey.base]
+id: proposed.script-timeout-throttled-primary-demote
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: A looping script timing out on a throttling primary that is force-demoted
+    must not crash when it queues the new primary-link client
+inputs:
+  properties:
+    busy_threshold_ms: {type: integer, default: 50}
+components:
+- use: valkey.action.commands
+  id: slow-script
+  config:
+    instances: primaries
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, busy-reply-threshold, "50"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, repl-throttling-enabled, "yes"], expect: {equals: OK}}
+    - {raw: "EVAL \"local t=0 for i=1,100000000000 do t=t+1 end return t\" 0\r\n",
+      connection: busy}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SCRIPT, KILL], connection: main, expect: {error: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {read: true, connection: busy}
+- use: valkey.action.failover
+  id: demote
+  depends_on: [slow-script]
+  config:
+    shard: 0
+    force: true
+    timeout_s: 60
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slow-script}
+- {evidence_id: valkey.failover.result, source: demote}

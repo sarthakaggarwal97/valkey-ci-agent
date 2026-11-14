@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "42e00635af0717b79a6d214889fe2cdd883928d4",
+  "parent": "621edbafba74c2d6211bf81d54be8b1da8543d4e",
+  "pr": 63,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix inconsistencies in the json command file descriptions (#63)",
+  "date": "2024-04-02",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2031,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the natural-language 'description' strings inside reply_schema blocks of src/commands/*.json (capitalization and trailing periods). These strings are compiled into the server only under -DLOG_REQ_RES (src/Makefile gates --with-reply-schema on it), which the standard builds under test don't use; even in such a build they appear only as doc text in COMMAND DOCS. No command behavior, reply, argument parsing, or persisted state changes, so no scenario can observe a difference."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "25122b140e8fb6a6b93e1f49f22e8fd522b754bc",
+  "parent": "b19ebaf551de6b8b4aa35e1d054aece8dd8b900f",
+  "pr": 175,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisObject to serverObject (#175)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3077,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure compile-time refactor: it renames the C struct tag redisObject to serverObject (and forward declarations of it in rio.h and module.c, plus one comment in evict.c), updating the `typedef struct serverObject robj` alias in server.h in the same commit. The struct's fields, layout and every function signature are unchanged; a struct tag name has no runtime representation, so no command reply, persistence format, replication, module ABI or memory behavior can differ between the builds. There is no behavior change for a scenario to exercise."
+}

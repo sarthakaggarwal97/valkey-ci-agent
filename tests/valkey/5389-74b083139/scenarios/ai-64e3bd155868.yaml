@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb496c7d58b7..74b083139289.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64e3bd155868
+seed: 1
+experiment:
+  id: proposed.script-timeout-kill-on-replica
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    busy-reply-threshold: 100

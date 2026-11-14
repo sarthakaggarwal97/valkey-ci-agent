@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1629e28f86c598bf8663c1a0ede81b68bc04a8c2",
+  "parent": "c413834da1183a85ea8a8e1447428a47a62c2be2",
+  "pr": 177,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisError to serverError (#177)",
+  "date": "2024-04-03",
+  "unstable": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2534,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor: the struct 'redisError' is renamed to 'serverError' in server.h and its two use sites in server.c (incrementErrorCount and the INFO errorstat section). The struct layout and all logic are byte-for-byte identical; no command reply, data path, replication, or persistence behavior changes, so no scenario can distinguish the builds."
+}
