@@ -1,6 +1,6 @@
 {
 "repo": "valkey-io/valkey-search",
-"pointer": {"cursor": "f8106e72e984983b3f534a5873ec65949da6f3e2", "cursor_date": "2024-11-27", "cursor_pr": null, "end": "f8106e72e984983b3f534a5873ec65949da6f3e2", "head": "92b44712de13155b54b6486009521fad98653372", "remaining": 0},
+"pointer": {"cursor": "f8106e72e984983b3f534a5873ec65949da6f3e2", "cursor_date": "2024-11-27", "cursor_pr": null, "end": "f8106e72e984983b3f534a5873ec65949da6f3e2", "head": "068a0a845815040761c1f50b9178a5aa83868934", "remaining": 0},
 "done": {
   "ec01f05a1ef46a6db55c732da57f5516ce440bac": {"at": "2026-11-05T06:22:48+00:00", "outcome": "no-code-change", "pr": 1483, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Scoring compatibility tests CME (#1483)"},
   "6d1eb2667d214c4841a8c5c59b249b02bbbdd7b8": {"at": "2026-11-05T06:22:48+00:00", "outcome": "no-code-change", "pr": 1446, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Remove stale local copy of the benchmark configs (#1446)"},
@@ -692,6 +692,7 @@
   "5f80ef3d64acd0d32bf405375c0615188935bea9": {"at": "2026-11-14T03:43:32+00:00", "cost_usd": 9.0078, "coverage": null, "findings": [], "folder": "tests/valkey-search/1647-5f80ef3d6", "hunted": 6, "outcome": "tested", "pr": 1647, "pr_repo": "valkey-io/valkey-search", "proposed": 6, "proven": 6, "recall": true, "repo": "valkey-io/valkey-search", "subject": "Allocate vector index memory in transparent huge pages (#1647)"}
 },
 "failed": {
+  "068a0a845815040761c1f50b9178a5aa83868934": {"attempts": 0, "cost_usd": 0.0, "date": "2026-11-13", "error": "the job left no result", "misses": 1, "parent": "92b44712de13155b54b6486009521fad98653372", "pr": 1700, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "sha": "068a0a845815040761c1f50b9178a5aa83868934", "subject": "test: cover FT.HYBRID LOAD projection on JSON indexes (#1700)"}
 },
-"last_run": {"at": "2026-11-14T03:43:32+00:00", "cost_usd": 9.0078, "merges": ["5f80ef3d64acd0d32bf405375c0615188935bea9"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43541652957"}
+"last_run": {"at": "2026-11-14T04:40:11+00:00", "cost_usd": 0.0, "merges": ["068a0a845815040761c1f50b9178a5aa83868934"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43553099941"}
 }
