@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.keys-hashtag-single-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: KEYS with a pattern that implies a single slot returns exactly the
+    same keys after the slot-dict optimization, across hashtag edge cases, same-slot
+    non-matching keys, expired keys, the empty pattern and a node that owns no slots
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: true}
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{a}x", v], expect: {equals: OK}}
+    - {command: [SET, "{a}y", v], expect: {equals: OK}}
+    - {command: [SET, "{a}z", v], expect: {equals: OK}}
+    - {command: [SET, "{a}", v], expect: {equals: OK}}
+    - {command: [SET, "x{a}y", v], expect: {equals: OK}}
+    - {command: [SET, "q}{a}", v], expect: {equals: OK}}
+    - {command: [SET, "{{a}}", v], expect: {equals: OK}}
+    - {command: [SET, "{b}1", v], expect: {equals: OK}}
+    - {command: [SET, "{b}2", v], expect: {equals: OK}}
+    - {command: [SET, foo, v], expect: {equals: OK}}
+    - {command: [SET, "{}", v], expect: {equals: OK}}
+    - {command: [SET, "{}x", v], expect: {equals: OK}}
+    - {command: [SET, "{u", v], expect: {equals: OK}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [SET, "{a}dead", v, EXAT, 1], expect: {equals: OK}}
+    - {command: [KEYS, "{a}*"], compare: unordered, expect: {equals: ["{a}", "{a}x",
+          "{a}y", "{a}z"]}}
+    - {command: [KEYS, "x{a}*"], compare: unordered, expect: {equals: ["x{a}y"]}}
+    - {command: [KEYS, "*{a}*"], compare: unordered, expect: {equals: ["q}{a}", "x{a}y",
+          "{a}", "{a}x", "{a}y", "{a}z", "{{a}}"]}}
+    - {command: [KEYS, "{a}"], compare: unordered, expect: {equals: ["{a}"]}}
+    - {command: [KEYS, "q}{a}"], compare: unordered, expect: {equals: ["q}{a}"]}}
+    - {command: [KEYS, "{{a}}"], compare: unordered, expect: {equals: ["{{a}}"]}}
+    - {command: [KEYS, "{a}dead"], compare: unordered, expect: {equals: []}}
+    - {command: [KEYS, "{a}missing"], compare: unordered, expect: {equals: []}}
+    - {command: [KEYS, nosuchkey], compare: unordered, expect: {equals: []}}
+    - {command: [KEYS, foo], compare: unordered, expect: {equals: [foo]}}
+    - {command: [KEYS, "{b}?"], compare: unordered, expect: {equals: ["{b}1", "{b}2"]}}
+    - {command: [KEYS, "{b}[12]"], compare: unordered, expect: {equals: ["{b}1", "{b}2"]}}
+    - {command: [KEYS, "[{]a}x"], compare: unordered, expect: {equals: ["{a}x"]}}
+    - {command: [KEYS, '\{a\}x'], compare: unordered, expect: {equals: ["{a}x"]}}
+    - {command: [KEYS, "{}*"], compare: unordered, expect: {equals: ["{}", "{}x"]}}
+    - {command: [KEYS, "{}x"], compare: unordered, expect: {equals: ["{}x"]}}
+    - {command: [KEYS, "{u"], compare: unordered, expect: {equals: ["{u"]}}
+    - {command: [KEYS, ""], compare: unordered, expect: {equals: [""]}}
+    - {command: [KEYS, "*"], compare: unordered, expect: {equals: ["", foo, "q}{a}",
+          "x{a}y", "{a}", "{a}x", "{a}y", "{a}z", "{b}1", "{b}2", "{u", "{{a}}", "{}",
+          "{}x"]}}
+    - {command: [KEYS, "{a}*"], node: 1, compare: unordered, expect: {equals: []}}
+    - {command: [KEYS, "*"], node: 1, compare: unordered, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

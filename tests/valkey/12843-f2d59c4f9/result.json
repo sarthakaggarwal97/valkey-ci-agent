@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2d59c4f91ef4ca1555abd04673d729f9d6f4af1",
+  "parent": "8e11f84dedf87a151059eacb91782d937afeeefd",
+  "pr": 12843,
+  "pr_repo": "redis/redis",
+  "subject": "Avoid unnecessary slot computing in KEYS command. (#12843)",
+  "date": "2023-12-07",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3587,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves the patternHashSlot computation in keysCommand behind the existing server.cluster_enabled guard. pslot is initialized to -1 and is now assigned only when cluster_enabled && !allkeys, so the new condition `pslot != -1` selects the single-slot iterator under exactly the same circumstances as the old `server.cluster_enabled && !allkeys && pslot != -1`; in standalone mode the slot was computed before but never used. patternHashSlot is side-effect free, so no reply, iteration order, expiry handling, or crash path differs between the builds for any input in any mode. This is a "
+}

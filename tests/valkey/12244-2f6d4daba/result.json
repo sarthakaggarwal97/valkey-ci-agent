@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2f6d4dabaa1d17346623d0fa71b8e7d2bae5187c",
+  "parent": "77e69d888406153f8a80f9e84a5fbafc8f4b7016",
+  "pr": 12244,
+  "pr_repo": "redis/redis",
+  "subject": "Fix outdated LFU comments to eliminate confusion (#12244)",
+  "date": "2023-12-06",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comments in src/evict.c (correcting the LFU field description from 'last decr time' to 'last access time' and describing the current decay-by-one behavior). No executable code, replies, configs, or data paths change, so no scenario can observe any difference and none is needed."
+}

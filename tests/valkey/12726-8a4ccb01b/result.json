@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8a4ccb01b3ea3072eae6ef3e513b0b24b11a85ae",
+  "parent": "91309f79814e1742fc2ddfd573d089abf6f44456",
+  "pr": 12726,
+  "pr_repo": "redis/redis",
+  "subject": "Fix clusterLoadConfig aux_argv minor memory leak (#12726)",
+  "date": "2023-12-03",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3376,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds sdsfreesplitres(aux_argv, ...) on error paths in clusterLoadConfig that immediately 'goto fmterr', which logs and calls exit(1). The memory being freed was reclaimed by process exit anyway, so there is no observable behaviour change on either build: the paths are reachable only by booting with a hand-corrupted nodes.conf, and both the parent and the fixed build fail startup identically with the same log and exit code. Nothing a client, replica, or cluster peer sees differs, so no scenario can distinguish the builds or find a regression here."
+}

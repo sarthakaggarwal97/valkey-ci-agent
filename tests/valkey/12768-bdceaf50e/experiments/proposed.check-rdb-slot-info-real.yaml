@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-slot-info-real
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-check-rdb on a real cluster-mode RDB whose SLOT_INFO opcode
+    carries the expires-slot-size field
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: checkrdb
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    cluster: true
+    ignore: ['^\d+:[A-Z] .*\n']
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, alpha, 1], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, bravo, 2], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, charlie, 3], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, delta, 4], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, echo, 5], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-rdb, args: [dump.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [dump.rdb, --stats, --format, info], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: checkrdb}

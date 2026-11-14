@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "91309f79814e1742fc2ddfd573d089abf6f44456",
+  "parent": "e216c839099b37c02f827821c14cce7aa16521bc",
+  "pr": 12786,
+  "pr_repo": "redis/redis",
+  "subject": "Fix compilation warning in KeySpace_ServerEventCallback and add CFLAGS=-Werror flag for module CI (#12786)",
+  "date": "2023-11-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3281,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI/build change plus a cosmetic fix in a test module: it adds CFLAGS=-Werror to the module-API test steps in the GitHub workflows and fixes a RedisModule_Log format specifier (%ld -> %llu with a cast) in tests/modules/postnotifications.c. No server code, command reply, replication, persistence or module-API behaviour changes; the only runtime effect is the formatting of a warning log line inside a test module, on a branch for unexpected subevents. There is nothing a fuzzer scenario could observe differing between the two builds."
+}

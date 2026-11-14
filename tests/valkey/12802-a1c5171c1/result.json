@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1c5171c1deab0c39efe517218f24eb5ca915fd5",
+  "parent": "095d05786f5da31557de2654a41368a654e7598a",
+  "pr": 12802,
+  "pr_repo": "redis/redis",
+  "subject": "Fix resize hash tables stuck on the last non-empty slot (#12802)",
+  "date": "2023-11-28",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.527,
+  "findings": [],
+  "recorded": []
+}

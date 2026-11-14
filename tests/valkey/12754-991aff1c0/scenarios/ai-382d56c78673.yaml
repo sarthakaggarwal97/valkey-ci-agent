@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 35c8d616cf9b..991aff1c0fe8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-382d56c78673
+seed: 1
+experiment:
+  id: proposed.keys-hashtag-single-slot
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

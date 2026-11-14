@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "15b993f1ef6ec436c1c2f411232b27d150a6c168",
+  "parent": "826b39e016b30dc63136a08797ddcc55eca21ae0",
+  "pr": 12847,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize dictExpand of empty dict (#12847)",
+  "date": "2023-12-08",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.619,
+  "findings": [],
+  "recorded": []
+}

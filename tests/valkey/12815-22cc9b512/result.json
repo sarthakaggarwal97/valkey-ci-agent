@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "22cc9b512250cf1b59403cb51c507e98185490de",
+  "parent": "bdceaf50e4fbfbd063d26361a98ebcfc380d206c",
+  "pr": 12815,
+  "pr_repo": "redis/redis",
+  "subject": "Use CLZ in _dictNextExp to get the next power of two (#12815)",
+  "date": "2023-11-29",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3634,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces the shift loop in the static helper _dictNextExp (src/dict.c) with a __builtin_clzl computation. The new expression 8*sizeof(long) - clzl(size-1) equals the old loop's result (the smallest e >= 2 with 2^e >= size) for every input: sizes 0-4 hit the new DICT_HT_INITIAL_EXP early-return just as the loop's e=2 start did, the unchanged size >= LONG_MAX guard still returns 63 and also keeps size-1 nonzero so clzl is never called on 0, and for all sizes in between the formula is exactly ceil(log2(size)), including at exact powers of two. It is a performance-only refactor with pro"
+}

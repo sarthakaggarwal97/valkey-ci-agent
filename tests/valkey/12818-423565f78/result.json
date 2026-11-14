@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "423565f7849a955cba4cce1cd1162e86c36319a3",
+  "parent": "22cc9b512250cf1b59403cb51c507e98185490de",
+  "pr": 12818,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize CPU cache efficiency on dict while rehashing in dictTwoPhaseUnlinkFind (#12818)",
+  "date": "2023-11-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 12.0284,
+  "findings": [],
+  "recorded": []
+}

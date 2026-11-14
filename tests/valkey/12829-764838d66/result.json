@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "764838d66fabaf4c866b2f674625ee3486098765",
+  "parent": "8a4ccb01b3ea3072eae6ef3e513b0b24b11a85ae",
+  "pr": 12829,
+  "pr_repo": "redis/redis",
+  "subject": "Check whether the client is NULL in luaCreateFunction (#12829)",
+  "date": "2023-12-04",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7462,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a NULL-client guard in luaCreateFunction's shebang-error path (src/eval.c). Both callers in this tree, evalGenericCommand (eval.c:512) and SCRIPT LOAD (eval.c:626), always pass a non-NULL client, and the old NULL-client caller (script reload from the RDB 'lua' aux field) no longer exists, so the guard is always true and the behaviour of both builds is identical on every reachable path: same error replies for bad shebangs, same caching, same replication. No external input, fault, or deployment can reach luaCreateFunction with a NULL client, so no scenario can distinguish th"
+}

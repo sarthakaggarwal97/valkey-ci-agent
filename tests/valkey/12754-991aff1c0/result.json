@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "991aff1c0fe818627b0f8a7d9a6cc7ff720d3682",
+  "parent": "35c8d616cf9bd869bc6dd2edda978e8188811046",
+  "pr": 12754,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize KEYS when pattern includes hashtag and implies a single slot. (#12754)",
+  "date": "2023-12-05",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1362,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-382d56c78673",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keys' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (KEYS {a}*), 17 (KEYS *{a}*), 25 (KEYS {b}?), 26 (KEYS {b}[12]), 29 (KEYS {}*), 33 (KEYS *)"
+    },
+    {
+      "scenario": "ai-d9a75a31605e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keys' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (KEYS {a}*), 17 (KEYS *{a}*), 25 (KEYS {b}?), 26 (KEYS {b}[12]), 29 (KEYS {}*), 33 (KEYS *)"
+    },
+    {
+      "scenario": "ai-cc68ac505cf2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keys' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (KEYS {a}*), 17 (KEYS *{a}*), 29 (KEYS {}*), 33 (KEYS *)"
+    }
+  ]
+}

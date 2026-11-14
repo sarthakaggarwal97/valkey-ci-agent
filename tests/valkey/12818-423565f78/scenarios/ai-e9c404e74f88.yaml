@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22cc9b512250..423565f7849a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e9c404e74f88
+seed: 418202
+experiment:
+  id: proposed.del-during-rehash
+  inputs:
+    resp: 3
+    lazyfree: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

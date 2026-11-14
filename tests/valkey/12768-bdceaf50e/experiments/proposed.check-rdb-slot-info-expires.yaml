@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-slot-info-expires
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb reads the expires-slot-size length of RDB_OPCODE_SLOT_INFO;
+    a valid cluster-shaped RDB with a slot-info record passes on the change and is
+    misread as corrupt on the parent
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      slot-info.rdb: !!binary 'UkVESVMwMDEx/gD0AAAA/wAAAAAAAAAA'
+      slot-info-trunc.rdb: !!binary 'UkVESVMwMDEx/gD0AAA='
+    runs:
+    - {tool: valkey-check-rdb, args: [slot-info.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [slot-info-trunc.rdb], expect: {exit: {equals: 1}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

@@ -1,0 +1,110 @@
+extends: [valkey.liveness]
+id: proposed.empty-dict-expand
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drives the new fast path in _dictExpand (dict empty but table allocated): hashtable-encoded
+    hashes, sets and sorted sets are emptied to zero one element at a time (table
+    size 8, so the shrink to 4 fires exactly when used==0) and in bulk, inside and
+    outside MULTI/EXEC, then recreated and read back. Every reply is compared against
+    the parent build; the eager table free must not crash, corrupt or leak.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shrink
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      zset-max-listpack-entries: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5], expect: {equals: 5}}
+    - {command: [HGET, h1, f1], expect: {equals: v1}}
+    - {command: [HGET, h1, f2], expect: {equals: v2}}
+    - {command: [HGET, h1, f3], expect: {equals: v3}}
+    - {command: [HDEL, h1, f1], expect: {equals: 1}}
+    - {command: [HDEL, h1, f2], expect: {equals: 1}}
+    - {command: [HDEL, h1, f3], expect: {equals: 1}}
+    - {command: [HDEL, h1, f4], expect: {equals: 1}}
+    - {command: [HDEL, h1, f5], expect: {equals: 1}}
+    - {command: [EXISTS, h1], expect: {equals: 0}}
+    - {command: [HSET, h1, f1, x, f2, y], expect: {equals: 2}}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [HDEL, h1, f1, f2], expect: {equals: 2}}
+    - {command: [EXISTS, h1], expect: {equals: 0}}
+    - {command: [HSET, h2, f01, v01, f02, v02, f03, v03, f04, v04, f05, v05, f06,
+        v06, f07, v07, f08, v08, f09, v09, f10, v10, f11, v11, f12, v12, f13, v13,
+        f14, v14, f15, v15, f16, v16, f17, v17, f18, v18, f19, v19, f20, v20, f21,
+        v21, f22, v22, f23, v23, f24, v24, f25, v25, f26, v26, f27, v27, f28, v28,
+        f29, v29, f30, v30, f31, v31, f32, v32, f33, v33, f34, v34, f35, v35, f36,
+        v36, f37, v37, f38, v38, f39, v39, f40, v40], expect: {equals: 40}}
+    - {command: [HDEL, h2, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11,
+        f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26,
+        f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40], expect: {
+        equals: 40}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {command: [SADD, s1, m1, m2, m3, m4, m5, m6], expect: {equals: 6}}
+    - {command: [SISMEMBER, s1, m1], expect: {equals: 1}}
+    - {command: [SISMEMBER, s1, m2], expect: {equals: 1}}
+    - {command: [SREM, s1, m1], expect: {equals: 1}}
+    - {command: [SREM, s1, m2], expect: {equals: 1}}
+    - {command: [SREM, s1, m3], expect: {equals: 1}}
+    - {command: [SREM, s1, m4], expect: {equals: 1}}
+    - {command: [SREM, s1, m5], expect: {equals: 1}}
+    - {command: [SREM, s1, m6], expect: {equals: 1}}
+    - {command: [EXISTS, s1], expect: {equals: 0}}
+    - {command: [SADD, s3, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26,
+        m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40], expect: {
+        equals: 40}}
+    - {command: [SREM, s3, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26,
+        m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40], expect: {
+        equals: 40}}
+    - {command: [EXISTS, s3], expect: {equals: 0}}
+    - {command: [ZADD, z1, 1, a, 2, b, 3, c, 4, d, 5, e, 6, f], expect: {equals: 6}}
+    - {command: [ZREMRANGEBYSCORE, z1, "-inf", "+inf"], expect: {equals: 6}}
+    - {command: [EXISTS, z1], expect: {equals: 0}}
+    - {command: [ZADD, z2, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [ZREMRANGEBYRANK, z2, 0, -1], expect: {equals: 5}}
+    - {command: [EXISTS, z2], expect: {equals: 0}}
+    - {command: [ZADD, z3, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [ZSCORE, z3, a], expect: {exists: true}}
+    - {command: [ZREM, z3, a], expect: {equals: 1}}
+    - {command: [ZREM, z3, b], expect: {equals: 1}}
+    - {command: [ZREM, z3, c], expect: {equals: 1}}
+    - {command: [ZREM, z3, d], expect: {equals: 1}}
+    - {command: [ZREM, z3, e], expect: {equals: 1}}
+    - {command: [EXISTS, z3], expect: {equals: 0}}
+    - {command: [SADD, s2, a, b, c, d, e], expect: {equals: 5}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SREM, s2, a, b, c, d, e], expect: {equals: QUEUED}}
+    - {command: [HSET, h3, a, 1, b, 2, c, 3, d, 4, e, 5], expect: {equals: QUEUED}}
+    - {command: [HDEL, h3, a, b, c, d, e], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [5, 5, 5]}}
+    - {command: [EXISTS, s2], expect: {equals: 0}}
+    - {command: [EXISTS, h3], expect: {equals: 0}}
+    - {command: [HSET, h9, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HGETALL, h9], compare: unordered-pairs}
+    - {command: [SADD, s9, x, y, z], expect: {equals: 3}}
+    - {command: [SMEMBERS, s9], compare: unordered}
+    - {command: [ZADD, z9, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [ZRANGE, z9, 0, -1], expect: {equals: [a, b]}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shrink.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink}

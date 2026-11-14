@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.eviction-swapdb-multi-db
+deployment:
+  modes: [standalone]
+metadata:
+  description: SWAPDB handover of key_count/non_empty_slots and cross-database eviction
+    sampling with mostly-empty databases, compared against the parent build
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 60
+    server_config:
+      maxmemory-policy: allkeys-lru
+      maxmemory-samples: 5
+      maxmemory-eviction-tenacity: 100
+    commands:
+    - {command: [DEBUG, POPULATE, 20000, "a:", 256], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 20000}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 6000, "b:", 256], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 6000}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 20000}}
+    - {command: [EXISTS, "a:0"], expect: {equals: 1}}
+    - {command: [EXISTS, "b:0"], expect: {equals: 0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 6000}}
+    - {command: [EXISTS, "b:0"], expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory, 7mb], expect: {equals: OK}}
+    - {command: [SET, "probe:1", x], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 0, max: 6001}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 20000}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 0, max: 6001}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, "probe:2", y], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

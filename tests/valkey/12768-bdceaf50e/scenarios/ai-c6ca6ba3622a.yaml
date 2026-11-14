@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3431b1f156b0..bdceaf50e4fb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c6ca6ba3622a
+seed: 7001
+experiment:
+  id: proposed.check-rdb-slot-info-real
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

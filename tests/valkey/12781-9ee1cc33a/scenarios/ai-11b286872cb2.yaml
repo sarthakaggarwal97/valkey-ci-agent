@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 991aff1c0fe8..9ee1cc33a3d6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-11b286872cb2
+seed: 12
+experiment:
+  id: proposed.eviction-allkeys-sampling
+  inputs:
+    policy: allkeys-lru
+    cluster: true
+    lazyfree: 'no'
+deployment:
+  mode: standalone
+  base_port: 7100

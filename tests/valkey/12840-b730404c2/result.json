@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b730404c2f6af3d3945957bae16a830afab9f314",
+  "parent": "9ee1cc33a3d66ac52728586961bfa53ac1da612c",
+  "pr": 12840,
+  "pr_repo": "redis/redis",
+  "subject": "Fix multi dbs donot dbExpand when loading RDB (#12840)",
+  "date": "2023-12-06",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6296,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only flips when rdbLoadRioWithLoadingCtx pre-sizes a database's hash tables during RDB load: the old code armed should_expand_db once at entry, so only the first database in a multi-DB RDB got its dbExpand() and every subsequent SELECTDB's RESIZEDB hint was ignored; the fix re-arms the flag on each RESIZEDB so every DB is pre-sized. dbExpand only reserves dict capacity (dictExpand/dictTryExpand); a non-pre-sized dict rehashes incrementally to the identical end state. The loaded keys, values, expires, and all command replies are byte-for-byte identical on both builds. The only differ"
+}

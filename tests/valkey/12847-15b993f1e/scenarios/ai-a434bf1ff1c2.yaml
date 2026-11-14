@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 826b39e016b3..15b993f1ef6e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a434bf1ff1c2
+seed: 12847
+experiment:
+  id: proposed.empty-dict-expand
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

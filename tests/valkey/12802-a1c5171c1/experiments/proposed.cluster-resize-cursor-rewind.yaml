@@ -1,0 +1,169 @@
+extends: [valkey.liveness]
+id: proposed.cluster-resize-cursor-rewind
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Resize cursor rewinds past the last non-empty slot (valkey-io/valkey#12802): after
+    serverCron shrinks the dict of the highest non-empty slot (hashslot(foo)=12182),
+    a sparse dict in a lower slot (hashslot(alice)=749) must still be shrunk, for
+    the main hash table, then again for the expires hash table after FLUSHALL resets
+    the cursor. DEBUG HTSTATS table size is summed over non-empty slot dicts, so the
+    parent reports 36 where the fix reports 8.
+inputs:
+  properties:
+    hz: {type: integer, enum: [10, 100, 500], default: 10}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: resize
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-command: "yes", hz: {$ref: inputs.hz}}
+    timeout_s: 30
+    commands:
+    - {command: [MSET, "{foo}1", a, "{foo}2", a, "{foo}3", a, "{foo}4", a, "{foo}5",
+        a, "{foo}6", a, "{foo}7", a, "{foo}8", a, "{foo}9", a, "{foo}10", a, "{foo}11",
+        a, "{foo}12", a, "{foo}13", a, "{foo}14", a, "{foo}15", a, "{foo}16", a, "{foo}17",
+        a, "{foo}18", a, "{foo}19", a, "{foo}20", a, "{foo}21", a, "{foo}22", a, "{foo}23",
+        a, "{foo}24", a, "{foo}25", a, "{foo}26", a, "{foo}27", a, "{foo}28", a, "{foo}29",
+        a, "{foo}30", a, "{foo}31", a, "{foo}32", a], expect: {equals: OK}}
+    - {command: [DEL, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5", "{foo}6",
+        "{foo}7", "{foo}8", "{foo}9", "{foo}10", "{foo}11", "{foo}12", "{foo}13",
+        "{foo}14", "{foo}15", "{foo}16", "{foo}17", "{foo}18", "{foo}19", "{foo}20",
+        "{foo}21", "{foo}22", "{foo}23", "{foo}24", "{foo}25", "{foo}26", "{foo}27",
+        "{foo}28", "{foo}29", "{foo}30", "{foo}31"], expect: {equals: 31}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 15, compare: skip, expect: {contains: "table\
+          \ size: 4"}}
+    - {command: [MSET, "{alice}1", a, "{alice}2", a, "{alice}3", a, "{alice}4", a,
+        "{alice}5", a, "{alice}6", a, "{alice}7", a, "{alice}8", a, "{alice}9", a,
+        "{alice}10", a, "{alice}11", a, "{alice}12", a, "{alice}13", a, "{alice}14",
+        a, "{alice}15", a, "{alice}16", a, "{alice}17", a, "{alice}18", a, "{alice}19",
+        a, "{alice}20", a, "{alice}21", a, "{alice}22", a, "{alice}23", a, "{alice}24",
+        a, "{alice}25", a, "{alice}26", a, "{alice}27", a, "{alice}28", a, "{alice}29",
+        a, "{alice}30", a, "{alice}31", a, "{alice}32", a], expect: {equals: OK}}
+    - {command: [DEL, "{alice}1", "{alice}2", "{alice}3", "{alice}4", "{alice}5",
+        "{alice}6", "{alice}7", "{alice}8", "{alice}9", "{alice}10", "{alice}11",
+        "{alice}12", "{alice}13", "{alice}14", "{alice}15", "{alice}16", "{alice}17",
+        "{alice}18", "{alice}19", "{alice}20", "{alice}21", "{alice}22", "{alice}23",
+        "{alice}24", "{alice}25", "{alice}26", "{alice}27", "{alice}28", "{alice}29",
+        "{alice}30", "{alice}31"], expect: {equals: 31}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 20, expect_difference: true, expect: {
+        contains: "table size: 8"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, "{foo}1", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}2", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}3", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}4", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}5", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}6", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}7", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}8", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}9", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}10", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}11", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}12", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}13", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}14", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}15", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}16", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}17", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}18", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}19", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}20", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}21", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}22", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}23", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}24", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}25", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}26", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}27", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}28", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}29", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}30", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}31", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}32", a, EX, 10000], expect: {equals: OK}}
+    - {command: [DEL, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5", "{foo}6",
+        "{foo}7", "{foo}8", "{foo}9", "{foo}10", "{foo}11", "{foo}12", "{foo}13",
+        "{foo}14", "{foo}15", "{foo}16", "{foo}17", "{foo}18", "{foo}19", "{foo}20",
+        "{foo}21", "{foo}22", "{foo}23", "{foo}24", "{foo}25", "{foo}26", "{foo}27",
+        "{foo}28", "{foo}29", "{foo}30", "{foo}31"], expect: {equals: 31}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 15, compare: skip, expect: {contains: "table\
+          \ size: 4"}}
+    - {command: [SET, "{alice}1", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}2", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}3", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}4", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}5", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}6", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}7", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}8", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}9", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}10", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}11", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}12", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}13", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}14", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}15", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}16", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}17", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}18", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}19", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}20", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}21", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}22", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}23", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}24", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}25", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}26", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}27", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}28", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}29", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}30", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}31", a, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{alice}32", a, EX, 10000], expect: {equals: OK}}
+    - {command: [PERSIST, "{alice}1"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}2"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}3"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}4"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}5"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}6"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}7"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}8"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}9"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}10"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}11"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}12"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}13"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}14"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}15"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}16"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}17"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}18"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}19"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}20"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}21"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}22"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}23"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}24"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}25"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}26"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}27"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}28"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}29"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}30"], expect: {equals: 1}}
+    - {command: [PERSIST, "{alice}31"], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 20, expect_difference: true, expect: {
+        contains: "table size: 8"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

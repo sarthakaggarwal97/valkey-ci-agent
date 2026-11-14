@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "35c8d616cf9bd869bc6dd2edda978e8188811046",
+  "parent": "764838d66fabaf4c866b2f674625ee3486098765",
+  "pr": 12799,
+  "pr_repo": "redis/redis",
+  "subject": "Only rebuild server when src or deps are modified (#12799)",
+  "date": "2023-12-04",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2213,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/mkreleasehdr.sh, narrowing the GIT_DIRTY check to `git diff -- src deps` so that modifications outside src/ and deps/ no longer mark the build dirty and force a rebuild. This is purely a build/CI convenience change: it does not alter any server behavior, command replies, replication, persistence, or tool output at runtime (at most the dirty-flag suffix in the version string of a locally dirty build). There is no runtime path for a fuzzer scenario to reach, so no scenario is needed."
+}

@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.eviction-allkeys-sampling
+deployment:
+  modes: [standalone]
+metadata:
+  description: Staged allkeys evictions on the rewritten performEvictions sampling
+    loop, with an RDB reload rebuilding key_count/non_empty_slots and delete churn
+    on slot dicts, every deterministic reply compared against the parent build
+inputs:
+  properties:
+    policy: {type: string, enum: [allkeys-lru, allkeys-lfu], default: allkeys-lru}
+    cluster: {type: boolean, default: false}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 60
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+      maxmemory-samples: 5
+      maxmemory-eviction-tenacity: 100
+      lazyfree-lazy-eviction: {$ref: inputs.lazyfree}
+    commands:
+    - {command: [DEBUG, POPULATE, 40000, "key:", 256], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 40000}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [DBSIZE], expect: {equals: 40000}}
+    - {command: [SET, "{pair}:a", v1], expect: {equals: OK}}
+    - {command: [SET, "{pair}:b", v2], expect: {equals: OK}}
+    - {command: [DEL, "{pair}:a"], expect: {equals: 1}}
+    - {command: [DEL, "{pair}:b"], expect: {equals: 1}}
+    - {command: [DEL, "key:0"], expect: {equals: 1}}
+    - {command: [DEL, "key:1"], expect: {equals: 1}}
+    - {command: [DEL, "key:2"], expect: {equals: 1}}
+    - {command: [DEL, "key:3"], expect: {equals: 1}}
+    - {command: [DEL, "key:4"], expect: {equals: 1}}
+    - {command: [DEL, "key:5"], expect: {equals: 1}}
+    - {command: [DEL, "key:6"], expect: {equals: 1}}
+    - {command: [DEL, "key:7"], expect: {equals: 1}}
+    - {command: [DEL, "key:8"], expect: {equals: 1}}
+    - {command: [DEL, "key:9"], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 39990}}
+    - {command: [CONFIG, SET, maxmemory, 13mb], expect: {equals: OK}}
+    - {command: [SET, "probe:1", x], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 39991}}
+    - {command: [CONFIG, SET, maxmemory, 10mb], expect: {equals: OK}}
+    - {command: [SET, "probe:2", x], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 39992}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [DEBUG, POPULATE, 20000, "k2:", 256], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 7mb], expect: {equals: OK}}
+    - {command: [SET, "probe:3", x], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 20001}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

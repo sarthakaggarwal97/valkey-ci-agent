@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e216c839099b37c02f827821c14cce7aa16521bc",
+  "parent": "423565f7849a955cba4cce1cd1162e86c36319a3",
+  "pr": 12641,
+  "pr_repo": "redis/redis",
+  "subject": "Change addReplyErrorFormat to addReplyError when there is no format (#12641)",
+  "date": "2023-11-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3202,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change swaps addReplyErrorFormat for addReplyError at four call sites whose message is a plain literal with no % conversion specifiers and no newlines. Both functions emit the identical error reply (addReplyErrorLength + afterErrorReply with flags 0); addReplyErrorFormat only adds a printf/newline-sanitising pass that is a no-op on these literals. The wire bytes, error stats and client behaviour are unchanged on every affected path (ACL SETUSER/GETUSER/DELUSER with spaces in the username, GEORADIUS ANY without COUNT, REPLCONF rdb-filter-only, Lua stack-limit reply), so this is a pure refac"
+}

@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3431b1f156b05866e4f9a368304216974f047c43",
+  "parent": "a1c5171c1deab0c39efe517218f24eb5ca915fd5",
+  "pr": 7351,
+  "pr_repo": "redis/redis",
+  "subject": "format cpu config as redis style (#7351)",
+  "date": "2023-11-29",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2913,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6384f726536f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cpulist' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (CONFIG GET bgsave_cpulist)"
+    },
+    {
+      "scenario": "ai-c80128aba98b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cpulist' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (CONFIG GET bgsave_cpulist)"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

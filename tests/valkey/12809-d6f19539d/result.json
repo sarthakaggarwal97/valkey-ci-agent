@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d6f19539d2414bce1b94af9f814ce09adef6d5f2",
+  "parent": "1bd0b54957ea71ac69d30d91806936161ac2b65f",
+  "pr": 12809,
+  "pr_repo": "redis/redis",
+  "subject": "Un-register notification and server event when RedisModule_OnLoad fails (#12809)",
+  "date": "2023-11-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.0456,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes a real use-after-free in moduleLoad()'s OnLoad-failure branch (dangling keyspace-notification subscribers, server-event callbacks, command filters, and authenticated clients after the module struct is freed; moduleUnload() itself is only refactored, no behavior change). But the bug is only triggerable by a runtime MODULE LOAD <path> noload against a live server followed by commands that fire those callbacks, and no sanctioned fuzzer component can reach it: valkey.action.commands refuses MODULE LOAD/LOADEX/UNLOAD; module loading through the deployment or the commands action tak"
+}

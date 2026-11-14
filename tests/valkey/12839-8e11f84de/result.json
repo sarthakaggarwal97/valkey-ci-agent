@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8e11f84dedf87a151059eacb91782d937afeeefd",
+  "parent": "e2a3f3091fa333b1856a0a6f2b28760f2aafbe7d",
+  "pr": 12839,
+  "pr_repo": "redis/redis",
+  "subject": "Fix replica node cannot expand dicts when loading legacy RDB (#12839)",
+  "date": "2023-12-07",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.062,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a hash-table pre-sizing optimization on a cold path with no externally observable behavior change, so no fuzzer scenario can drive it meaningfully. The only edit is the divisor used by dbExpand in cluster mode: getMyClusterSlotCount() (a replica's own numslots, always 0) becomes getMyShardSlotCount() (its primary's numslots). This is reached only at rdb.c:3266-3274, and only when should_expand_db is still 1 at a key opcode -- i.e. when loading a LEGACY RDB that carries a RESIZEDB hint but no RDB_OPCODE_SLOT_INFO. A modern cluster build always writes SLOT_INFO after RESIZEDB (rdb."
+}

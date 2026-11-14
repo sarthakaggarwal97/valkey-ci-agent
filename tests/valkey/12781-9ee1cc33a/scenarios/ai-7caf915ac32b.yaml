@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 991aff1c0fe8..9ee1cc33a3d6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7caf915ac32b
+seed: 14
+experiment:
+  id: proposed.eviction-volatile-sampling
+  inputs:
+    policy: volatile-ttl
+    cluster: false
+deployment:
+  mode: standalone
+  base_port: 7300

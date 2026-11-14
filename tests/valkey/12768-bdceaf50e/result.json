@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bdceaf50e4fbfbd063d26361a98ebcfc380d206c",
+  "parent": "3431b1f156b05866e4f9a368304216974f047c43",
+  "pr": 12768,
+  "pr_repo": "redis/redis",
+  "subject": "Fix the check for new RDB_OPCODE_SLOT_INFO in redis-check-rdb (#12768)",
+  "date": "2023-11-29",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/redis-check-rdb.c:285",
+      "src/redis-check-rdb.c:286"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.0891,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9f81508893b2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'checkrdb' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (valkey-check-rdb dump.rdb), 7 (valkey-check-rdb dump.rdb --stats --format info)"
+    },
+    {
+      "scenario": "ai-1ce09e1d8521",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'check-rdb' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-check-rdb slot-info.rdb)"
+    },
+    {
+      "scenario": "ai-1ce09e1d8521",
+      "build": "unstable",
+      "seed": 7701,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1ce09e1d8521",
+      "build": "unstable",
+      "seed": 7702,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1ce09e1d8521",
+      "build": "unstable",
+      "seed": 7703,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c6ca6ba3622a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'checkrdb' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (valkey-check-rdb dump.rdb), 7 (valkey-check-rdb dump.rdb --stats --format info)"
+    }
+  ],
+  "recall_round": {
+    "tests": 1,
+    "recall": false
+  }
+}

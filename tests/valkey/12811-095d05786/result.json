@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "095d05786f5da31557de2654a41368a654e7598a",
+  "parent": "d6f19539d2414bce1b94af9f814ce09adef6d5f2",
+  "pr": 12811,
+  "pr_repo": "redis/redis",
+  "subject": "clarify the comment of findSlotByKeyIndex function (#12811)",
+  "date": "2023-11-27",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2086,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (#12811) only edits comments in src/db.c: it clarifies the doc comment of findSlotByKeyIndex and expands the inline comment explaining why the +1 and -1 adjustments cancel out. No executable code is modified, so there is no behaviour change to exercise and no scenario is needed."
+}

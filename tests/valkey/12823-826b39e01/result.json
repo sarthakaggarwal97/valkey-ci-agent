@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "826b39e016b30dc63136a08797ddcc55eca21ae0",
+  "parent": "f2d59c4f91ef4ca1555abd04673d729f9d6f4af1",
+  "pr": 12823,
+  "pr_repo": "redis/redis",
+  "subject": "Align server.lastsave and server.rdb_save_time_last by removing multiple calls to time(NULL) (#12823)",
+  "date": "2023-12-07",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4017,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a timekeeping consistency refactor in backgroundSaveDoneHandler: one time(NULL) sample at handler entry now sets both server.lastsave and server.rdb_save_time_last, instead of two separate calls. No control flow, persistence format, replication behavior, or reply shape changes. The only observable effect is removing a possible <=1-second skew between LASTSAVE and INFO's rdb_last_bgsave_time_sec when the clock ticks between the two old calls \u2014 a race that cannot be reproduced deterministically. Both affected values are wall-clock timestamps/durations that a compared sequence must "
+}

@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9ee1cc33a3d66ac52728586961bfa53ac1da612c",
+  "parent": "991aff1c0fe818627b0f8a7d9a6cc7ff720d3682",
+  "pr": 12781,
+  "pr_repo": "redis/redis",
+  "subject": "Make the sampling logic in eviction clearer (#12781)",
+  "date": "2023-12-06",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 36,
+    "executed": 36,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.4313,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-94957ebfd499",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (DEL key:0), 10 (DEL key:1), 11 (DEL key:2), 12 (DEL key:3), 13 (DEL key:4), 14 (DEL key:5), 15 (DEL key:6), 16 (DEL key:7), 17 (DEL key:"
+    },
+    {
+      "scenario": "ai-11b286872cb2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (DEL key:0), 10 (DEL key:1), 11 (DEL key:2), 12 (DEL key:3), 13 (DEL key:4), 14 (DEL key:5), 15 (DEL key:6), 16 (DEL key:7), 17 (DEL key:"
+    },
+    {
+      "scenario": "ai-fb2f01910f73",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (DEL key:0), 10 (DEL key:1), 11 (DEL key:2), 12 (DEL key:3), 13 (DEL key:4), 14 (DEL key:5), 15 (DEL key:6), 16 (DEL key:7), 17 (DEL key:"
+    },
+    {
+      "scenario": "ai-7caf915ac32b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 32 (EXISTS ballast:0), 33 (EXISTS ballast:19999)"
+    },
+    {
+      "scenario": "ai-8c5a60be45a8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 32 (EXISTS ballast:0), 33 (EXISTS ballast:19999)"
+    },
+    {
+      "scenario": "ai-8f48e10a5be5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (EXISTS a:0), 11 (EXISTS b:0)"
+    }
+  ]
+}

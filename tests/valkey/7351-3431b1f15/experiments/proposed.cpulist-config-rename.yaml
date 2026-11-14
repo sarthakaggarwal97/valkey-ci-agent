@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.cpulist-config-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: cpulist configs renamed to hyphen style with underscore aliases; CONFIG
+    GET/SET lookup, glob matching, and CONFIG REWRITE plus restart compared against
+    the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cpulist
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {server_cpulist: "0", bio_cpulist: "0", aof_rewrite_cpulist: "0",
+      bgsave_cpulist: "0"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, server-cpulist], expect_difference: true, expect: {
+        contains: server-cpulist}}
+    - {command: [CONFIG, GET, bio-cpulist], expect_difference: true, expect: {contains: bio-cpulist}}
+    - {command: [CONFIG, GET, server_cpulist], expect: {contains: server_cpulist}}
+    - {command: [CONFIG, GET, "*cpulist*"], expect_difference: true, compare: unordered-pairs,
+      expect: {contains: bgsave-cpulist}}
+    - {command: [CONFIG, SET, server-cpulist, "0"], expect_difference: true, expect: {
+        error: immutable}}
+    - {command: [CONFIG, SET, bio_cpulist, "0"], expect: {error: immutable}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, aof-rewrite-cpulist], expect_difference: true, expect: {
+        contains: aof-rewrite-cpulist}}
+    - {command: [CONFIG, GET, bgsave_cpulist], expect: {contains: "0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cpulist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cpulist}

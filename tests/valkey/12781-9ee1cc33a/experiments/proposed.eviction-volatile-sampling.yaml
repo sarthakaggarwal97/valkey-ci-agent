@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.eviction-volatile-sampling
+deployment:
+  modes: [standalone]
+metadata:
+  description: Volatile eviction over sparse per-slot expires dicts, with PERSIST/EXPIRE
+    churn of DB_EXPIRES accounting, exhausting every volatile key to a deterministic
+    OOM, compared against the parent build
+inputs:
+  properties:
+    policy: {type: string, enum: [volatile-lru, volatile-lfu, volatile-ttl], default: volatile-lru}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 60
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+      maxmemory-samples: 5
+      maxmemory-eviction-tenacity: 100
+    commands:
+    - {command: [DEBUG, POPULATE, 20000, "ballast:", 256], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 20000}}
+    - {command: [SET, vk0, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk1, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk2, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk3, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk4, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk5, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk6, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk7, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk8, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk9, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk10, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk11, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk12, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk13, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk14, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vk15, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, "{vt}:a", x, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, "{vt}:b", x, EX, 1000], expect: {equals: OK}}
+    - {command: [PERSIST, "{vt}:a"], expect: {equals: 1}}
+    - {command: [EXPIRE, "{vt}:a", 1000], expect: {equals: 1}}
+    - {command: [SET, "{vt}:b", y], expect: {equals: OK}}
+    - {command: [EXPIRE, "{vt}:b", 1000], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 20018}}
+    - {command: [CONFIG, SET, maxmemory, 4mb], expect: {equals: OK}}
+    - {command: [SET, "probe:1", x], expect: {error: "OOM"}}
+    - {command: [DBSIZE], expect: {equals: 20000}}
+    - {command: [EXISTS, vk0], expect: {equals: 0}}
+    - {command: [EXISTS, vk15], expect: {equals: 0}}
+    - {command: [EXISTS, "{vt}:a"], expect: {equals: 0}}
+    - {command: [EXISTS, "{vt}:b"], expect: {equals: 0}}
+    - {command: [EXISTS, "ballast:0"], expect: {equals: 1}}
+    - {command: [EXISTS, "ballast:19999"], expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, "probe:2", x], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 20001}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a1c5171c1dea..3431b1f156b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c80128aba98b
+seed: 73512
+experiment:
+  id: proposed.cpulist-config-rename
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
