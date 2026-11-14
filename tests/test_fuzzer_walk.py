@@ -759,6 +759,25 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     assert json.loads((folder / "result.json").read_text()) == result
 
 
+def test_a_signal_crash_whose_symbol_drifts_across_builds_is_one_crash(monkeypatch, tmp_path):
+    # fuzzer#162: the same NULL free crashed every build, but the EIP named callReplyGetPrivateData on unstable
+    # and RM_FreeCallReply on 2023's builds, so it fingerprinted apart and read as "appeared after" the merge.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    new_name = {"rule": "crash", "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData", "lines": []}
+    old_name = {"rule": "crash", "detail": "crash: crashed by signal: 11 in RM_FreeCallReply", "lines": []}
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        build = _build(run_dir)
+        found = {"new": new_name} if build == "unstable" else {"old": old_name}
+        return {"status": "PASS", "reason": None, "reached": build == "merge", "parent_exited": False,
+                "reached_commands": set(), "found": found}
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    crashes = [f for f in result["findings"] if f["rule"] == "crash"]
+    assert [f["builds"] for f in crashes] == [{"parent": True, "merge": True, "unstable": True}]
+    assert crashes[0]["verdict"] == "predates #4716"
+
+
 def test_claude_cut_off_by_its_timeout_answers_in_the_same_session(monkeypatch, tmp_path):
     # valkey-search #1650: Claude read the change for 50 minutes, timed out, and everything it read was lost.
     test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")

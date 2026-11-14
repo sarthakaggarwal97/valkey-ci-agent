@@ -921,6 +921,22 @@ def files(finding: dict[str, Any]) -> bool:
     return bool(finding["builds"]["unstable"]) and not finding.get("verdict", "").startswith("intended by")
 
 
+_SIGNAL_CRASH_RE = re.compile(r"(crash: crashed by signal: \d+) in \w+")
+
+
+def crash_matches(info: dict[str, Any], found: dict[str, dict[str, Any]], fingerprint: str) -> bool:
+    """Whether ``found``, another build's findings, shows ``info``'s crash: by fingerprint, or for a signal
+    crash by its signal alone, without the function. The EIP's symbol drifts across builds (inlining, the
+    fork's renames), so one crash fingerprints apart and reads as new on unstable (fuzzer-walk #162: the same
+    NULL free was callReplyGetPrivateData on unstable and RM_FreeCallReply on 2023's builds)."""
+    if fingerprint in found:
+        return True
+    match = _SIGNAL_CRASH_RE.match(str(info.get("detail") or ""))
+    if not match:
+        return False
+    return any(str(other.get("detail") or "").startswith(match.group(1)) for other in found.values())
+
+
 _STRING_RE = re.compile(r'"((?:[^"\\]|\\.){12,})"')
 _FORMAT_RE = re.compile(r"%[-+ #0-9.*]*(?:hh|h|ll|l|z|j|t|L)?[a-zA-Z]")
 
@@ -1248,11 +1264,14 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                     judged.add(fingerprint)
                     again = fingerprint in view(test, doc, "unstable", hunt_seed, again=True)["found"]
                     found.append({**info, "fingerprint": fingerprint, "seed": hunt_seed, "builds": {
-                        "parent": fingerprint in view(test, doc, "parent", hunt_seed)["found"],
-                        "merge": fingerprint in view(test, doc, "merge", hunt_seed)["found"], "unstable": again}})
+                        "parent": crash_matches(info, view(test, doc, "parent", hunt_seed)["found"], fingerprint),
+                        "merge": crash_matches(info, view(test, doc, "merge", hunt_seed)["found"], fingerprint),
+                        "unstable": again}})
             for build in ("merge", "parent"):
                 for fingerprint, info in view(test, doc, build, seed)["found"].items():
-                    if fingerprint not in judged:
+                    # Not a crash an unstable finding already judged under a drifted symbol: one bug, one line.
+                    if fingerprint not in judged and not any(crash_matches(info, {"": f}, fingerprint)
+                                                             for f in found):
                         judged.add(fingerprint)
                         found.append({**info, "fingerprint": fingerprint, "seed": seed, "builds": {
                             "parent": fingerprint in view(test, doc, "parent", seed)["found"],
