@@ -707,15 +707,20 @@ def _check_and_validate(
         if not experiment.valid:
             proposal.error = f"uses experiment {proposal.experiment}, which did not compile: {experiment.error}"
             return
-    server_config = doc["deployment"].get("server_config")
-    if configs is not None and isinstance(server_config, dict):
-        unknown = sorted(str(key) for key in server_config if str(key) not in configs)
+    if configs is not None:
+        # instance_configs too: a per-role or per-instance setting lands in that instance's config file the
+        # same unprobed way server_config does, and one the build lacks kills it at startup just the same.
+        instance_configs = doc["deployment"].get("instance_configs")
+        layers = [doc["deployment"].get("server_config"),
+                  *(instance_configs.values() if isinstance(instance_configs, dict) else ())]
+        settings = {str(key) for layer in layers if isinstance(layer, dict) for key in layer}
+        unknown = sorted(settings - configs)
         if unknown:
             proposal.error = (
-                f"deployment.server_config sets {', '.join(unknown)}, which the checkout's src/config.c does not "
-                "have: a build that rejects its config file dies at startup and the test is skipped whole. Set "
-                "only settings the builds under test know; exercise a new option inside the sequence with "
-                "CONFIG SET marked expect_difference."
+                f"the deployment's server config sets {', '.join(unknown)}, which the checkout's src/config.c "
+                "does not have: a build that rejects its config file dies at startup and the test is skipped "
+                "whole. Set only settings the builds under test know; exercise a new option inside the sequence "
+                "with CONFIG SET marked expect_difference."
             )
             return
     rendered = _render_scenario(doc, change)

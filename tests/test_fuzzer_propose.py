@@ -462,14 +462,19 @@ def test_server_config_the_checkout_lacks_is_rejected(tmp_path, fuzzer_dir, monk
         "base_port: 7000}", "base_port: 7000, server_config: {appendonly: 'yes', list-max-ziplist-size: 4}}")
     unknown = OTHER_GOOD.replace(
         "base_port: 7100}", "base_port: 7100, server_config: {dual-channel-replication-enabled: 'yes'}}")
+    # instance_configs lands in an instance's config file the same unprobed way server_config does.
+    per_role = OTHER_GOOD.replace("seed: 8", "seed: 9").replace(
+        "base_port: 7100}", "base_port: 7200, instance_configs: {replica: {dual-channel-replication-enabled: 'yes'}}}")
     runner = StubRunner(_answer([{"rationale": "known", "scenario": known},
-                                 {"rationale": "unknown", "scenario": unknown}]),
+                                 {"rationale": "unknown", "scenario": unknown},
+                                 {"rationale": "per-role", "scenario": per_role}]),
                         _answer([]))
-    run, result, out = _propose(runner, tmp_path, fuzzer_dir, count=2)
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, count=3)
     assert [s["rationale"] for s in result["scenarios"]] == ["known"]
-    assert len(result["dropped"]) == 1
-    assert "dual-channel-replication-enabled" in result["dropped"][0]["error"]
-    assert "src/config.c does not" in result["dropped"][0]["error"]
+    assert len(result["dropped"]) == 2
+    for dropped in result["dropped"]:
+        assert "dual-channel-replication-enabled" in dropped["error"]
+        assert "src/config.c does not" in dropped["error"]
 
 
 def test_known_configs_names_aliases_and_directives(tmp_path):
