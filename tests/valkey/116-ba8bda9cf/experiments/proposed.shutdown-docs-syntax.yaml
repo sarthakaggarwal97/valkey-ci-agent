@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-docs-syntax
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    SHUTDOWN's declared argument tree changed from four flat optional args to one
+    oneof ([[NOSAVE|SAVE] [NOW] [FORCE] | ABORT]); COMMAND DOCS shutdown must differ
+    from the parent build, while COMMAND INFO, arity and the docs of unrelated commands
+    stay identical.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, shutdown], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, shutdown], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, save], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, failover], expect: {exists: true}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

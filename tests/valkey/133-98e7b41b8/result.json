@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98e7b41b8504f02aa2f30ef2a2690bf05cb53d54",
+  "parent": "ba8bda9cffe80345cd4a74dfd98ab96b3bd52fb0",
+  "pr": 133,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix rename redis to valkey to pass reply-schemas-validator job (#133)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2372,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/req-res-log-validator.py, a CI helper script for the reply-schemas-validator job: it renames the default redis-server/redis-cli binary paths to valkey-server/valkey-cli and updates print/comment strings. No server code, command behavior, reply, tool shipped in the build, replication or persistence path is touched, so no runtime behavior can differ between the two builds and no scenario can reach the change."
+}

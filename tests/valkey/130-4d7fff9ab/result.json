@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4d7fff9abacab3c8c7618caea419aebeb71f266e",
+  "parent": "0ba2f1b14e03172f51c0b6ec2fed6af0d8378191",
+  "pr": 130,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unused var desc in luaRegisterFunctionReadPositionalArgs (#130)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2147,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes an unused local variable (`sds desc = NULL;`) and its dead cleanup (`if (desc) sdsfree(desc);`) in luaRegisterFunctionReadPositionalArgs; desc was never assigned, so no code path, reply, or memory behaviour changes. This is a pure refactor with no testable behaviour difference."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c7df0f06e79659fcac7d6716f7ad0f4449bcacae",
+  "parent": "11ddd8b289215b11e7afd797cb9ba83195d9f376",
+  "pr": 55,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Makefile respect user's SERVER_CFLAGS and OPT (#55)",
+  "date": "2024-03-27",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2253,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only touches src/Makefile: it moves the default -flto/-fno-omit-frame-pointer flags from SERVER_CFLAGS/SERVER_LDFLAGS into the OPTIMIZATION variable and adds $(OPT) to FINAL_LDFLAGS, so user-provided SERVER_CFLAGS and OPT are no longer clobbered by defaults. This is a build-system change with no runtime behaviour change in the server, its commands, replication, persistence or tools; a default build produces an equivalent binary. There is no code path a fuzzer scenario could reach, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1516d53defdad5cf5f65a4080b44e6a9fbdd889",
+  "parent": "98e7b41b8504f02aa2f30ef2a2690bf05cb53d54",
+  "pr": 138,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename files redisassert to serverassert (#138)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2784,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames src/redisassert.c/.h to src/serverassert.c/.h (100% similarity renames), updates the matching #include lines in ae.c, dict.c, intset.c, kvstore.c, listpack.c, memtest.c, monotonic.c, quicklist.c, rax.c, sds.c, ziplist.c, zmalloc.c, and swaps redisassert.o for serverassert.o in the Makefile object lists. It is a pure build/refactor change with no behaviour change: no command, reply, replication, persistence or cluster path is altered, and any mistake would surface as a compile/link failure, not a runtime bug. No scenario is needed."
+}

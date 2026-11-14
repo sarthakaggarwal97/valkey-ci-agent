@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "621edbafba74c2d6211bf81d54be8b1da8543d4e",
+  "parent": "a1516d53defdad5cf5f65a4080b44e6a9fbdd889",
+  "pr": 142,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redisassert to serverassert in comment (#142)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2081,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comment text in src/serverassert.c and src/serverassert.h (renaming 'redisassert' to 'serverassert' in file-header comments). No executable code, macro, build file, or configuration changes, so there is no behaviour to exercise and no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11ddd8b289215b11e7afd797cb9ba83195d9f376",
+  "parent": "3782446a40388aed205eb5fcd5cdf94046b01a79",
+  "pr": 45,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Changing Redis references in files documenting development guidelines (#26) (#45)",
+  "date": "2024-03-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.226,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only documentation text: the BUGS file and CONTRIBUTING.md, swapping Redis GitHub URLs for placeholderkv ones. No source file, command, config, replication, persistence or tool behaviour changes, so there is no runtime path for a scenario to reach."
+}

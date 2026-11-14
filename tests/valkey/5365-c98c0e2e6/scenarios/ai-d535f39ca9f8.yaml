@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 74b083139289..c98c0e2e6c27.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d535f39ca9f8
+seed: 7002
+experiment:
+  id: proposed.flush-terminates-forkless-save
+  inputs:
+    populate_count: 20000
+    flush: FLUSHDB
+deployment:
+  mode: standalone
+  base_port: 7100
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    forkless-policy: prefer-forkless
+    enable-debug-command: 'yes'
+    appendonly: 'no'
+    rdb-key-save-delay: 2000

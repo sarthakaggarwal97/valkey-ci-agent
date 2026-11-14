@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "289eb47eb96d30f08543d721880fe99b623abd48",
+  "parent": "1950acd1e2b8c2282d51e528377f6e564eb447cd",
+  "pr": 86,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace offensive term (#86)",
+  "date": "2024-03-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2139,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comment text: one line in the top-level Makefile comment and one comment in deps/linenoise/linenoise.c, replacing an offensive term. No executable code, build rules, configuration, or behaviour is touched, so there is nothing a scenario could exercise or compare."
+}

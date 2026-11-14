@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "57789d4d08fbe794c178a7d6a7c267f15a32b7b4",
+  "parent": "c120a4587494989454057a9f3c96526f4b82f237",
+  "pr": 62,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update naming to to Valkey (#62)",
+  "date": "2024-03-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5242,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure build/naming change: the Makefile renames the built executables from placeholderkv-* to valkey-* and src/server.c updates the matching strstr(exec_name, ...) strings that dispatch into sentinel/check-rdb/check-aof mode, keeping dispatch consistent with each build's own binary names. Everything else in the diff is CI workflows, test harness Tcl, and documentation. No command behaviour, reply, replication, persistence, or cluster path changes, so there is no behavioural difference between the builds for a scenario to reach."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "253fe9dcedbab88bd2f3d85b3be7a5d037c4a4a5",
+  "parent": "af1b0de92de2ace4a01e74cf9ed7d7d6f3dedf70",
+  "pr": 72,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typos and replace 'codespell' with 'typos' (#72)",
+  "date": "2024-03-31",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3974,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely typo fixes: comments and identifier renames (local variables, a prototype parameter name, Tcl test proc names renamed consistently at definition and every call site), CI configuration replacing codespell with typos, and one printf string inside an #ifdef-guarded self-test harness that is not compiled into the server. No command reply, config, persistence, replication, cluster, or tool behavior changes, so there is nothing for a scenario to reach."
+}

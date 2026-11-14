@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "83507d74b8588d2d8561a263466d34ee669d9812",
+  "parent": "e35d86f2a28bd39fc883132c361a2def7a463094",
+  "pr": 139,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update for latest 'typos' (#139)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2219,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits .config/typos.toml (the typos linter's CI configuration, adding ignore words like 'ro', 'ang', 'arange') and fixes a spelling error ('potentional' -> 'potential') inside a comment in tests/unit/acl.tcl. No C source, command behavior, protocol, replication, persistence, or tool code is touched, so there is no runtime behavior to exercise and no scenario is needed."
+}

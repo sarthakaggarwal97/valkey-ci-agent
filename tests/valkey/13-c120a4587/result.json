@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c120a4587494989454057a9f3c96526f4b82f237",
+  "parent": "699f62e8e3f55bfd665ab234e559081d2bd68230",
+  "pr": 13,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Sharded pubsub command execution within multi/exec (#13)",
+  "date": "2024-03-27",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6834,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

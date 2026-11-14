@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e35d86f2a28bd39fc883132c361a2def7a463094",
+  "parent": "4d7fff9abacab3c8c7618caea419aebeb71f266e",
+  "pr": 131,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix rename REDIS_TEST to SERVER_TEST to pass the Daily workflow (#131)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3062,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the REDIS_TEST compile-time macro to SERVER_TEST in #ifdef guards around embedded unit-test code (and one test-only struct field in quicklist.c). That macro is defined only in special test builds via the Makefile/CI; in the ordinary builds the fuzzer runs, all guarded code is compiled out on both the parent and the change, so the two builds are behaviourally identical. This is a build/CI fix with no runtime behaviour to exercise, so no scenario is needed."
+}

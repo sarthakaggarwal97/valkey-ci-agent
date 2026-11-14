@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bdd7314f419e07e5ad0b21b0d3e801aef280f902",
+  "parent": "253fe9dcedbab88bd2f3d85b3be7a5d037c4a4a5",
+  "pr": 103,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fine-tune ASCII art (#103)",
+  "date": "2024-03-31",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2486,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adjusts spacing and glyphs in the startup ASCII art logo (src/asciilogo.h), a cosmetic string printed to the log at boot. It affects no command behavior, replies, replication, persistence, or any code path an oracle could judge, so no scenario is needed."
+}

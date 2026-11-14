@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1fa8da3359c76ef713a46e47933cbe2ce4309249",
+  "parent": "57789d4d08fbe794c178a7d6a7c267f15a32b7b4",
+  "pr": 71,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename functionsLibMataData to functionsLibMetaData (#71)",
+  "date": "2024-03-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2192,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the C typedef functionsLibMataData to functionsLibMetaData in src/functions.c and updates the type name at its use sites (functionExtractLibMetaData, functionFreeLibMetaData, and a local variable in functionsCreateWithLibraryCtx). No fields, logic, replies, persistence formats, or replication behavior change; it is a compile-time-only refactor with no observable runtime difference, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b2a397366b1704b03f5042395ff620cd2096f598",
+  "parent": "de311aea53fa2fd039ae4f7652150e2166dfbaea",
+  "pr": 77,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change ascii logo with temporal valkey logo (#77)",
+  "date": "2024-03-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.326,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only swaps the ASCII-art banner string in src/asciilogo.h for a Valkey-branded one. Its sole consumer is the snprintf in server.c's logo printing, and the new string keeps exactly the same printf specifiers in the same order and types (%s, %s, %d, %s, %s, %d, %ld) matching the seven arguments, well under the 16KB buffer. The banner is cosmetic startup-log output (shown only on a TTY or with always-show-logo) and affects no command reply, data path, replication, or persistence, so there is no behaviour for a scenario to exercise."
+}

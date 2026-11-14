@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3ab066f71002de28025a7b28af4e90310294e40e",
+  "parent": "289eb47eb96d30f08543d721880fe99b623abd48",
+  "pr": 66,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "For additional compatibility this adds REDIS_CFLAGS and REDIS_LDFLAGS support to MAKEFILE (#66)",
+  "date": "2024-03-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2224,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system only: src/Makefile gets comment wording updates and new optional REDIS_CFLAGS/REDIS_LDFLAGS variables that merely alias SERVER_CFLAGS/SERVER_LDFLAGS at compile time. No runtime code path, command behavior, reply, or protocol is affected, so no fuzzer scenario can reach or test it."
+}

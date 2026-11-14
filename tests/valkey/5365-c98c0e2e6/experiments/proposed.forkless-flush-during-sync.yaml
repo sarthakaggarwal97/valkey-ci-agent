@@ -1,0 +1,83 @@
+extends: [valkey.base]
+id: proposed.forkless-flush-during-sync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: FLUSHDB on an insignificant DB races the end of a forkless full-sync/save
+    on the primary
+inputs:
+  properties:
+    warm_up_s: {type: number, minimum: 0.5, maximum: 30, default: 2}
+    settle_s: {type: number, minimum: 0.5, maximum: 60, default: 4}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: {$ref: inputs.warm_up_s}}
+- use: valkey.action.commands
+  id: flush-burst
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [SET, dbonekey, x], expect: {equals: OK}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [WAIT, "1", "80"]}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [flush-burst]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: flush-burst}

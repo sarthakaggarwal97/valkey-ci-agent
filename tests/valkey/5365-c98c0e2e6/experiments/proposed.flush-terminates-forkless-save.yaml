@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.flush-terminates-forkless-save
+deployment:
+  modes: [standalone]
+metadata:
+  description: A FLUSHDB/FLUSHALL during an active forkless disk BGSAVE terminates
+    the consistent-snapshot iterator without leaving a stray queued item
+inputs:
+  properties:
+    populate_count: {type: integer, minimum: 1, maximum: 10000000, default: 20000}
+    flush: {type: string, enum: [FLUSHALL, FLUSHDB], default: FLUSHALL}
+components:
+- use: valkey.action.commands
+  id: flush-during-save
+  timeout_s: 60
+  config:
+    resp: 2
+    instances: primary
+    commands:
+    - {command: [DEBUG, POPULATE, {$ref: inputs.populate_count}], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [{$ref: inputs.flush}], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush-during-save}

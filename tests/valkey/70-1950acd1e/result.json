@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1950acd1e2b8c2282d51e528377f6e564eb447cd",
+  "parent": "9be3a1d5aba7cff8fa7561188504a5d070bdf720",
+  "pr": 70,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix remaining names in CONTRIBUTING.md (#70)",
+  "date": "2024-03-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2293,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only touches CONTRIBUTING.md (renaming Redis to Valkey, reformatting text) and adds a .cache entry to .gitignore. It is pure documentation/repo-metadata with no code, config, command, protocol, or tool behavior change, so no scenario can reach it and none is needed."
+}

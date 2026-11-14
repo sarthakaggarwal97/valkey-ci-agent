@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba8bda9cffe80345cd4a74dfd98ab96b3bd52fb0",
+  "parent": "83507d74b8588d2d8561a263466d34ee669d9812",
+  "pr": 116,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix shutdown syntax hint, following intention (#116)",
+  "date": "2024-04-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1876,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3a4736d746aa",
+      "build": "unstable",
+      "seed": 1101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3a4736d746aa",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3a4736d746aa",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e537cacdaa51",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e537cacdaa51",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e537cacdaa51",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

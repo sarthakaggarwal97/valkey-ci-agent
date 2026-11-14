@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 74b083139289..c98c0e2e6c27.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9c67dcb46e24
+seed: 51002
+experiment:
+  id: proposed.forkless-flush-during-sync
+  inputs:
+    warm_up_s: 3
+    settle_s: 6
+    stable_keys: 1200
+    mutable_keys: 400
+    mutation_rate: 1000
+    value_size: 16384
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    forkless-policy: prefer-forkless
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '0'

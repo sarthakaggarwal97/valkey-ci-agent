@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "parent": "74b083139289aa8777c5d3be9520eb8ed9bf17d7",
+  "pr": 5365,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: don't queue a FLUSHDB item for a completed iterator (#5365)",
+  "date": "2026-11-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 15.139,
+  "findings": [],
+  "recorded": []
+}

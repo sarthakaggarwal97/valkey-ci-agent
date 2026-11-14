@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af1b0de92de2ace4a01e74cf9ed7d7d6f3dedf70",
+  "parent": "b2a397366b1704b03f5042395ff620cd2096f598",
+  "pr": 84,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo (#84)",
+  "date": "2024-03-30",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2109,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a typo in a code comment in src/acl.c (\"resopnsible\" -> \"responsible\"). No executable code, config, protocol, or tool behaviour changes, so there is nothing a scenario could reach or regress."
+}
