@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "57ae2bcfffe6425e86a52801353adceabff912c6",
+  "parent": "41407640c9666664ad873ff97977393219d9bdd5",
+  "pr": 923,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement metric to CPU consumption for remote query (#923)",
+  "date": "2026-11-14",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": "57ae2bcfffe6425e86a52801353adceabff912c6",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 14.9684,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a8aa97578111",
+      "build": "unstable",
+      "seed": 11,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8662a4423aef",
+      "build": "unstable",
+      "seed": 12,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-682a83429968",
+      "build": "unstable",
+      "seed": 14,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-682a83429968",
+      "build": "unstable",
+      "seed": 15,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eb690ac1c619",
+      "build": "unstable",
+      "seed": 14,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

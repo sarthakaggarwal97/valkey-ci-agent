@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-14T21:36+00:00.
+Updated 2026-11-14T21:46+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2461 | 80 | #12758 (2023-11-13) | 292 | 239.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.6 |
-| valkey-io/valkey-search | 691 | 0 | f8106e72e984 (2024-11-27) | 9 | 30.0 |
+| valkey-io/valkey-search | 692 | 0 | f8106e72e984 (2024-11-27) | 10 | 30.1 |
 
 ## Last runs
 
@@ -48,15 +48,16 @@ Updated 2026-11-14T21:36+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-14T18:52:00+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43628892454): 0 merge(s) tested, 0 without a code change.
+[2026-11-14T21:46:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43631714931): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-search#923](https://github.com/valkey-io/valkey-search/pull/923) ([tests](tests/valkey-search/923-57ae2bcff/)): Implement metric to CPU consumption for remote query (#923): 4 of 4 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 965 of 1546 tested (62%)
+- Merges whose tests reached the change: 966 of 1547 tested (62%)
 - Changed-line coverage: median 100% of 1027 merge(s) measured, 78 under 50%
 - Recall: 256 parents flagged of 402 fix merges
-- Claude: $904.67 in the last 24 hours, $6234.46 in the last 7 days, $11366.10 in all
+- Claude: $919.64 in the last 24 hours, $6249.43 in the last 7 days, $11381.07 in all
 - Issues filed: 81
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

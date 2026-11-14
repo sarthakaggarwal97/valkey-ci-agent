@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.search-remote-cpu-metric
+deployment:
+  modes: [standalone]
+metadata:
+  description: New coordinator_server_search_index_partition_cpu_time_usec metric
+    is registered on the change build only, and the ScopedThreadCPUMonitor now wrapping
+    every async FT.SEARCH (null accumulator for local searches) and ResolveContent
+    does not crash or change search replies
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: {$ref: inputs.cluster}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT._DEBUG, LIST_METRICS, APP, NAMES_ONLY], expect_difference: true,
+      expect: {contains: coordinator_server_search_index_partition_cpu_time_usec}}
+    - {command: [HSET, 'doc:1', v, !!binary "AACAPwAAgD8AAIA/", n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', v, !!binary "AAAAQAAAAEAAAABA", n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', v, !!binary "AABAQAAAQEAAAEBA", n, 3], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AAAgQQAAIEEAACBB"], wait_s: 30, expect: {contains: 'doc:3'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @v $BLOB]', PARAMS, 2, BLOB, !!binary "AAAgQQAAIEEAACBB"],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', RETURN, 1, n, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAgD8AAIA/"], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @v $BLOB]', NOCONTENT, LIMIT, 0, 0, PARAMS,
+        2, BLOB, !!binary "AAAgQQAAIEEAACBB"], compare: unordered}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@n'], compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AAAgQQAAIEEAACBB"], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}
