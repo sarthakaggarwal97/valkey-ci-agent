@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-14T21:17+00:00.
+Updated 2026-11-14T21:23+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2439 | 102 | #12738 (2023-11-27) | 270 | 240.3 |
+| valkey-io/valkey | 2439 | 102 | #12738 (2023-11-27) | 270 | 236.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.6 |
 | valkey-io/valkey-search | 691 | 0 | f8106e72e984 (2024-11-27) | 9 | 30.0 |
@@ -43,7 +43,7 @@ Updated 2026-11-14T21:17+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-14T20:52:52+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43639769113): 0 merge(s) tested, 0 without a code change.
+[2026-11-14T21:23:39+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43642519644): 0 merge(s) tested, 0 without a code change.
 
 
 ### valkey-io/valkey-search
@@ -56,7 +56,7 @@ Updated 2026-11-14T21:17+00:00.
 - Merges whose tests reached the change: 957 of 1533 tested (62%)
 - Changed-line coverage: median 100% of 1014 merge(s) measured, 78 under 50%
 - Recall: 252 parents flagged of 397 fix merges
-- Claude: $803.58 in the last 24 hours, $6233.87 in the last 7 days, $11265.01 in all
+- Claude: $803.58 in the last 24 hours, $6133.37 in the last 7 days, $11265.01 in all
 - Issues filed: 80
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
