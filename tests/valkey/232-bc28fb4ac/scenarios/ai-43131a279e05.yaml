@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey aaec32121360..bc28fb4ac0ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-43131a279e05
+seed: 101
+experiment:
+  id: proposed.lolwut-version-trailer
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

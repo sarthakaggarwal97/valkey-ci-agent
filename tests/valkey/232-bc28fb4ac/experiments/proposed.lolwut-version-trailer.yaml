@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.lolwut-version-trailer
+deployment:
+  modes: [standalone]
+metadata:
+  description: LOLWUT default, VERSION 5 and VERSION 6 all render the VALKEY_VERSION
+    trailer unchanged after the macro rename, at default and clamped boundary arguments
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lolwut
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [LOLWUT], expect: {contains: "Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5"], compare: skip, expect: {contains: "Georg Nees\
+          \ - schotter, plotter on paper, 1968. Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5", "1", "1", "1"], compare: skip, expect: {contains: "Redis\
+          \ ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5", "1000", "200", "200"], compare: skip, expect: {
+        contains: "Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5", "-1", "-1", "-1"], compare: skip, expect: {
+        contains: "Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "6"], compare: skip, expect: {contains: "Original\
+          \ 8 bit image from Plaguemon by hikikomori. Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "6", "1000", "1000"], compare: skip, expect: {contains: "Redis\
+          \ ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "2147483648"], expect: {contains: "Redis ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "9223372036854775808"], expect: {error: true}}
+    - {command: [LOLWUT, VERSION, notanumber], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lolwut.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lolwut}

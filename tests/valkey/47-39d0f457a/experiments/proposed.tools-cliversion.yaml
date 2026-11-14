@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.tools-cliversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark --version print cliVersion built from
+    SERVER_VERSION, outputs compared across builds
+components:
+- use: valkey.action.tools
+  id: ver
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: [' \(git:[0-9a-f]+(-dirty)?\)']
+    runs:
+    - {tool: valkey-cli, args: [--version], expect: {exit: {equals: 0}, stdout: {
+          contains: "redis-cli 255.255.255"}}}
+    - {tool: valkey-cli, args: [-v], expect: {exit: {equals: 0}, stdout: {contains: "255.255.255"}}}
+    - {tool: valkey-benchmark, args: [--version], expect: {exit: {equals: 0}, stdout: {
+          contains: "redis-benchmark 255.255.255"}}}
+    - {tool: valkey-benchmark, args: [-v], expect: {exit: {equals: 0}, stdout: {contains: "255.255.255"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ver}

@@ -1,0 +1,67 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "39d0f457a2a332cd511e45a8b28e65524ff4dea6",
+  "parent": "55de74e0dc9a14166c5c96d2282ae29f09785e59",
+  "pr": 47,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update versioning fields for compatibility (#47)",
+  "date": "2024-04-03",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 2,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 23,
+    "executed": 22,
+    "percent": 95,
+    "uncovered": [
+      "src/sentinel.c:1849"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.3219,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-38bcae872e57",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-38bcae872e57",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-38bcae872e57",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef73353bfca1",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef73353bfca1",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef73353bfca1",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

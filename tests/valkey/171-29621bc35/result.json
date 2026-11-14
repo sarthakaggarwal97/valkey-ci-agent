@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "29621bc356116051c09d2ba7b8a405eeaa04be95",
+  "parent": "a0b09763d0c1fb5000b0bbcb18c4d545670ebb53",
+  "pr": 171,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update Valkey keyword in sentinel.conf (#171)",
+  "date": "2024-04-04",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2701,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only sentinel.conf, the sample Sentinel config template: comment wording (Redis -> Valkey, redis.io -> valkey.io URLs) and the template's default pidfile path string. No source code, command behavior, config parsing, replication, or persistence path changes, and the fuzzer's servers are started from configs the runner generates, never from this shipped template, so no runtime behavior is reachable or testable."
+}

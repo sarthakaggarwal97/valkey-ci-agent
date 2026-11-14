@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.lua-server-api-functions
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD libraries using the new server.* library API, run them,
+    and reload them from a SAVEd RDB across a restart
+components:
+- use: valkey.action.commands
+  id: serverfn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('setter',\
+          \ function(keys, args) return server.call('SET', keys[1], args[1]) end)\n\
+          server.register_function('getter', function(keys, args) return server.pcall('GET',\
+          \ keys[1]) end)"], expect_difference: true, expect: {equals: mylib}}
+    - {command: [FCALL, setter, 1, fk, hello], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, fk], expect_difference: true, expect: {equals: hello}}
+    - {command: [FCALL, getter, 1, fk], expect_difference: true, expect: {equals: hello}}
+    - {command: [FUNCTION, LOAD, "#!lua name=redislib\nredis.register_function('oldsetter',\
+          \ function(keys, args) return redis.call('SET', keys[1], args[1]) end)"],
+      expect: {equals: redislib}}
+    - {command: [FCALL, oldsetter, 1, ok1, stillworks], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FCALL, setter, 1, fk2, world], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, fk2], expect_difference: true, expect: {equals: world}}
+    - {command: [GET, fk], expect_difference: true, expect: {equals: hello}}
+    - {command: [FCALL, oldsetter, 1, ok2, stillworks], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [serverfn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: serverfn}

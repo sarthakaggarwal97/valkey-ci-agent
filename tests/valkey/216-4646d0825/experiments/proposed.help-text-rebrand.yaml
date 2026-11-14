@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.help-text-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND HELP and DEBUG HELP help text no longer mentions Redis; help
+    replies differ between parent and change, other replies do not
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: help
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, HELP], expect_difference: true, expect: {contains: "about\
+          \ all commands"}}
+    - {command: [DEBUG, HELP], expect_difference: true, expect: {contains: "RESP protocol\
+          \ error"}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, GETKEYS, SET, k, v], expect: {equals: [k]}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [DEBUG, STRINGMATCH-LEN, "*", a], expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [help.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: help}

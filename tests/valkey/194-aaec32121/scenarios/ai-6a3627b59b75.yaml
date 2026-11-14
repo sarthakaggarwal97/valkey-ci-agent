@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 906c8e8f90d7..aaec32121360.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6a3627b59b75
+seed: 9004
+experiment:
+  id: proposed.module-asyncrmcall-promise
+  inputs:
+    resp: 3
+    appendonly: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

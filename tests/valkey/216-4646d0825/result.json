@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4646d0825e3d08285dbbaec71af6848b40034cf4",
+  "parent": "29621bc356116051c09d2ba7b8a405eeaa04be95",
+  "pr": 216,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redis in HELP commands (#216)",
+  "date": "2024-04-04",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.5748,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f5510bdfbd80",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'help' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (DEBUG STRINGMATCH-LEN * a)"
+    },
+    {
+      "scenario": "ai-206f382256f3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'help' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (DEBUG STRINGMATCH-LEN * a)"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

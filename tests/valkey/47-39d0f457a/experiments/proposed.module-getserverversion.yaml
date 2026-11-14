@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.module-getserverversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: RedisModule_GetServerVersion returns SERVER_VERSION_NUM, checked via
+    tests/modules/misc.so test.redisversion
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modver
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [test.redisversion], expect: {equals: "255.255.255"}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "server_version:255.255.255"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modver}

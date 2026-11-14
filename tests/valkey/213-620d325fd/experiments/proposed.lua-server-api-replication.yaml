@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.lua-server-api-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: Writes made through server.call in EVAL and FCALL on a primary propagate
+    to its replica
+components:
+- use: valkey.action.commands
+  id: serverrepl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, rkey, rval],
+      node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=repllib\nserver.register_function('rset',\
+          \ function(keys, args) return server.call('SET', keys[1], args[1]) end)"],
+      node: 0, expect_difference: true, expect: {equals: repllib}}
+    - {command: [FCALL, rset, 1, fkey, fval], node: 0, expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, rkey], node: 1, wait_s: 15, expect_difference: true, expect: {
+        equals: rval}}
+    - {command: [GET, fkey], node: 1, wait_s: 15, expect_difference: true, expect: {
+        equals: fval}}
+    - {command: [FCALL_RO, rset, 1, fkey], node: 1, expect_difference: true, expect: {
+        error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [serverrepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: serverrepl}

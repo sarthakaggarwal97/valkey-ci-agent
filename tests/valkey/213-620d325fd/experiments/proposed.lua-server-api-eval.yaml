@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.lua-server-api-eval
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL scripts reach the new server.* Lua API alias; the parent errors
+    on the nonexistent 'server' global
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: servereval
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], 'via-redis')", 1, k0], expect: {
+        equals: OK}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, k1, v1],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [EVAL, "server.call('RPUSH', KEYS[1], '', 'a', '') return server.call('LRANGE',\
+          \ KEYS[1], 0, -1)", 1, l1], expect_difference: true, expect: {equals: [
+          "", a, ""]}}
+    - {command: [EVAL, "if rawequal(server, redis) then return 1 else return 0 end",
+        0], expect_difference: true, expect: {equals: 1}}
+    - {command: [EVAL, "return type(server.call)", 0], expect_difference: true, expect: {
+        equals: function}}
+    - {command: [EVAL, "local e = server.pcall('NOSUCHCMD') if e and e.err then return\
+          \ 1 end return 0", 0], expect_difference: true, expect: {equals: 1}}
+    - {command: [EVAL, "return server.error_reply('My Error')", 0], expect_difference: true,
+      expect: {error: "My Error"}}
+    - {command: [EVAL, "return server.status_reply('MYSTATUS')", 0], expect_difference: true,
+      expect: {equals: MYSTATUS}}
+    - {command: [EVAL, "return server.sha1hex('')", 0], expect_difference: true, expect: {
+        equals: da39a3ee5e6b4b0d3255bfef95601890afd80709}}
+    - {command: [EVAL, "server.log(server.LOG_WARNING, 'from-server-api') return 1",
+        0], expect_difference: true, expect: {equals: 1}}
+    - {command: [EVAL, "server.call('SET', KEYS[1], 'x1') return redis.call('GET',\
+          \ KEYS[1])", 1, mixed], expect_difference: true, expect: {equals: x1}}
+    - {command: [EVAL, "return server.call()", 0], expect_difference: true, expect: {
+        error: true}}
+    - {command: [EVAL, "return server.nosuchfield", 0], expect_difference: true, expect: {
+        error: "nonexistent global variable"}}
+    - {command: [EVAL_RO, "return server.call('GET', KEYS[1])", 1, k1], expect_difference: true,
+      expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [servereval.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: servereval}

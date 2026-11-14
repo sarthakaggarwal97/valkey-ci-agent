@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.version-fields-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: New SERVER_VERSION/SERVER_NAME fields in Lua and INFO, pinned Redis
+    compat version, and the new server-ver RDB aux field across SAVE and restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: versions
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [LOLWUT], expect: {contains: "255.255.255"}}
+    - {command: [EVAL, "return redis.REDIS_VERSION", 0], expect_difference: true,
+      expect: {equals: "7.2.4"}}
+    - {command: [EVAL, "return redis.REDIS_VERSION_NUM", 0], expect_difference: true,
+      expect: {equals: 459268}}
+    - {command: [EVAL, "return redis.SERVER_VERSION", 0], expect_difference: true,
+      expect: {equals: "255.255.255"}}
+    - {command: [EVAL, "return redis.SERVER_NAME", 0], expect_difference: true, expect: {
+        equals: "valkey"}}
+    - {command: [EVAL, "return redis.SERVER_VERSION_NUM", 0], expect_difference: true,
+      expect: {equals: 16777215}}
+    - {command: [EVAL, "local i=redis.call('INFO','server') return string.match(i,'server_name:(%w+)')\
+          \ or 'absent'", 0], expect_difference: true, expect: {equals: "valkey"}}
+    - {command: [EVAL, "local i=redis.call('INFO','server') return string.match(i,'server_version:([%d%.]+)')\
+          \ or 'absent'", 0], expect_difference: true, expect: {equals: "255.255.255"}}
+    - {command: [EVAL, "local i=redis.call('INFO','server') return string.match(i,'redis_version:([%d%.]+)')\
+          \ or 'absent'", 0], expect_difference: true, expect: {equals: "7.2.4"}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, a, b, c, d, e], expect: {equals: 5}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [a, b, c, d, e]}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [versions.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: versions}

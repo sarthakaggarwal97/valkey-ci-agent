@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 29621bc35611..4646d0825e3d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-206f382256f3
+seed: 216002
+experiment:
+  id: proposed.help-text-rebrand
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

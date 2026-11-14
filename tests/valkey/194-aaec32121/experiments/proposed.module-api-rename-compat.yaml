@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.module-api-rename-compat
+deployment:
+  modes: [standalone]
+metadata:
+  description: basics.so built through the new redismodule.h compat shim, loaded via
+    the OnLoad-fallback path, its self-asserting API battery compared with the parent
+    build and its module
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modcompat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [test.getresp], expect: {in: [2, 3]}}
+    - {command: [test.basics], expect: {equals: ALL TESTS PASSED}}
+    - {command: [test.call], expect: {equals: OK}}
+    - {command: [test.callresp3map], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect: {equals: OK}}
+    - {command: [test.callresp3set], expect: {equals: OK}}
+    - {command: [test.callresp3double], expect: {equals: OK}}
+    - {command: [test.callresp3bool], expect: {equals: OK}}
+    - {command: [test.callresp3null], expect: {equals: OK}}
+    - {command: [test.callreplywitharrayreply], expect: {equals: [test, "1234"]}}
+    - {command: [test.callreplywithnestedreply], expect: {equals: test}}
+    - {command: [test.callreplywithbignumberreply], expect: {equals: "1234567999999999999999999999999999999"}}
+    - {command: [test.callreplywithverbatimstringreply], expect: {equals: "txt:This\
+          \ is a verbatim\nstring"}}
+    - {command: [test.string.append], expect: {equals: foobar}}
+    - {command: [test.string.append.am], expect: {equals: foobar}}
+    - {command: [test.string.trim], expect: {equals: OK}}
+    - {command: [test.string.printf, foo, bar], expect: {equals: "Got 3 args. argv[1]:\
+          \ foo, argv[2]: bar"}}
+    - {command: [test.unlink], expect: {equals: OK}}
+    - {command: [test.rmcallautomode]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modcompat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modcompat}

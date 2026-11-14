@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bc28fb4ac0ba4dc9f97fede94ea7893d8faabce3",
+  "parent": "aaec321213605e6315d85f2e617b4f33420b8df7",
+  "pr": 232,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update Server version to valkey version (#232)",
+  "date": "2024-04-05",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 4,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 15,
+    "percent": 93,
+    "uncovered": [
+      "src/sentinel.c:1849"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.0574,
+  "findings": [],
+  "recorded": []
+}

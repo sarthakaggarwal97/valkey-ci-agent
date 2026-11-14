@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.lolwut-art-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: LOLWUT VERSION 5 and VERSION 6 render their art and print SERVER_VERSION,
+    replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lolwut
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [LOLWUT], expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5"], compare: skip, expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5", "1000", "200", "200"], compare: skip, expect: {
+        contains: "Georg Nees"}}
+    - {command: [LOLWUT, VERSION, "5", "0", "-1", "0"], compare: skip, expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "6"], compare: skip, expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "6", "1000", "1000"], compare: skip, expect: {contains: "hikikomori"}}
+    - {command: [LOLWUT, VERSION, "6", "1", "1"], compare: skip, expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "4294967295"], expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, "9223372036854775807"], expect: {contains: "255.255.255"}}
+    - {command: [LOLWUT, VERSION, notanumber], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lolwut.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lolwut}

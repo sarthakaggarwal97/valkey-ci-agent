@@ -1,0 +1,173 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aaec321213605e6315d85f2e617b4f33420b8df7",
+  "parent": "906c8e8f90d7e6c8af082a45f18c9e805b3fa333",
+  "pr": 194,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove REDISMODULE_ prefixes and introduce compatibility header (#194)",
+  "date": "2024-04-05",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 0,
+  "hunted": 12,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1306,
+    "executed": 237,
+    "percent": 18,
+    "uncovered": [
+      "src/call_reply.c:86",
+      "src/call_reply.c:203",
+      "src/call_reply.c:251",
+      "src/call_reply.c:443",
+      "src/db.c:868",
+      "src/db.c:954",
+      "src/debug.c:261",
+      "src/module.c:538",
+      "src/module.c:546",
+      "src/module.c:552",
+      "src/module.c:557",
+      "src/module.c:563",
+      "src/module.c:575",
+      "src/module.c:607",
+      "src/module.c:609",
+      "src/module.c:614",
+      "src/module.c:623",
+      "src/module.c:656",
+      "src/module.c:681",
+      "src/module.c:701",
+      "src/module.c:705",
+      "src/module.c:706",
+      "src/module.c:709",
+      "src/module.c:712",
+      "src/module.c:715",
+      "src/module.c:718",
+      "src/module.c:721",
+      "src/module.c:726",
+      "src/module.c:730",
+      "src/module.c:746",
+      "src/module.c:761",
+      "src/module.c:762",
+      "src/module.c:867",
+      "src/module.c:869",
+      "src/module.c:874",
+      "src/module.c:964",
+      "src/module.c:966",
+      "src/module.c:984",
+      "src/module.c:986",
+      "src/module.c:1010",
+      "src/module.c:1011",
+      "src/module.c:1034",
+      "src/module.c:1035",
+      "src/module.c:1054",
+      "src/module.c:1057",
+      "src/module.c:1063",
+      "src/module.c:1064",
+      "src/module.c:1093",
+      "src/module.c:1094",
+      "src/module.c:1106"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 25.943,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 16 (test.string.printf foo bar) as the user 'default +@all resetkeys ~nomatch-*' ran, though its rule refuses it: {\"reply\":[\"test\",\"1234\"]}",
+      "scenario": "ai-bc9faebbb439",
+      "seed": 1102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #194",
+      "fingerprint": "c61ea12aadf60b0f6183",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/156"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-58027ff7dc0f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modcompat' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (test.callresp3attribute)"
+    },
+    {
+      "scenario": "ai-58027ff7dc0f",
+      "build": "unstable",
+      "seed": 1101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-58027ff7dc0f",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-58027ff7dc0f",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-417683af6a9d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call PING), 1 (do_rm_call SET mk mv), 2 (do_rm_call BLPOP nolist 0), 3 (do_rm_call LPUSH biglist a b c ), 4 (do_rm_call LRANGE b"
+    },
+    {
+      "scenario": "ai-d21e1cbebc88",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call PING), 1 (do_rm_call SET mk mv), 2 (do_rm_call BLPOP nolist 0), 3 (do_rm_call LPUSH biglist a b c ), 4 (do_rm_call LRANGE b"
+    },
+    {
+      "scenario": "ai-d2e1a53d578b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call PING), 1 (do_rm_call SET mk mv), 2 (do_rm_call BLPOP nolist 0), 3 (do_rm_call LPUSH biglist a b c ), 4 (do_rm_call LRANGE b"
+    },
+    {
+      "scenario": "ai-6a3627b59b75",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call PING), 1 (do_rm_call SET mk mv), 2 (do_rm_call BLPOP nolist 0), 3 (do_rm_call LPUSH biglist a b c ), 4 (do_rm_call LRANGE b"
+    },
+    {
+      "scenario": "ai-23e892af2742",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call LPOP nokey 2), 1 (do_rm_call KEYS nomatch*), 5 (do_rm_call_async BLPOP bk 0 on connection bc1), 9 (LLEN bk), 10 (do_rm_call"
+    },
+    {
+      "scenario": "ai-3ba0f604d101",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call LPOP nokey 2), 1 (do_rm_call KEYS nomatch*), 5 (do_rm_call_async BLPOP bk 0 on connection bc1), 9 (LLEN bk), 10 (do_rm_call"
+    },
+    {
+      "scenario": "ai-ba55ea86b465",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'promise' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (do_rm_call LPOP nokey 2), 1 (do_rm_call KEYS nomatch*), 5 (do_rm_call_async BLPOP bk 0 on connection bc1), 9 (LLEN bk), 10 (do_rm_call"
+    },
+    {
+      "scenario": "ai-e1fb155cd812",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'repl' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (do_rm_call_async BLPOP rk 0 on connection w1), 6 (LLEN rk), 7 (LLEN rk on node 1), 8 (do_rm_call_async_no_replicate BLPOP nk 0 on connect"
+    },
+    {
+      "scenario": "ai-43b3727e0e07",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'repl' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (do_rm_call_async BLPOP rk 0 on connection w1), 6 (LLEN rk), 7 (LLEN rk on node 1), 8 (do_rm_call_async_no_replicate BLPOP nk 0 on connect"
+    }
+  ]
+}

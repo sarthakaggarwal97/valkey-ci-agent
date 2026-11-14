@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.rdb-aux-field-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE writes an RDB whose aux header is valkey-ver instead of server-ver
+    plus redis-ver; valkey-check-rdb of each build shows its own build's aux fields
+components:
+- use: valkey.action.tools
+  id: check-rdb-aux
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^\\d+:[A-Z] .*\\n']
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k1, v1], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-rdb, args: [dump.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "AUX FIELD valkey-ver = '255.255.255'"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb-aux}

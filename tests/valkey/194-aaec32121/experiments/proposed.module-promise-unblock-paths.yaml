@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.module-promise-unblock-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drives the renamed async RM_Call promise machinery via blockedclient.so, compared
+    across the change and its parent: promise creation (callReplyCreatePromise), the
+    unblock handler (moduleCallCommandUnblockedHandler), a fire-and-forget promise
+    freed without an unblock handler (freeRedisModuleAsyncRMCallPromise and the temp-client
+    async_rm_call_handle release), a promise resolved by BLPOP timeout, and RESP2
+    null-array / empty-array / error parsing in call_reply.c.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: promise
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [do_rm_call, LPOP, nokey, "2"], expect: {error: false}}
+    - {command: [do_rm_call, KEYS, "nomatch*"], expect: {equals: []}}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [do_rm_call, INCR, str], expect: {error: true}}
+    - {command: [do_rm_call, ""], expect: {error: true}}
+    - {connection: bc1, command: [do_rm_call_async, BLPOP, bk, "0"]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, bk, v1], expect: {equals: 1}}
+    - {connection: bc1, read: true, expect: {exists: true}}
+    - {command: [LLEN, bk], wait_s: 10, expect: {equals: 0}}
+    - {connection: bc2, command: [do_rm_call_async_on_thread, BLPOP, bk2, "0"]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, bk2, v2], expect: {equals: 1}}
+    - {connection: bc2, read: true, expect: {exists: true}}
+    - {command: [LLEN, bk2], wait_s: 10, expect: {equals: 0}}
+    - {command: [do_rm_call_fire_and_forget, BLPOP, fk, "0"], expect: {equals: Blocked}}
+    - {command: [LPUSH, fk, fv], expect: {equals: 1}}
+    - {command: [LLEN, fk], wait_s: 10, expect: {equals: 0}}
+    - {command: [do_rm_call_async, BLPOP, tk, "0.1"], expect: {error: false}}
+    - {connection: bc3, command: [blpop_and_set_multiple_keys, mk, ka, va, kb, vb]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, mk, go], expect: {equals: 1}}
+    - {command: [GET, ka], wait_s: 10, expect: {equals: va}}
+    - {command: [GET, kb], expect: {equals: vb}}
+    - {connection: bc3, read: true, expect: {exists: true}}
+    - {command: [do_rm_call_async_script_mode, SET, sk, sv], expect: {equals: OK}}
+    - {command: [GET, sk], expect: {equals: sv}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [promise.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: promise}

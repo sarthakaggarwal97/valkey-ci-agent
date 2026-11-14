@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.cli-tools-version-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark --version print cliVersion built from
+    VALKEY_VERSION, and valkey-cli LOLWUT round-trips the version trailer
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: ver
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    ignore: ['\(git:[0-9a-f]+(-dirty)?\)']
+    runs:
+    - {tool: valkey-cli, args: [--version], expect: {exit: {equals: 0}, stdout: {
+          contains: "valkey-cli 255.255.255"}}}
+    - {tool: valkey-cli, args: [-v], expect: {exit: {equals: 0}, stdout: {contains: "valkey-cli\
+            \ 255.255.255"}}}
+    - {tool: valkey-benchmark, args: [--version], expect: {exit: {equals: 0}, stdout: {
+          contains: "valkey-benchmark 255.255.255"}}}
+    - {tool: valkey-cli, args: [-p, $port, LOLWUT], expect: {exit: {equals: 0}, stdout: {
+          contains: "Redis ver. 255.255.255"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ver}

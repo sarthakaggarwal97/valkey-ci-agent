@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e1cb4c8a8bccfd62cdf76c40a7804110d336d039",
+  "parent": "e4d61c482538f333390b2e257e1b8b12fc2b3c94",
+  "pr": 167,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename #include guards (#167)",
+  "date": "2024-04-03",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2572,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames #include guard macros (__REDIS_* to VALKEY_*) in nine header files. Include guards are compile-time-only symbols that prevent double inclusion; renaming them changes no generated code, no command behaviour, no reply, no persistence or replication path. A successful build already proves the rename is consistent, so there is nothing a runtime scenario could exercise."
+}

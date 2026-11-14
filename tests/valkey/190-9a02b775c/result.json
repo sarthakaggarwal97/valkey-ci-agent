@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9a02b775c18643e5dc41873f202c3f4200c28ad4",
+  "parent": "39d0f457a2a332cd511e45a8b28e65524ff4dea6",
+  "pr": 190,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace Valkey in runtest scripts error prints (#190)",
+  "date": "2024-04-03",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2156,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords the 'You need tcl 8.5 or newer' error messages in the runtest, runtest-cluster, runtest-moduleapi and runtest-sentinel test-runner shell scripts, replacing 'Redis' with 'Valkey'. No server code, command behavior, replication, persistence, or bundled tool is touched, so there is nothing a fuzzer scenario could exercise or regress."
+}

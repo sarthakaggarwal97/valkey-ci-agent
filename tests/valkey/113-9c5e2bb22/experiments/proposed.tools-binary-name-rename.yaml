@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.tools-binary-name-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: --version and --help/usage of valkey-cli, valkey-benchmark, valkey-check-rdb
+    and valkey-check-aof name the valkey binaries, not the redis ones
+components:
+- use: valkey.action.tools
+  id: names
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 20
+    runs:
+    - {tool: valkey-cli, args: [--version], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "valkey-cli "}}}
+    - {tool: valkey-cli, args: [--help], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "Usage: valkey-cli"}}}
+    - {tool: valkey-benchmark, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "valkey-benchmark "}}}
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "Usage: valkey-benchmark [OPTIONS]"}}}
+    - {tool: valkey-check-rdb, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "valkey-check-rdb "}}}
+    - {tool: valkey-check-aof, args: [--version], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "valkey-check-aof "}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: names}

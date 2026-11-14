@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.version-macro-surfaces
+deployment:
+  modes: [standalone]
+metadata:
+  description: SERVER_VERSION to VALKEY_VERSION rename - INFO field rename, Lua version
+    globals rename, and self-reload of an RDB whose aux header now says valkey-ver
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: version-surfaces
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [HELLO], compare: skip}
+    - {command: [EVAL, "return tostring(redis.VALKEY_VERSION)", 0], expect_difference: true,
+      expect: {equals: "255.255.255"}}
+    - {command: [EVAL, "return tostring(redis.VALKEY_VERSION_NUM)", 0], expect_difference: true,
+      expect: {equals: "16777215"}}
+    - {command: [EVAL, "return tostring(redis.SERVER_VERSION)", 0], expect_difference: true,
+      expect: {equals: "nil"}}
+    - {command: [EVAL, "return tostring(redis.SERVER_VERSION_NUM)", 0], expect_difference: true,
+      expect: {equals: "nil"}}
+    - {command: [EVAL, "local i = redis.call('INFO','server'); return string.match(i,\
+          \ 'valkey_version:[%d%.]+') or 'absent'", 0], expect_difference: true, expect: {
+        equals: "valkey_version:255.255.255"}}
+    - {command: [EVAL, "local i = redis.call('INFO','server'); return string.match(i,\
+          \ 'server_version:[%d%.]+') or 'absent'", 0], expect_difference: true, expect: {
+        equals: absent}}
+    - {command: [EVAL, "local i = redis.call('INFO','server'); return string.match(i,\
+          \ 'redis_version:[%d%.]+') or 'absent'", 0], expect: {equals: "redis_version:7.2.4"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [EVAL, "local i = redis.call('INFO','server'); return string.match(i,\
+          \ 'valkey_version:[%d%.]+') or 'absent'", 0], expect_difference: true, expect: {
+        equals: "valkey_version:255.255.255"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [version-surfaces.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: version-surfaces}

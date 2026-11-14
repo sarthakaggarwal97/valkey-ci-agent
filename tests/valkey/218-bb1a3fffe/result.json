@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb1a3fffe73bb37a5bb63044128917a0bc091230",
+  "parent": "4646d0825e3d08285dbbaec71af6848b40034cf4",
+  "pr": 218,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CI break issue due to serverTests merged issue (#218)",
+  "date": "2024-04-04",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2182,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line compile fix in src/server.c's internal test-harness path (`valkey-server test all`): it renames `serverTest`/`struct redisTest` to the correct identifiers `serverTests`/`struct serverTest` so the file compiles. This code only runs when the binary is invoked with the `test` argument to execute built-in unit tests, never during normal server operation, and the fix changes no command, replication, persistence or protocol behaviour \u2014 it only repairs a CI build break. There is nothing a fuzzer scenario against a running server could reach or exercise, so no scenario is need"
+}

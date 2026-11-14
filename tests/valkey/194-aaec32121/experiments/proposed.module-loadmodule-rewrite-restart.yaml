@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.module-loadmodule-rewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE writes the loadmodule line via the renamed struct ValkeyModule,
+    and a restart reloads the module from the rewritten config through the OnLoad-fallback
+    path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [test.basics], expect: {equals: ALL TESTS PASSED}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [test.call], expect: {equals: OK}}
+    - {command: [test.callresp3map], expect: {equals: OK}}
+    - {command: [test.string.printf, foo, bar], expect: {equals: "Got 3 args. argv[1]:\
+          \ foo, argv[2]: bar"}}
+    - {command: [MODULE, LIST], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

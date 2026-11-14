@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.module-promise-replication-effects
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Async RM_Call promise effects under replication, compared across builds with blockedclient.so
+    on a two-node primary/replica pair: a BLPOP consumed inside an unblocked promise
+    with the '!' flag must replicate, do_rm_call_async_no_replicate must leave the
+    replica with the element the primary consumed, and writes performed inside the
+    promise unblock callback (blpop_and_set_multiple_keys) must reach the replica.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {node: 1, command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], expect: {
+        equals: OK}}
+    - {node: 1, command: [INFO, replication], compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {connection: w1, command: [do_rm_call_async, BLPOP, rk, "0"]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, rk, rv], expect: {equals: 1}}
+    - {connection: w1, read: true, expect: {exists: true}}
+    - {command: [LLEN, rk], wait_s: 10, expect: {equals: 0}}
+    - {node: 1, command: [LLEN, rk], wait_s: 20, expect: {equals: 0}}
+    - {connection: w2, command: [do_rm_call_async_no_replicate, BLPOP, nk, "0"]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, nk, nv], expect: {equals: 1}}
+    - {connection: w2, read: true, expect: {exists: true}}
+    - {command: [LLEN, nk], wait_s: 10, expect: {equals: 0}}
+    - {node: 1, command: [LLEN, nk], wait_s: 20, expect: {equals: 1}}
+    - {connection: w3, command: [blpop_and_set_multiple_keys, mk, ka, va, kb, vb]}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [LPUSH, mk, go], expect: {equals: 1}}
+    - {command: [GET, ka], wait_s: 10, expect: {equals: va}}
+    - {node: 1, command: [GET, ka], wait_s: 20, expect: {equals: va}}
+    - {node: 1, command: [GET, kb], wait_s: 20, expect: {equals: vb}}
+    - {connection: w3, read: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

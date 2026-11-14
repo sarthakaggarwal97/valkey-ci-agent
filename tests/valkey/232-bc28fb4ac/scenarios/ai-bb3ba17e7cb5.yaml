@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey aaec32121360..bc28fb4ac0ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bb3ba17e7cb5
+seed: 1003
+experiment:
+  id: proposed.rdb-aux-field-rename
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

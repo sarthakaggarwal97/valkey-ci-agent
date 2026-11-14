@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.module-asyncrmcall-promise
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drives the renamed async RM_Call promise machinery (VALKEYMODULE_REPLY_PROMISE,
+    callReplyCreatePromise, moduleCallCommandUnblockedHandler with and without an
+    unblock handler, freeRedisModuleAsyncRMCallPromise), RESP null-array call-reply
+    parsing, VALKEYMODULE_CTX_FLAGS_MULTI/DENY_BLOCKING checks, and the SWAPDB module
+    server event, compared between the rename change and its parent with blockedclient.so
+    loaded on both private servers.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: promise
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      appendonly: {$ref: inputs.appendonly}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [do_rm_call, PING], expect: {equals: PONG}}
+    - {command: [do_rm_call, SET, mk, mv], expect: {equals: OK}}
+    - {command: [do_rm_call, BLPOP, nolist, "0"]}
+    - {command: [do_rm_call, LPUSH, biglist, a, b, c, ""], expect: {equals: 4}}
+    - {command: [do_rm_call, LRANGE, biglist, 0, -1], expect: {equals: ["", c, b,
+          a]}}
+    - {command: [do_rm_call_fire_and_forget, BLPOP, fk, "0"], expect: {equals: Blocked}}
+    - {command: [LPUSH, fk, v1], expect: {equals: 1}}
+    - {command: [LRANGE, fk, 0, -1], expect: {equals: []}}
+    - {command: [do_rm_call_async, BLPOP, tk, "1"]}
+    - {command: [do_rm_call_async_on_thread, BLPOP, tk2, "1"]}
+    - {command: [do_rm_call_async_no_replicate, BLPOP, tk3, "1"]}
+    - {command: [do_rm_call_async_script_mode, GET, mk], expect: {equals: mv}}
+    - {command: [do_bg_rm_call, GET, mk], expect: {equals: mv}}
+    - {command: [do_fake_bg_true]}
+    - {command: [acquire_gil]}
+    - {command: [do_rm_call_async, BLPOP, bk, "20"], connection: blk}
+    - {command: [EVAL, "local i = redis.call('info','clients') return tonumber(string.match(i,\
+          \ 'blocked_clients:(%d+)'))", "0"], wait_s: 15, expect: {min: 1}, compare: skip}
+    - {command: [LPUSH, bk, hello], expect: {equals: 1}}
+    - {command: [LRANGE, bk, 0, -1], compare: skip}
+    - {connection: blk, read: true, compare: skip}
+    - {command: [blpop_and_set_multiple_keys, bk2, sk1, sv1], connection: blk2}
+    - {command: [EVAL, "local i = redis.call('info','clients') return tonumber(string.match(i,\
+          \ 'blocked_clients:(%d+)'))", "0"], wait_s: 15, expect: {min: 1}, compare: skip}
+    - {command: [LPUSH, bk2, go], expect: {equals: 1}}
+    - {command: [GET, sk1], wait_s: 15, expect: {equals: sv1}}
+    - {connection: blk2, read: true, compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [do_rm_call_async, BLPOP, nolist, "0"], expect: {equals: QUEUED}}
+    - {command: [do_bg_rm_call, GET, mk], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, dbkey, one], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [GET, dbkey], expect: {equals: one}}
+    - {command: [SWAPDB, 0, 16], expect: {error: "out of range"}}
+    - {command: [SWAPDB, -1, 0], expect: {error: "out of range"}}
+    - {command: [SWAPDB, notanint, 0], expect: {error: "invalid first DB"}}
+    - {command: [do_rm_call, SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [GET, dbkey]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [promise.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: promise}

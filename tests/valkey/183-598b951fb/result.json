@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "598b951fb509a53037b7a43b863c06e53a35909b",
+  "parent": "3a0ba0ad93be5a2981c0ec0efc8c7a55be0a58e6",
+  "pr": 183,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "rename redisServer to valkeyServer (#183)",
+  "date": "2024-04-03",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2477,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the C struct tag 'redisServer' to 'valkeyServer' in src/server.c and src/server.h. The struct's fields, the global variable name, and all code using it are unchanged, so the compiled behaviour is identical: no command reply, replication, persistence, or cluster path differs. A pure refactor with no observable behaviour change needs no scenario."
+}

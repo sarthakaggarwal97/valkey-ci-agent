@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6ea6a693e20ef5db2c154336756dfda0128acb85",
+  "parent": "48184ae2dbb42e786de13f9ea6c99bfd0e1dbdc7",
+  "pr": 203,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename 'redis' to 'server' functions missing (#203)",
+  "date": "2024-04-04",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2689,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure rename refactor: redisIsSupervised becomes serverIsSupervised in server.c and the redisConfig struct with getRedisConfig/freeRedisConfig becomes serverConfig with getServerConfig/freeServerConfig in valkey-benchmark.c. All call sites are updated and no function body, logic, reply, or config semantics change; any error would be a compile failure, not a runtime behavior difference, so there is nothing for a scenario to exercise."
+}

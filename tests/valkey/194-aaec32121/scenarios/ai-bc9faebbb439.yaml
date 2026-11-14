@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 906c8e8f90d7..aaec32121360.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bc9faebbb439
+seed: 1102
+experiment:
+  id: proposed.module-api-rename-compat
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

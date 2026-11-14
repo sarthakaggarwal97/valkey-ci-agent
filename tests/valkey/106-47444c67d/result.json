@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "47444c67de854a3d547e2d0cb81ce41b29babc5d",
+  "parent": "490f4ebb65c94538e89d8e6fbfc5fd50b21725bc",
+  "pr": 106,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update Makefile comments to relect name change (#106)",
+  "date": "2024-04-05",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2191,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the TLS module build artifact in src/Makefile (redis-tls.so to valkey-tls.so, applied when BUILD_TLS=module). It is a build-system change with no runtime behaviour: no server code, command, replication, persistence or protocol path differs between the two builds, so no fuzzer scenario can reach or validate it."
+}

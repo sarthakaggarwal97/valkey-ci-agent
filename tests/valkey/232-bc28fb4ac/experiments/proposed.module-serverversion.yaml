@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.module-serverversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_GetServerVersion returns VALKEY_VERSION_NUM, reached through misc.so,
+    whose version command the change renamed from test.redisversion to test.serverversion
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modver
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [test.serverversion], expect_difference: true, expect: {equals: "255.255.255"}}
+    - {command: [test.redisversion], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modver}

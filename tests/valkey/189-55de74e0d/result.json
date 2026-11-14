@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "55de74e0dc9a14166c5c96d2282ae29f09785e59",
+  "parent": "e1cb4c8a8bccfd62cdf76c40a7804110d336d039",
+  "pr": 189,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "The usage (--help) message now refers to valkey (#189)",
+  "date": "2024-04-03",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4571,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites only the fprintf string literals in usage() in src/server.c (the text shown for valkey-server -h/--help or bad arguments) and nothing else: no parsing, reply, persistence, replication, or startup behaviour changes, and the function still just prints to stderr and exits 1. The fuzzer's components cannot reach it anyway: valkey.action.tools runs only valkey-cli, valkey-benchmark, valkey-check-rdb and valkey-check-aof, not valkey-server itself, and every other component starts valkey-server with a valid config, which never invokes usage(). A cosmetic help-text wording change w"
+}

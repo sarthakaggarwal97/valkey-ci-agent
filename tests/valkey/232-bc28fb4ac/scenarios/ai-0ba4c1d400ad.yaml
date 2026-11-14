@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey aaec32121360..bc28fb4ac0ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0ba4c1d400ad
+seed: 1001
+experiment:
+  id: proposed.version-macro-surfaces
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

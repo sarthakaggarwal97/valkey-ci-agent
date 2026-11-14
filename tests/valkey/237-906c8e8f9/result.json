@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "906c8e8f90d7e6c8af082a45f18c9e805b3fa333",
+  "parent": "7f5bcc96f018c67191f68c50bde3797fe0614ac5",
+  "pr": 237,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "delete cluster fail time script (#237)",
+  "date": "2024-04-05",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2251,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes utils/cluster_fail_time.tcl, a standalone developer utility Tcl script used manually to measure PFAIL->FAIL transition time. It removes no server, tool, or library code and changes no runtime behaviour of any build artifact, so no scenario can reach or test it."
+}
