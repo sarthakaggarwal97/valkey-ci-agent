@@ -513,6 +513,21 @@ def test_the_watchdogs_stack_trace_is_no_crash(tmp_path):
     assert finding["rule"] == "crash"
 
 
+def test_a_log_excerpt_cut_inside_the_watchdogs_section_is_no_crash(tmp_path):
+    # fuzzer-walk #164: valkey.observer.log keeps only a log's last lines, so its excerpt can open inside a
+    # watchdog section, past the header the section regex needs.
+    remnant = ("/usr/lib/libc.so.6(pthread_cond_wait+0x197) [0x79588d6ab147]\n\n7/7 expected stacktraces.\n\n"
+               "------ STACK TRACE DONE ------\n3800:signal-handler (1794691385) --------\n")
+    (tmp_path / "trace-log.valkey-0.log").write_text(remnant)
+    assert findings(_report(), tmp_path) == {}
+    # A crash report's own trace, cut the same way, stays a crash.
+    (tmp_path / "trace-log.valkey-0.log").write_text(
+        "Valkey crashed by signal: 11\n------ STACK TRACE ------\nEIP:\n./valkey-server *:7000(lsetCommand+0x1a)[0x5]\n"
+        "------ STACK TRACE DONE ------\n")
+    (finding,) = findings(_report(), tmp_path).values()
+    assert finding["detail"] == "Node crash or assertion: crashed by signal: 11 in lsetCommand"
+
+
 def test_a_log_names_its_crash_by_summary_assertion_or_signal():
     leak = ("SUMMARY: AddressSanitizer: 64 byte(s) leaked in 1 allocation(s).\n"
             "Direct leak of 64 byte(s)\n    #0 0x1 in malloc\n    #1 0x2 in ztrymalloc_usable\n    #2 0x3 in sdsnew\n")

@@ -193,6 +193,12 @@ _CRASH_PATTERNS = [(title, pattern) for title, _, pattern, _ in _ANOMALY_PATTERN
 # instead, which stays.
 _WATCHDOG_SECTION_RE = re.compile(r"--- WATCHDOG TIMER EXPIRED ---.*?(?:------ STACK TRACE DONE ------[^\n]*\n?|\Z)",
                                   re.S)
+# A log excerpt (valkey.observer.log keeps only the last lines) can open inside a watchdog section, its header
+# cut off (fuzzer-walk #164): a headerless fragment ending at the first STACK TRACE DONE is stripped too, unless
+# a crash's own marker shows the fragment is a crash report's.
+_WATCHDOG_REMNANT_RE = re.compile(
+    r"\A(?:(?!BUG REPORT START|crashed by signal|ASSERTION FAILED|Guru Meditation|Sanitizer).)*?"
+    r"------ STACK TRACE DONE ------[^\n]*\n?", re.S | re.I)
 _SANITIZER_RE = re.compile(r"SUMMARY: \w*Sanitizer: [^\n]*")
 _ASSERTION_RE = re.compile(r"ASSERTION FAILED[^\n]*\n([^\n]*)")
 _SIGNAL_RE = re.compile(r"crashed by signal[^\n]*")
@@ -767,6 +773,7 @@ def findings(report: dict[str, Any], run_dir: Path) -> dict[str, dict[str, Any]]
         if path.name.startswith("parent.") or path.name == "console.log":
             continue
         text = _WATCHDOG_SECTION_RE.sub("", strip_ansi(path.read_text(errors="replace")))
+        text = _WATCHDOG_REMNANT_RE.sub("", text)
         for title, pattern in _CRASH_PATTERNS:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
