@@ -230,6 +230,10 @@ class FixTask:
     # Open pull requests into ``target.upstream_branch`` that name the failing
     # test or close its detector issue: one may already fix the failure.
     open_fixes: tuple[OpenFix, ...] = ()
+    # Prepare the fix as of the failed commit: the checkout's default branch
+    # is held at it, so nothing merged since is there to find. Only a replayed
+    # failure sets it (scripts/ci_fix/eval.py), whose fix has since landed.
+    as_of_failure: bool = False
 
 
 @dataclass(frozen=True)
@@ -383,6 +387,7 @@ class FrontDoor(str, Enum):
     PR = "pr"  # a maintainer's command on a PR (scripts/ci_fix/main.py)
     FOLLOW_UP = "follow-up"  # a bot-owned PR's red head (scripts/backport/ci_followup.py)
     REVIEW = "review"  # a review of the bot's pull request into the default branch (scripts/ci_fix/upstream.py)
+    EVAL = "eval"  # a replayed failure whose fix is known (scripts/ci_fix/eval.py): never published
 
 
 @dataclass(frozen=True)

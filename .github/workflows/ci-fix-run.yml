@@ -4,6 +4,9 @@ name: CI Fix Run
 # (ci-fix-issues.yml), a maintainer's command on a PR (ci-fix.yml), a
 # bot-owned PR's red head (backport-ci-followup.yml), or a review of the bot's
 # pull request into the default branch (ci-fix-upstream-upkeep.yml).
+# A failure whose fix is known is replayed through the same jobs
+# (ci-fix-eval.yml, front door `eval`): it is planned with the workflow's own
+# read-only token, and its publish job does not run.
 #
 #   plan -> fix -> [plan-upstream -> fix-upstream] -> publish
 #
@@ -24,7 +27,7 @@ on:
   workflow_call:
     inputs:
       front_door:
-        description: "issue, pr, follow-up or review (scripts/ci_fix/models.py FrontDoor)"
+        description: "issue, pr, follow-up, review or eval (scripts/ci_fix/models.py FrontDoor)"
         required: true
         type: string
       request:
@@ -42,10 +45,11 @@ on:
         type: string
         default: valkey
     secrets:
+      # The App plans and publishes a real fix; a replayed one needs neither.
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
       AWS_ROLE_ARN:
         required: true
 
@@ -87,6 +91,9 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
+        # A replayed failure reads only public data: its job log and the
+        # workflow file, with this workflow's own token.
+        if: inputs.front_door != 'eval'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -108,7 +115,7 @@ jobs:
         id: plan
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.target-token.outputs.token || github.token }}
           AGENT_TOKEN: ${{ github.token }}
           FRONT_DOOR: ${{ inputs.front_door }}
           REQUEST: ${{ inputs.request }}
@@ -186,6 +193,8 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
+        # A replayed failure reads only public data, with this workflow's own token.
+        if: inputs.front_door != 'eval'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -214,7 +223,7 @@ jobs:
         id: plan
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.target-token.outputs.token || github.token }}
         run: |
           python -m scripts.ci_fix.run plan-upstream --plan ci-fix-plan --outcome ci-fix-result \
             --out ci-fix-upstream-plan --result ci-fix-upstream-result
@@ -264,7 +273,10 @@ jobs:
   publish:
     name: "Publish the fix (${{ inputs.key }})"
     needs: [plan, fix, plan-upstream, fix-upstream]
-    if: always() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'job' || needs.plan.outputs.mode == 'local')
+    # Never for a replayed failure, whose candidate is scored instead.
+    if: >-
+      always() && inputs.front_door != 'eval' && needs.plan.result == 'success'
+      && (needs.plan.outputs.mode == 'job' || needs.plan.outputs.mode == 'local')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
