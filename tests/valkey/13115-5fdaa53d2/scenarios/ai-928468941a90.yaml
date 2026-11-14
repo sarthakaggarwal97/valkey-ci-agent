@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4979cf02ff83..5fdaa53d20c8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-928468941a90
+seed: 13115
+experiment:
+  id: proposed.lua-number-arg-conversion
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

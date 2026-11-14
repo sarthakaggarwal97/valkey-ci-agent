@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.pong-failback-under-pause
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: SIGSTOP an observer replica across a failover and failback of shard
+    0; on resume it must reconcile demoted-primary PONGs, stale epochs and slot ownership
+    correctly
+inputs:
+  properties:
+    paused_instance: {type: string, default: replica}
+    pause_s: {type: number, minimum: 1, maximum: 120, default: 12}
+    settle_s: {type: number, minimum: 0, maximum: 300, default: 25}
+    force: {type: boolean, default: false}
+    failover_timeout_s: {type: number, minimum: 1, maximum: 600, default: 45}
+components:
+- use: valkey.fault.process-signal
+  id: pause-observer
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.paused_instance}
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, pause-observer]
+  config: {seconds: 2}
+- use: valkey.action.failover
+  id: failover-1
+  depends_on: [warm-up]
+  config:
+    shard: 0
+    force: {$ref: inputs.force}
+    timeout_s: {$ref: inputs.failover_timeout_s}
+- use: valkey.action.failover
+  id: failover-2
+  depends_on: [failover-1]
+  config:
+    shard: 0
+    force: {$ref: inputs.force}
+    timeout_s: {$ref: inputs.failover_timeout_s}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [failover-2]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 3}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: pause-observer}
+- {evidence_id: valkey.failover.result, source: failover-1}
+- {evidence_id: valkey.failover.result, source: failover-2}

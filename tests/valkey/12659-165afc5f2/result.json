@@ -1,0 +1,103 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "165afc5f2a2bc8ef18af85a6e5cb345c7af614ec",
+  "parent": "820a4e45f1c46d8acbd07043b8992d5f69a872ec",
+  "pr": 12659,
+  "pr_repo": "redis/redis",
+  "subject": "Determine the large limit of the quicklist node based on fill (#12659)",
+  "date": "2024-02-22",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 22,
+    "executed": 21,
+    "percent": 95,
+    "uncovered": [
+      "src/quicklist.c:1021"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.976,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b30dcd16a3d2",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b30dcd16a3d2",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b30dcd16a3d2",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d30e23a2a47c",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d30e23a2a47c",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d30e23a2a47c",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2dd66795443c",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2dd66795443c",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2dd66795443c",
+      "build": "unstable",
+      "seed": 305,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b2dbd51fe0c",
+      "build": "unstable",
+      "seed": 404,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b2dbd51fe0c",
+      "build": "unstable",
+      "seed": 405,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b2dbd51fe0c",
+      "build": "unstable",
+      "seed": 406,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a265554aeed885bfba42d425024d34cbb779a8c",
+  "parent": "165afc5f2a2bc8ef18af85a6e5cb345c7af614ec",
+  "pr": 12971,
+  "pr_repo": "redis/redis",
+  "subject": "Expose lua os.clock() api (#12971)",
+  "date": "2024-02-22",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4519,
+  "findings": [],
+  "recorded": []
+}

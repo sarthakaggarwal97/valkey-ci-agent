@@ -1,40 +1,40 @@
 # Fuzzer walk
 
-Updated 2026-11-14T06:29+00:00.
+Updated 2026-11-14T06:53+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2279 | 261 | #13115 (2024-03-10) | 282 | 244.7 |
+| valkey-io/valkey | 2299 | 241 | #12996 (2024-02-20) | 302 | 247.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
-| valkey-io/valkey-search | 688 | 1 | f8106e72e984 (2024-11-27) | 15 | 45.1 |
+| valkey-io/valkey-search | 688 | 1 | f8106e72e984 (2024-11-27) | 8 | 45.1 |
 
 ## Last runs
 
 ### valkey-io/valkey
 
-[2026-11-14T05:10:43+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43551524115): 20 merge(s) tested, 17 without a code change.
+[2026-11-14T06:53:57+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43560262144): 20 merge(s) tested, 1 without a code change.
 
 - [valkey-io/valkey#35](https://github.com/valkey-io/valkey/pull/35): to retry, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed (artifacts.parent acquire: FileNotFoundError)
-- [valkey-io/valkey#30](https://github.com/valkey-io/valkey/pull/30) ([tests](tests/valkey/30-1c9710fca/)): Fix the CI sentinel break issue (#30): declined: The change only updates the executable-name substring that enables Sentinel mode (redis-sentinel -> placeholderkv-sentinel during the project rename) and the matching binary name in the CI test harness (tests/instances.tcl). The behaviour depends solely on the filename the server binary is
-- [valkey-io/valkey@bd7387354a9d](https://github.com/valkey-io/valkey/commit/bd7387354a9d9b9664ca6215bf3e6d955e07eb03) ([tests](tests/valkey/bd7387354/)): Fixed fork/exec problem: declined: The change only alters which process names (argv[0] basenames) trigger check-rdb/check-aof mode in main(): the old code matched 'redis-check-rdb'/'redis-check-aof', the fix matches 'placeholderkv-check-rdb'/'placeholderkv-check-aof', the names this era's Makefile actually builds. The dispa
-- [valkey-io/valkey@9a6721bd11ca](https://github.com/valkey-io/valkey/commit/9a6721bd11ca9454b425a695c9455434564c2dd5) ([tests](tests/valkey/9a6721bd1/)): Fix check aof: declined: The change only edits the project's own test harness (tests/integration/aof.tcl, swapping the hardcoded binary path src/redis-check-aof for the renamed src/placeholderkv-check-aof in exec calls) and a help-text string in utils/generate-commands-json.py. No server code, tool code, or runtim
-- [valkey-io/valkey@0aaae734f461](https://github.com/valkey-io/valkey/commit/0aaae734f46101e621f9d56d76c42d04029d3c99) ([tests](tests/valkey/0aaae734f/)): Fix incorrect find/replace: declined: The change only corrects a mangled library filename (libhiENGINE_ssl.a -> libhiredis_ssl.a) in src/Makefile's BUILD_TLS=yes/module link flags. It is a build-system fix: with the bug, a TLS build fails to link; with the fix, it links. No runtime code, command reply, replication, persistence
-- [valkey-io/valkey@38632278fd06](https://github.com/valkey-io/valkey/commit/38632278fd06fe186f7707e4fa099f666d805547) ([tests](tests/valkey/38632278f/)): A single commit to get stuff building: declined: The commit touches only build and CI machinery and docs: it renames make variables (REDIS_CFLAGS/REDIS_LDFLAGS to SERVER_CFLAGS/SERVER_LDFLAGS), renames the produced binaries to placeholderkv-*, rearranges where -flto/-O3 flags are applied in src/Makefile, and updates .github/workflows/ci.
-- [redis/redis#13154](https://github.com/redis/redis/pull/13154) ([tests](tests/valkey/13154-e64d91c37/)): Fix dict use-after-free problem in kvs->rehashing (#13154): 0 of 5 test(s) reached the change, coverage 50%
-- [redis/redis#13148](https://github.com/redis/redis/pull/13148) ([tests](tests/valkey/13148-bad33f873/)): fix wrong data type conversion in zrangeResultBeginStore (#13148): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13141](https://github.com/redis/redis/pull/13141) ([tests](tests/valkey/13141-e04d41d78/)): Prevent lua error_reply abuse from causing errorstats to become larger (#13141): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13143](https://github.com/redis/redis/pull/13143) ([tests](tests/valkey/13143-aeada2014/)): Avoid unnecessary dict shrink in zremrangeGenericCommand (#13143): declined: The change only skips dictShrinkIfNeeded on a sorted set's dict when the ZREMRANGEBY* delete emptied it and dbDelete is about to free the entire object anyway; when members remain the shrink still runs as before. It is a performance-only refactor with no observable change to replies, keysp
-- [redis/redis#13135](https://github.com/redis/redis/pull/13135) ([tests](tests/valkey/13135-7b070423b/)): Fix dictionary use-after-free in active expire and make kvstore iter to respect EMPTY flag (#13135): 0 of 5 test(s) reached the change, coverage 100%; crash, fixed by redis/redis#13135 (recorded)
-- [redis/redis#13147](https://github.com/redis/redis/pull/13147) ([tests](tests/valkey/13147-98a6e55d4/)): Add missing REDIS_STATIC in quicklist (#13147): declined: The change only adds REDIS_STATIC to two forward declarations in quicklist.c so they match the static definitions of _quicklistSplitNode and _quicklistMergeNodes. REDIS_STATIC expands to 'static' (or nothing in test builds), so this affects symbol linkage/visibility at compile time only; n
-- [redis/redis#13073](https://github.com/redis/redis/pull/13073) ([tests](tests/valkey/13073-1d77a8e2c/)): Makefile respect user's REDIS_CFLAGS and OPT (#13073): declined: The change is confined to src/Makefile: it relocates default optimization flags (-flto, -fno-omit-frame-pointer) from REDIS_CFLAGS into the OPTIMIZATION variable and adds $(OPT) to FINAL_LDFLAGS so user-provided REDIS_CFLAGS and OPT are honored. It is purely a build/CI flag-handling change
-- [redis/redis#13072](https://github.com/redis/redis/pull/13072) ([tests](tests/valkey/13072-3b3d16f74/)): Add KVSTORE_FREE_EMPTY_DICTS to cluster mode keys / expires kvstore (#13072): 0 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13108](https://github.com/redis/redis/pull/13108) ([tests](tests/valkey/13108-ad28d222e/)): Lua eval scripts first in first out LRU eviction (#13108): 2 of 2 test(s) reached the change, coverage 93%
-- [redis/redis#13117](https://github.com/redis/redis/pull/13117) ([tests](tests/valkey/13117-a8e745117/)): Xread last entry in stream (#7388) (#13117): 3 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#13069](https://github.com/redis/redis/pull/13069) ([tests](tests/valkey/13069-9efc6ad6a/)): Add API RedisModule_ClusterKeySlot and RedisModule_ClusterCanonicalKeyNameInSlot (#13069): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#13104](https://github.com/redis/redis/pull/13104) ([tests](tests/valkey/13104-9c065c417/)): Enable accept4() on *BSD (#13104): declined: The change only widens the HAVE_ACCEPT4 preprocessor guard in src/config.h to define it on OpenBSD 5.7+, FreeBSD 10+ and NetBSD 8.0+. On Linux, where the fuzzer builds and runs, __linux__ already defined HAVE_ACCEPT4 before and after the change, so the compiled binaries are identical and n
-- [redis/redis#12958](https://github.com/redis/redis/pull/12958) ([tests](tests/valkey/12958-da727ad44/)): Fix redis-check-aof incorrectly considering data in manifest format as MP-AOF (#12958): 0 of 3 test(s) reached the change, coverage 0%
-- [redis/redis#12986](https://github.com/redis/redis/pull/12986) ([tests](tests/valkey/12986-3c8d15f8c/)): Pick random slot for a node to distribute operation across slots in redis-benchmark (#12986): 0 of 5 test(s) reached the change, coverage 0%
+- [redis/redis#13115](https://github.com/redis/redis/pull/13115) ([tests](tests/valkey/13115-5fdaa53d2/)): Fix conversion of numbers in lua args to redis args (#13115): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#13112](https://github.com/redis/redis/pull/13112) ([tests](tests/valkey/13112-4979cf02f/)): Change crc16 slot table to be fixed size character array instead of pointer to strings (#13112): declined: Pure data-layout refactor: crc16_slot_table changes from an array of 16384 string pointers to a flat array of char[4] entries, with the string initializers untouched. The table's only consumer is valkey-benchmark's cluster-mode hash-tag substitution (setClusterKeyHashTag, redis-benchmark.c
+- [redis/redis#13055](https://github.com/redis/redis/pull/13055) ([tests](tests/valkey/13055-28976a900/)): Fix PONG message processing for primary-ship tracking during failovers (#13055): 0 of 10 test(s) reached the change, coverage 78%
+- [redis/redis#13058](https://github.com/redis/redis/pull/13058) ([tests](tests/valkey/13058-ad1273033/)): Implement defragmentation for pubsub kvstore (#13058): 0 of 5 test(s) reached the change, coverage 88%; crash, introduced and since fixed (recorded)
+- [redis/redis#13101](https://github.com/redis/redis/pull/13101) ([tests](tests/valkey/13101-33ea43258/)): Call finalizerProc when free the aeTimeEvent in ae (#13101): declined: The change makes aeDeleteEventLoop call each pending time event's finalizerProc before freeing it (src/ae.c:152-153). No code in the tree registers a finalizer: every aeCreateTimeEvent call site (serverCron in server.c:2743, evictionTimeProc in evict.c:475, module timers in module.c:9244, 
+- [redis/redis#13103](https://github.com/redis/redis/pull/13103) ([tests](tests/valkey/13103-df75153d7/)): Fix reply schemas validator build issue due to new regular expression (#13103): declined: The change only modifies utils/generate-command-code.py, a build-time code generator used for the reply-schemas validator CI build. It escapes backslash and plus characters in generated C identifiers and uses json.dumps for string literals so the generated code compiles when a reply schema
+- [redis/redis#13097](https://github.com/redis/redis/pull/13097) ([tests](tests/valkey/13097-a50bbcb65/)): redis-cli fixes around help hints version filtering (#13097): declined: This is a valkey-cli bug fix in the legacy help-hint version-filtering path (versionIsSupported and removeUnsupportedArgs in src/redis-cli.c), reached only when the CLI compares the connected server's reported version against the command/argument `since` strings compiled into cli_commands.
+- [redis/redis#12913](https://github.com/redis/redis/pull/12913) ([tests](tests/valkey/12913-4cae99e78/)): Add overhead of all DBs and rehashing dict count to info. (#12913): 4 of 6 test(s) reached the change, coverage 100%
+- [redis/redis#12898](https://github.com/redis/redis/pull/12898) ([tests](tests/valkey/12898-f17381a38/)): Fix propagation of entries_read by calling streamPropagateGroupID unconditionally (#12898): 2 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#13098](https://github.com/redis/redis/pull/13098) ([tests](tests/valkey/13098-cc9fbd270/)): freeDictIfNeeded when kvstoreEmpty (#13098): declined: The added freeDictIfNeeded() call in kvstoreEmpty() is unreachable with effect in this checkout: freeDictIfNeeded is a no-op unless the kvstore has KVSTORE_FREE_EMPTY_DICTS, the only kvstores ever passed to kvstoreEmpty are db->keys/db->expires (db.c:498-499) which are always created witho
+- [redis/redis#13087](https://github.com/redis/redis/pull/13087) ([tests](tests/valkey/13087-a7abc2f06/)): SCRIPT FLUSH run truly async, close lua interpreter in bio (#13087): 0 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#13092](https://github.com/redis/redis/pull/13092) ([tests](tests/valkey/13092-763827c98/)): Fix redis-cli --count (for --scan, --bigkeys, etc) was ignored unless --pattern was also used (#13092): 0 of 4 test(s) reached the change, coverage 0%
+- [redis/redis#13080](https://github.com/redis/redis/pull/13080) ([tests](tests/valkey/13080-0a12f380e/)): Optimize DEL on expired keys (#13080): declined: The change is a behaviour-preserving optimization: expireIfNeeded's 0/1 return is renamed to a KEY_VALID/KEY_EXPIRED/KEY_DELETED enum with KEY_VALID=0, and every call site (lookupKey, dbRandomKey, scanGenericCommand) keeps the exact old truthiness via '!= KEY_VALID'. The only logic change,
+- [redis/redis#13068](https://github.com/redis/redis/pull/13068) ([tests](tests/valkey/13068-104b20760/)): Fix size stat in malloc(0) and cleanups around zmalloc file (#13068): declined: The only behavioural line (size = MALLOC_MIN_SIZE(size) in zmalloc's prefix-size accounting) is compiled only when HAVE_MALLOC_SIZE is undefined, i.e. no jemalloc/tcmalloc/macOS and no libc malloc_usable_size; the fuzzer's Linux builds (jemalloc or glibc) never compile that path. The rest 
+- [redis/redis#13086](https://github.com/redis/redis/pull/13086) ([tests](tests/valkey/13086-bfcaa7db0/)): Fix minor memory leak in rewriteSetObject (#13086): declined: The change only frees a set iterator on the rio-write-failure path of rewriteSetObject during AOF rewrite. That path is reached solely when writing the rewrite output fails (a disk I/O error), which the fuzzer cannot induce: the only disk-full fault (valkey.bgsave-disk-full) needs root and
+- [redis/redis#12971](https://github.com/redis/redis/pull/12971) ([tests](tests/valkey/12971-4a265554a/)): Expose lua os.clock() api (#12971): 2 of 2 test(s) reached the change, coverage 100%
+- [redis/redis#12659](https://github.com/redis/redis/pull/12659) ([tests](tests/valkey/12659-165afc5f2/)): Determine the large limit of the quicklist node based on fill (#12659): 4 of 6 test(s) reached the change, coverage 95%
+- [redis/redis#13078](https://github.com/redis/redis/pull/13078) ([tests](tests/valkey/13078-820a4e45f/)): Edit the history field of xinfo-consumers (#13078): declined: The change only rewords the 7.2.0 history string of XINFO CONSUMERS in src/commands.def and src/commands/xinfo-consumers.json (documentation metadata surfaced via COMMAND DOCS). It alters no command behaviour, reply structure, parsing, replication or persistence path, so there is nothing r
+- [redis/redis#13076](https://github.com/redis/redis/pull/13076) ([tests](tests/valkey/13076-5b9fc4652/)): Add new allocator.muzzy field to memory-stats reply schema (#13076): declined: The change only edits src/commands/memory-stats.json, adding the allocator.muzzy field to the MEMORY STATS reply schema. Reply schemas are documentation metadata compiled in only with the --with-reply-schema generator flag, not in normal builds. The runtime code emitting allocator.muzzy in
 
 ### valkey-io/valkey-bloom
 
@@ -54,10 +54,10 @@ Updated 2026-11-14T06:29+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 906 of 1446 tested (63%)
-- Changed-line coverage: median 100% of 937 merge(s) measured, 69 under 50%
-- Recall: 235 parents flagged of 371 fix merges
-- Claude: $588.95 in the last 24 hours, $6604.77 in the last 7 days, $10619.11 in all
+- Merges whose tests reached the change: 911 of 1455 tested (63%)
+- Changed-line coverage: median 100% of 946 merge(s) measured, 70 under 50%
+- Recall: 237 parents flagged of 375 fix merges
+- Claude: $629.93 in the last 24 hours, $6678.64 in the last 7 days, $10692.98 in all
 - Issues filed: 78
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

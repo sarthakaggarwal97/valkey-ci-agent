@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.lua-os-clock-sandbox
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua scripts see an os table holding only clock(); every other os method
+    is absent, the table is readonly, and EVAL and FCALL behave alike
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: osclock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "return type(os)", 0], expect_difference: true, expect: {equals: table}}
+    - {command: [EVAL, "return type(os.clock)", 0], expect_difference: true, expect: {
+        equals: function}}
+    - {command: [EVAL, "return type(os.clock())", 0], expect_difference: true, expect: {
+        equals: number}}
+    - {command: [EVAL, "local s = os.clock() local e = os.clock() if s >= 0 and e\
+          \ >= s then return 1 end return {err='clock not monotonic'}", 0], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EVAL, "local t = {} for k, v in pairs(os) do t[#t+1] = k .. ':' ..\
+          \ type(v) end table.sort(t) return t", 0], expect_difference: true, expect: {
+        equals: ["clock:function"]}}
+    - {command: [EVAL, "return tostring(os.execute)", 0], expect_difference: true,
+      expect: {equals: "nil"}}
+    - {command: [EVAL, "return os.execute('true')", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'execute'"}}
+    - {command: [EVAL, "return os.exit(0)", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'exit'"}}
+    - {command: [EVAL, "return os.getenv('PATH')", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'getenv'"}}
+    - {command: [EVAL, "return os.remove('dump.rdb')", 0], expect_difference: true,
+      expect: {error: "attempt to call field 'remove'"}}
+    - {command: [EVAL, "return os.rename('dump.rdb','x.rdb')", 0], expect_difference: true,
+      expect: {error: "attempt to call field 'rename'"}}
+    - {command: [EVAL, "return os.tmpname()", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'tmpname'"}}
+    - {command: [EVAL, "return os.time()", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'time'"}}
+    - {command: [EVAL, "return os.date()", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'date'"}}
+    - {command: [EVAL, "return os.difftime(1,0)", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'difftime'"}}
+    - {command: [EVAL, "return os.setlocale('C')", 0], expect_difference: true, expect: {
+        error: "attempt to call field 'setlocale'"}}
+    - {command: [EVAL, "os.clock = nil return 1", 0], expect_difference: true, expect: {
+        error: "readonly table"}}
+    - {command: [EVAL, "os.execute = function() return 1 end return 1", 0], expect_difference: true,
+      expect: {error: "readonly table"}}
+    - {command: [EVAL, "rawset(os, 'injected', 1) return 1", 0], expect_difference: true,
+      expect: {error: "readonly table"}}
+    - {command: [EVAL, "return {double = os.clock()}", 0], compare: skip, expect: {
+        exists: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=oslib\nredis.register_function('osclock',\
+          \ function(keys, args) return type(os.clock()) end)\nredis.register_function('osexec',\
+          \ function(keys, args) return os.execute('true') end)"], expect: {equals: oslib}}
+    - {command: [FCALL, osclock, 0], expect_difference: true, expect: {equals: number}}
+    - {command: [FCALL, osexec, 0], expect_difference: true, expect: {error: "attempt\
+          \ to call field 'execute'"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [osclock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: osclock}

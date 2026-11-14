@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5fdaa53d20c82c99042e79b737fb9bc157a73d60",
+  "parent": "4979cf02ff83e90ced80db5111452a4c3e082c3a",
+  "pr": 13115,
+  "pr_repo": "redis/redis",
+  "subject": "Fix conversion of numbers in lua args to redis args (#13115)",
+  "date": "2024-03-10",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7282,
+  "findings": [],
+  "recorded": []
+}

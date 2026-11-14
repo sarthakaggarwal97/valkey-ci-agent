@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.xreadgroup-entries-read-aof
+deployment:
+  modes: [standalone]
+metadata:
+  description: The XGROUP SETID ENTRIESREAD that XREADGROUP now propagates also feeds
+    the AOF; a server restarted from its AOF must restore the group's entries-read,
+    which the parent loses or leaves stale
+components:
+- use: valkey.action.commands
+  id: aofreplay
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, st, 2-2, f, v], expect: {equals: "2-2"}}
+    - {command: [XADD, st, 3-3, f, v], expect: {equals: "3-3"}}
+    - {command: [XGROUP, CREATE, st, g, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 2, STREAMS, st, ">"], expect: {
+        equals: [[st, [["1-1", [f, v]], ["2-2", [f, v]]]]]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [XINFO, GROUPS, st], expect_difference: true, expect: {equals: [[
+            name, g, consumers, 1, pending, 2, last-delivered-id, "2-2", entries-read,
+            2, lag, 1]]}}
+    - {command: [XREADGROUP, GROUP, g, c1, NOACK, COUNT, 1, STREAMS, st, ">"], expect: {
+        equals: [[st, [["3-3", [f, v]]]]]}}
+    - {command: [XADD, st, 4-4, f, v], expect: {equals: "4-4"}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 1, STREAMS, st, ">"], expect: {
+        equals: [[st, [["4-4", [f, v]]]]]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [XINFO, GROUPS, st], expect_difference: true, expect: {equals: [[
+            name, g, consumers, 1, pending, 3, last-delivered-id, "4-4", entries-read,
+            4, lag, 0]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofreplay.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofreplay}

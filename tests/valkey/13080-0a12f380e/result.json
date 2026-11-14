@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0a12f380e8999dd01c2f30993c9522d4b8606f09",
+  "parent": "104b2076027fd5b0adb5742a9a2930afe180e412",
+  "pr": 13080,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize DEL on expired keys (#13080)",
+  "date": "2024-02-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.4201,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a behaviour-preserving optimization: expireIfNeeded's 0/1 return is renamed to a KEY_VALID/KEY_EXPIRED/KEY_DELETED enum with KEY_VALID=0, and every call site (lookupKey, dbRandomKey, scanGenericCommand) keeps the exact old truthiness via '!= KEY_VALID'. The only logic change, the early 'continue' in delGenericCommand on KEY_DELETED, skips a dbSyncDelete/dbAsyncDelete call that was a guaranteed no-op, since KEY_DELETED is returned only after deleteExpiredKeyAndPropagate has already removed the key from the keyspace (async delete also unlinks the entry immediately). The DEL/UNLINK "
+}

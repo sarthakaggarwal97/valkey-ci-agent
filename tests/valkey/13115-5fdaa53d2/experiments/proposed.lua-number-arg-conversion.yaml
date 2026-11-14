@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.lua-number-arg-conversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua numbers with an integral value are passed to commands as plain
+    integers (ll2string via double2ll), not fpconv_dtoa scientific notation
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaargs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 2e9)", 1, big], expect: {
+        equals: OK}}
+    - {command: [GET, big], expect_difference: true, expect: {equals: "2000000000"}}
+    - {command: [EVAL, "return redis.call('set', KEYS[1], -2e9)", 1, neg], expect: {
+        equals: OK}}
+    - {command: [GET, neg], expect_difference: true, expect: {equals: "-2000000000"}}
+    - {command: [EVAL, "return redis.call('incrby', KEYS[1], 1e8)", 1, c8], expect_difference: true,
+      expect: {equals: 100000000}}
+    - {command: [EVAL, "return redis.call('incrby', KEYS[1], 1e7)", 1, c7], expect: {
+        equals: 10000000}}
+    - {command: [EVAL, "return redis.call('incrby', KEYS[1], 1e18)", 1, c18], expect_difference: true,
+      expect: {equals: 1000000000000000000}}
+    - {command: [EVAL, "return redis.call('incrby', KEYS[1], -1e18)", 1, cn18], expect_difference: true,
+      expect: {equals: -1000000000000000000}}
+    - {command: [EVAL, "return redis.call('incrby', KEYS[1], 4e18)", 1, c4e18], expect_difference: true,
+      expect: {equals: 4000000000000000000}}
+    - {command: [EVAL, "local foo = redis.pcall('incrby', KEYS[1], 5e18) if type(foo)\
+          \ == 'table' then return 'rejected' else return foo end", 1, c5e18], expect: {
+        equals: rejected}}
+    - {command: [EVAL, "local foo = redis.pcall('hincrby','hash','field',200000000)\
+          \ if type(foo) == 'table' then return foo.err else return foo end", 0],
+      expect_difference: true, expect: {equals: 200000000}}
+    - {command: [EVAL, "return redis.call('expire', KEYS[1], 1e9)", 1, big], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 3.5)", 1, frac], expect: {
+        equals: OK}}
+    - {command: [GET, frac], expect: {equals: "3.5"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luaargs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaargs}

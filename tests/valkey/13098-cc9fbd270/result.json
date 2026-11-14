@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc9fbd270e6a845289aee475d84b2a2711e8d6aa",
+  "parent": "a7abc2f067f9ad124124b5a80cc106fc24c60a85",
+  "pr": 13098,
+  "pr_repo": "redis/redis",
+  "subject": "freeDictIfNeeded when kvstoreEmpty (#13098)",
+  "date": "2024-02-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.1127,
+  "findings": [],
+  "recorded": [],
+  "reason": "The added freeDictIfNeeded() call in kvstoreEmpty() is unreachable with effect in this checkout: freeDictIfNeeded is a no-op unless the kvstore has KVSTORE_FREE_EMPTY_DICTS, the only kvstores ever passed to kvstoreEmpty are db->keys/db->expires (db.c:498-499) which are always created without that flag (server.c:2661, db.c:570, lazyfree.c:181), and the only flagged kvstore, pubsubshard_channels (server.c:2679), is never emptied via kvstoreEmpty \u2014 its per-channel deletes already freed empty dicts before this change (kvstore.c:799). Both builds therefore behave identically on every reachable path"
+}

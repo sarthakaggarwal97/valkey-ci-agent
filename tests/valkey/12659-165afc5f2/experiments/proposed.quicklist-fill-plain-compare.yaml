@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.quicklist-fill-plain-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Elements above the fill-based limit become plain quicklist nodes; DUMP
+    payloads, list commands over plain nodes, the packed-threshold DEBUG semantics,
+    and persistence compared against the parent build
+inputs:
+  properties:
+    fill: {type: integer, minimum: -5, maximum: 512, default: -2}
+    at_limit: {type: integer, minimum: 64, maximum: 1048576, default: 8192}
+    large: {type: integer, minimum: 65, maximum: 1048577, default: 8193}
+    compress_depth: {type: integer, minimum: 0, maximum: 5, default: 0}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: plain
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      list-max-listpack-size: {$ref: inputs.fill}
+      list-compress-depth: {$ref: inputs.compress_depth}
+    checks: {compat: true, replica: true, faults: true}
+    commands:
+    - {command: [RPUSH, small, a, b, c], expect: {equals: 3}}
+    - {command: [EVAL, "return redis.call('RPUSH', KEYS[1], string.rep('x', tonumber(ARGV[1])))",
+        1, edge, {$ref: inputs.at_limit}], expect: {equals: 1}}
+    - {command: [DUMP, edge], expect: {exists: true}}
+    - {command: [EVAL, "return redis.call('RPUSH', KEYS[1], string.rep('b', tonumber(ARGV[1])))",
+        1, big, {$ref: inputs.large}], expect: {equals: 1}}
+    - {command: [DUMP, big], expect_difference: true, expect: {exists: true}}
+    - {command: [OBJECT, ENCODING, big], compare: skip, expect: {equals: quicklist}}
+    - {command: [EVAL, "local n = #redis.call('LINDEX', KEYS[1], 0) if n == tonumber(ARGV[1])\
+          \ then return 'len-ok' else return 'len-bad-' .. n end", 1, big, {$ref: inputs.large}],
+      expect: {equals: len-ok}}
+    - {command: [RPUSH, mix, s1, s2, s3], expect: {equals: 3}}
+    - {command: [EVAL, "return redis.call('RPUSH', KEYS[1], string.rep('y', tonumber(ARGV[1])))",
+        1, mix, {$ref: inputs.large}], expect: {equals: 4}}
+    - {command: [RPUSH, mix, s4], expect: {equals: 5}}
+    - {command: [EVAL, "return redis.call('LPUSH', KEYS[1], string.rep('z', tonumber(ARGV[1])))",
+        1, mix, {$ref: inputs.large}], expect: {equals: 6}}
+    - {command: [EVAL, "return redis.call('LINSERT', KEYS[1], 'BEFORE', 's2', string.rep('w',\
+          \ tonumber(ARGV[1])))", 1, mix, {$ref: inputs.large}], expect: {equals: 7}}
+    - {command: [EVAL, "local t = redis.call('LRANGE', KEYS[1], 0, -1) local s = ''\
+          \ for i = 1, #t do s = s .. #t[i] .. ',' end return s", 1, mix], expect: {
+        exists: true}}
+    - {command: [DUMP, mix], expect_difference: true, expect: {exists: true}}
+    - {command: [EVAL, "redis.call('LSET', KEYS[1], 3, string.rep('v', tonumber(ARGV[1])))\
+          \ return redis.call('LLEN', KEYS[1])", 1, mix, {$ref: inputs.large}], expect: {
+        equals: 7}}
+    - {command: [LSET, mix, 0, t0], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('LSET', KEYS[1], 2, string.rep('u', tonumber(ARGV[1])\
+          \ + 7)) return redis.call('LLEN', KEYS[1])", 1, mix, {$ref: inputs.large}],
+      expect: {equals: 7}}
+    - {command: [DUMP, mix], expect_difference: true, expect: {exists: true}}
+    - {command: [LPOP, mix], expect: {equals: t0}}
+    - {command: [LTRIM, mix, 1, -2], expect: {equals: OK}}
+    - {command: [LLEN, mix], expect: {equals: 4}}
+    - {command: [EVAL, "return redis.call('LREM', KEYS[1], 0, string.rep('u', tonumber(ARGV[1])\
+          \ + 7))", 1, mix, {$ref: inputs.large}], expect: {equals: 1}}
+    - {command: [EVAL, "local t = redis.call('LRANGE', KEYS[1], 0, -1) local s = ''\
+          \ for i = 1, #t do s = s .. #t[i] .. ',' end return s", 1, mix], expect: {
+        exists: true}}
+    - {command: [DUMP, mix], expect_difference: true, expect: {exists: true}}
+    - {command: [LMOVE, big, big2, LEFT, RIGHT], expect: {exists: true}}
+    - {command: [LLEN, big], expect: {equals: 0}}
+    - {command: [DUMP, big2], expect_difference: true, expect: {exists: true}}
+    - {command: [COPY, big2, bigcopy], expect: {equals: 1}}
+    - {command: [DUMP, bigcopy], expect_difference: true, expect: {exists: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 1024], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('RPUSH', KEYS[1], string.rep('p', 2000))",
+        1, pt], expect: {equals: 1}}
+    - {command: [DUMP, pt], expect: {exists: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 0], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('RPUSH', KEYS[1], string.rep('q', tonumber(ARGV[1])))",
+        1, pt0, {$ref: inputs.large}], expect: {equals: 1}}
+    - {command: [DUMP, pt0], expect_difference: true, expect: {exists: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 4294967295], expect: {error: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 4293918720], expect: {equals: OK}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 0], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [LLEN, mix], expect: {equals: 3}}
+    - {command: [EVAL, "local t = redis.call('LRANGE', KEYS[1], 0, -1) local s = ''\
+          \ for i = 1, #t do s = s .. #t[i] .. ',' end return s", 1, mix], expect: {
+        exists: true}}
+    - {command: [DUMP, mix], expect_difference: true, expect: {exists: true}}
+    - {command: [LLEN, big2], expect: {equals: 1}}
+required_events: [plain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: plain}

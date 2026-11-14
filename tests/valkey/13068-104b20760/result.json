@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "104b2076027fd5b0adb5742a9a2930afe180e412",
+  "parent": "bfcaa7db0a70f81c062e2ff6dee1b23baf1cbf53",
+  "pr": 13068,
+  "pr_repo": "redis/redis",
+  "subject": "Fix size stat in malloc(0) and cleanups around zmalloc file (#13068)",
+  "date": "2024-02-26",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4023,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioural line (size = MALLOC_MIN_SIZE(size) in zmalloc's prefix-size accounting) is compiled only when HAVE_MALLOC_SIZE is undefined, i.e. no jemalloc/tcmalloc/macOS and no libc malloc_usable_size; the fuzzer's Linux builds (jemalloc or glibc) never compile that path. The rest of the diff is comment fixes, an include swap, and a rewrite of the REDIS_TEST-only zmalloc unit test, which is what covers the malloc(0) stat fix and is not reachable from a running server. Even where the fix compiles, the effect is a few bytes in the internal used_memory stat, visible only via INFO memory, "
+}

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cc9fbd270e6a..f17381a38d78.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6d54153956dd
+seed: 12898
+experiment:
+  id: proposed.xreadgroup-entries-read-replication
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

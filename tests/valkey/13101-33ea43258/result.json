@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "33ea432585fa3d7ca3da1de98b64e7267110ad4b",
+  "parent": "df75153d79a83e53d71c9cd08e5863b73fe97914",
+  "pr": 13101,
+  "pr_repo": "redis/redis",
+  "subject": "Call finalizerProc when free the aeTimeEvent in ae (#13101)",
+  "date": "2024-03-03",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7125,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change makes aeDeleteEventLoop call each pending time event's finalizerProc before freeing it (src/ae.c:152-153). No code in the tree registers a finalizer: every aeCreateTimeEvent call site (serverCron in server.c:2743, evictionTimeProc in evict.c:475, module timers in module.c:9244, showThroughput in redis-benchmark.c:1012/1736) passes NULL, so the new branch is never taken. Moreover aeDeleteEventLoop is only reached in valkey-server after aeMain returns, and nothing ever calls aeStop on server.el (the server terminates via exit()), making that call site unreachable; the benchmark's call"
+}

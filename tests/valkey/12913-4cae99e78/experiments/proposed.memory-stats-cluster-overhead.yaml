@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.memory-stats-cluster-overhead
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The same MEMORY STATS / INFO memory overhead fields on a cluster-mode server (16384
+    on-demand slot dicts): a slot dict rehash held open inside MULTI/EXEC, a FLUSHALL
+    mid-rehash resetting the counters, and the allocated-but-empty db.0 listing after
+    the flush.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memstats-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [MEMORY, STATS], expect_difference: true, expect: {contains: "db.dict.rehashing.count"}}
+    - {command: [SET, s1, v], expect: {equals: OK}}
+    - {command: [SET, s2, v], expect: {equals: OK}}
+    - {command: [SET, s3, v], expect: {equals: OK}}
+    - {command: [INFO, memory], expect_difference: true, expect: {contains: "mem_overhead_db_hashtable_rehashing:0"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, '{t}1', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{t}2', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{t}3', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{t}4', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{t}5', v], expect: {equals: QUEUED}}
+    - {command: [INFO, memory], expect: {equals: QUEUED}}
+    - {command: [MEMORY, STATS], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "mem_overhead_db_hashtable_rehashing:32"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, '{u}1', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{u}2', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{u}3', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{u}4', v], expect: {equals: QUEUED}}
+    - {command: [SET, '{u}5', v], expect: {equals: QUEUED}}
+    - {command: [FLUSHALL], expect: {equals: QUEUED}}
+    - {command: [INFO, memory], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "mem_overhead_db_hashtable_rehashing:0"}}
+    - {command: [MEMORY, STATS], expect_difference: true, expect: {contains: "db.0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memstats-cluster.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memstats-cluster}

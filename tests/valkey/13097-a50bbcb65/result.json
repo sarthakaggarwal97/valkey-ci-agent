@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a50bbcb6566f76da3da32c18afd66cb674bbbc83",
+  "parent": "4cae99e785ee3302adc37144f07f737b9b7bfc7d",
+  "pr": 13097,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli fixes around help hints version filtering (#13097)",
+  "date": "2024-03-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.6328,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a valkey-cli bug fix in the legacy help-hint version-filtering path (versionIsSupported and removeUnsupportedArgs in src/redis-cli.c), reached only when the CLI compares the connected server's reported version against the command/argument `since` strings compiled into cli_commands.c (all between 1.0.0 and 8.x). Both builds under test report REDIS_VERSION 255.255.255 (src/version.h), newer than every `since`, so versionIsSupported returns 1 at the first numeric comparison (255 > since's first component, unchanged code) for every command and argument: the new equality/digit-count branche"
+}

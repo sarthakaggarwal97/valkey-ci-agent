@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 763827c98144..a7abc2f067f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1bf9c6a190e2
+seed: 202
+experiment:
+  id: proposed.script-flush-async-churn
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    lazyfree-lazy-user-flush: 'yes'
+    lazyfree-lazy-expire: 'yes'
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-eviction: 'yes'

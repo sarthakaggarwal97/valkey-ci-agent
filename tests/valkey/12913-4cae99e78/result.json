@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4cae99e785ee3302adc37144f07f737b9b7bfc7d",
+  "parent": "f17381a38d78f75e228d00972115b31d9a1d0b2e",
+  "pr": 12913,
+  "pr_repo": "redis/redis",
+  "subject": "Add overhead of all DBs and rehashing dict count to info. (#12913)",
+  "date": "2024-03-01",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 30,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.8343,
+  "findings": [],
+  "recorded": []
+}

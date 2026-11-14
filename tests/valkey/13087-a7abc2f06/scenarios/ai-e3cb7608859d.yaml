@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 763827c98144..a7abc2f067f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e3cb7608859d
+seed: 101
+experiment:
+  id: proposed.script-flush-async-churn
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

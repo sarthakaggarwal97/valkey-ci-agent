@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 820a4e45f1c4..165afc5f2a2b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7bf847c6b1b9
+seed: 606
+experiment:
+  id: proposed.quicklist-plain-under-fault
+  inputs:
+    target: replica
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7500
+  server_config:
+    list-max-listpack-size: -1
+    list-compress-depth: 1

@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "763827c98144fa83b4fc50eb4cae7ec4d63e7925",
+  "parent": "0a12f380e8999dd01c2f30993c9522d4b8606f09",
+  "pr": 13092,
+  "pr_repo": "redis/redis",
+  "subject": "Fix redis-cli --count (for --scan, --bigkeys, etc) was ignored unless --pattern was also used (#13092)",
+  "date": "2024-02-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/redis-cli.c:8886"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.2911,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8f4e9ad1f8b0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'scan-count' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-98152be6925e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'scan-count' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-cb9b3ad32da0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cli-count' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    },
+    {
+      "scenario": "ai-154b55543b1c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'cli-count' returned ERROR: the candidate build has no valkey-cli beside its valkey-server: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/valkey-cli"
+    }
+  ]
+}

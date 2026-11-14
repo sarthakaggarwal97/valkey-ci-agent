@@ -1,0 +1,65 @@
+extends: [valkey.base]
+id: proposed.xreadgroup-entries-read-replica-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: XREADGROUP traffic on the primary while a replica is killed or stalled
+    and resyncs; the replica's XINFO GROUPS must converge to the primary's exact entries-read
+    and lag
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.action.commands
+  id: stream-setup
+  config:
+    instances: primary
+    timeout_s: 30
+    commands:
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, st, 2-2, f, v], expect: {equals: "2-2"}}
+    - {command: [XADD, st, 3-3, f, v], expect: {equals: "3-3"}}
+    - {command: [XGROUP, CREATE, st, g, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 1, STREAMS, st, ">"], expect: {
+        equals: [[st, [["1-1", [f, v]]]]]}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: stream-setup.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: pause
+  depends_on: [stream-setup, kill-replica]
+  config: {seconds: 1.5}
+- use: valkey.action.commands
+  id: reads-under-fault
+  depends_on: [pause]
+  config:
+    instances: primary
+    timeout_s: 30
+    commands:
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 2, STREAMS, st, ">"], expect: {
+        equals: [[st, [["2-2", [f, v]], ["3-3", [f, v]]]]]}}
+    - {command: [XADD, st, 4-4, f, v], expect: {equals: "4-4"}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 1, STREAMS, st, ">"], expect: {
+        equals: [[st, [["4-4", [f, v]]]]]}}
+- use: valkey.action.commands
+  id: check-replica
+  depends_on: [reads-under-fault]
+  config:
+    instances: replica
+    timeout_s: 120
+    commands:
+    - {command: [INFO, replication], wait_s: 60, expect: {contains: "master_link_status:up"}}
+    - {command: [XINFO, GROUPS, st], wait_s: 30, expect: {equals: [[name, g, consumers,
+            1, pending, 4, last-delivered-id, "4-4", entries-read, 4, lag, 0]]}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [check-replica.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: check-replica}

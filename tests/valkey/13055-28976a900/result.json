@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28976a9003c6dd5cdd7225c5bc90743b4fcde13c",
+  "parent": "ad127303338f21a29ba7f11b51f076edc29655d3",
+  "pr": 13055,
+  "pr_repo": "redis/redis",
+  "subject": "Fix PONG message processing for primary-ship tracking during failovers (#13055)",
+  "date": "2024-03-04",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 0,
+  "hunted": 10,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 19,
+    "executed": 15,
+    "percent": 78,
+    "uncovered": [
+      "src/cluster_legacy.c:2997",
+      "src/cluster_legacy.c:4993",
+      "src/cluster_legacy.c:4994",
+      "src/cluster_legacy.c:4995"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.6837,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

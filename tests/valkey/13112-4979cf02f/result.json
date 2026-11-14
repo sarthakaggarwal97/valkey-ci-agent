@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4979cf02ff83e90ced80db5111452a4c3e082c3a",
+  "parent": "9738ba9841e01ec3c7dde1618f295105b90f79c9",
+  "pr": 13112,
+  "pr_repo": "redis/redis",
+  "subject": "Change crc16 slot table to be fixed size character array instead of pointer to strings (#13112)",
+  "date": "2024-03-08",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6625,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure data-layout refactor: crc16_slot_table changes from an array of 16384 string pointers to a flat array of char[4] entries, with the string initializers untouched. The table's only consumer is valkey-benchmark's cluster-mode hash-tag substitution (setClusterKeyHashTag, redis-benchmark.c:431); every entry is at most 3 characters, so each char[4] entry stays NUL-terminated and strlen, pointer decay, and the bytes written into keys are identical to the parent. No server, CLI, protocol, persistence, replication, or cluster behavior changes. The changed code is also reachable only by valkey-benc"
+}

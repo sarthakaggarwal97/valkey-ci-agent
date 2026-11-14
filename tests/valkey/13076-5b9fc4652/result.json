@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b9fc465239036b378a39cbebf3706a2db74dd32",
+  "parent": "f6785df663928d6614030e93aaeafa4a3b24ae3f",
+  "pr": 13076,
+  "pr_repo": "redis/redis",
+  "subject": "Add new allocator.muzzy field to memory-stats reply schema (#13076)",
+  "date": "2024-02-21",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3641,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/commands/memory-stats.json, adding the allocator.muzzy field to the MEMORY STATS reply schema. Reply schemas are documentation metadata compiled in only with the --with-reply-schema generator flag, not in normal builds. The runtime code emitting allocator.muzzy in the MEMORY STATS reply (object.c) already exists unchanged in the parent commit; this commit just synchronizes the schema document with the existing reply. No command behaviour, reply, replication, or persistence path differs between the two builds, so no scenario can reach the change."
+}

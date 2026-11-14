@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f17381a38d78f75e228d00972115b31d9a1d0b2e",
+  "parent": "cc9fbd270e6a845289aee475d84b2a2711e8d6aa",
+  "pr": 12898,
+  "pr_repo": "redis/redis",
+  "subject": "Fix propagation of entries_read by calling streamPropagateGroupID unconditionally (#12898)",
+  "date": "2024-02-29",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.6155,
+  "findings": [],
+  "recorded": []
+}

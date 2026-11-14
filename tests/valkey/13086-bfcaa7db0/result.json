@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bfcaa7db0a70f81c062e2ff6dee1b23baf1cbf53",
+  "parent": "4a265554aeed885bfba42d425024d34cbb779a8c",
+  "pr": 13086,
+  "pr_repo": "redis/redis",
+  "subject": "Fix minor memory leak in rewriteSetObject (#13086)",
+  "date": "2024-02-22",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3233,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only frees a set iterator on the rio-write-failure path of rewriteSetObject during AOF rewrite. That path is reached solely when writing the rewrite output fails (a disk I/O error), which the fuzzer cannot induce: the only disk-full fault (valkey.bgsave-disk-full) needs root and is excluded. On every reachable path the emitted AOF bytes, return value, replies and data are identical to the parent build, and even when the error path did fire the rewrite child aborts and exits immediately, so the leaked iterator was never observable as a crash, wrong reply, lost data or sanitizer repor"
+}

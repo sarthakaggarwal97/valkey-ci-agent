@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad127303338f..28976a9003c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5871485c4c62
+seed: 90013
+experiment:
+  id: proposed.pong-failback-under-pause
+  inputs:
+    paused_instance: valkey-8
+    pause_s: 12
+    settle_s: 25
+    force: false
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    cluster-node-timeout: 3000

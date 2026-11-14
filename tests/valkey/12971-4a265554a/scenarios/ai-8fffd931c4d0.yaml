@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 165afc5f2a2b..4a265554aeed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8fffd931c4d0
+seed: 2
+experiment:
+  id: proposed.lua-os-clock-sandbox
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f17381a38d78..4cae99e785ee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fd5547fc0079
+seed: 11
+experiment:
+  id: proposed.memory-stats-db-overhead
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

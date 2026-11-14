@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "820a4e45f1c46d8acbd07043b8992d5f69a872ec",
+  "parent": "5b9fc465239036b378a39cbebf3706a2db74dd32",
+  "pr": 13078,
+  "pr_repo": "redis/redis",
+  "subject": "Edit the history field of xinfo-consumers (#13078)",
+  "date": "2024-02-22",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2429,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords the 7.2.0 history string of XINFO CONSUMERS in src/commands.def and src/commands/xinfo-consumers.json (documentation metadata surfaced via COMMAND DOCS). It alters no command behaviour, reply structure, parsing, replication or persistence path, so there is nothing risky to exercise and no scenario is warranted."
+}

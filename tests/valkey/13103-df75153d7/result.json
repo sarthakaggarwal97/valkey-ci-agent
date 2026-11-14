@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "df75153d79a83e53d71c9cd08e5863b73fe97914",
+  "parent": "a50bbcb6566f76da3da32c18afd66cb674bbbc83",
+  "pr": 13103,
+  "pr_repo": "redis/redis",
+  "subject": "Fix reply schemas validator build issue due to new regular expression (#13103)",
+  "date": "2024-03-02",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2263,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies utils/generate-command-code.py, a build-time code generator used for the reply-schemas validator CI build. It escapes backslash and plus characters in generated C identifiers and uses json.dumps for string literals so the generated code compiles when a reply schema contains a regular expression. It is a build/CI fix with no change to server behavior, command replies, replication, persistence, or any runtime path a fuzzer scenario could reach; correctness is verified by the build itself compiling."
+}

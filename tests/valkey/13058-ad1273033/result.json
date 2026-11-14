@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad127303338f21a29ba7f11b51f076edc29655d3",
+  "parent": "33ea432585fa3d7ca3da1de98b64e7267110ad4b",
+  "pr": 13058,
+  "pr_repo": "redis/redis",
+  "subject": "Implement defragmentation for pubsub kvstore (#13058)",
+  "date": "2024-03-04",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 84,
+    "executed": 74,
+    "percent": 88,
+    "uncovered": [
+      "src/defrag.c:517",
+      "src/defrag.c:820",
+      "src/defrag.c:825",
+      "src/defrag.c:827",
+      "src/defrag.c:828",
+      "src/defrag.c:829",
+      "src/defrag.c:830",
+      "src/defrag.c:831",
+      "src/defrag.c:833",
+      "src/defrag.c:838"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.1268,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: dict.c:391 'DICTHT_SIZE(d->ht_size_exp[0]) > (unsigned long)d->rehashidx' is not true",
+      "scenario": "ai-fc9a738ccf5e",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dec80a8e5eb553688b49",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

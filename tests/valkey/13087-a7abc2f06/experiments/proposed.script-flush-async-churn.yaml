@@ -1,0 +1,253 @@
+extends: [valkey.base]
+id: proposed.script-flush-async-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cache more than 64 scripts and SCRIPT FLUSH in ASYNC, bare and SYNC
+    modes repeatedly under the key-value workload; the change closes the old lua interpreter
+    on the bio thread (ASYNC, dict > 64) or on the main thread with malloc_trim (SYNC)
+    while new scripts run on the fresh interpreter, and the bio job must drain
+components:
+- use: valkey.action.commands
+  id: flush-churn
+  config:
+    instances: primary
+    timeout_s: 15
+    commands:
+    - {command: [SCRIPT, EXISTS, "0123456789abcdef0123456789abcdef01234567"], expect: {
+        equals: [0]}}
+    - {command: [EVAL, "--a1", 0]}
+    - {command: [EVAL, "--a2", 0]}
+    - {command: [EVAL, "--a3", 0]}
+    - {command: [EVAL, "--a4", 0]}
+    - {command: [EVAL, "--a5", 0]}
+    - {command: [EVAL, "--a6", 0]}
+    - {command: [EVAL, "--a7", 0]}
+    - {command: [EVAL, "--a8", 0]}
+    - {command: [EVAL, "--a9", 0]}
+    - {command: [EVAL, "--a10", 0]}
+    - {command: [EVAL, "--a11", 0]}
+    - {command: [EVAL, "--a12", 0]}
+    - {command: [EVAL, "--a13", 0]}
+    - {command: [EVAL, "--a14", 0]}
+    - {command: [EVAL, "--a15", 0]}
+    - {command: [EVAL, "--a16", 0]}
+    - {command: [EVAL, "--a17", 0]}
+    - {command: [EVAL, "--a18", 0]}
+    - {command: [EVAL, "--a19", 0]}
+    - {command: [EVAL, "--a20", 0]}
+    - {command: [EVAL, "--a21", 0]}
+    - {command: [EVAL, "--a22", 0]}
+    - {command: [EVAL, "--a23", 0]}
+    - {command: [EVAL, "--a24", 0]}
+    - {command: [EVAL, "--a25", 0]}
+    - {command: [EVAL, "--a26", 0]}
+    - {command: [EVAL, "--a27", 0]}
+    - {command: [EVAL, "--a28", 0]}
+    - {command: [EVAL, "--a29", 0]}
+    - {command: [EVAL, "--a30", 0]}
+    - {command: [EVAL, "--a31", 0]}
+    - {command: [EVAL, "--a32", 0]}
+    - {command: [EVAL, "--a33", 0]}
+    - {command: [EVAL, "--a34", 0]}
+    - {command: [EVAL, "--a35", 0]}
+    - {command: [EVAL, "--a36", 0]}
+    - {command: [EVAL, "--a37", 0]}
+    - {command: [EVAL, "--a38", 0]}
+    - {command: [EVAL, "--a39", 0]}
+    - {command: [EVAL, "--a40", 0]}
+    - {command: [EVAL, "--a41", 0]}
+    - {command: [EVAL, "--a42", 0]}
+    - {command: [EVAL, "--a43", 0]}
+    - {command: [EVAL, "--a44", 0]}
+    - {command: [EVAL, "--a45", 0]}
+    - {command: [EVAL, "--a46", 0]}
+    - {command: [EVAL, "--a47", 0]}
+    - {command: [EVAL, "--a48", 0]}
+    - {command: [EVAL, "--a49", 0]}
+    - {command: [EVAL, "--a50", 0]}
+    - {command: [EVAL, "--a51", 0]}
+    - {command: [EVAL, "--a52", 0]}
+    - {command: [EVAL, "--a53", 0]}
+    - {command: [EVAL, "--a54", 0]}
+    - {command: [EVAL, "--a55", 0]}
+    - {command: [EVAL, "--a56", 0]}
+    - {command: [EVAL, "--a57", 0]}
+    - {command: [EVAL, "--a58", 0]}
+    - {command: [EVAL, "--a59", 0]}
+    - {command: [EVAL, "--a60", 0]}
+    - {command: [EVAL, "--a61", 0]}
+    - {command: [EVAL, "--a62", 0]}
+    - {command: [EVAL, "--a63", 0]}
+    - {command: [EVAL, "--a64", 0]}
+    - {command: [EVAL, "--a65", 0]}
+    - {command: [EVAL, "--a66", 0]}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='a1'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='a2'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='a3'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:69\r\n"}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:0\r\n"}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "--b1", 0]}
+    - {command: [EVAL, "--b2", 0]}
+    - {command: [EVAL, "--b3", 0]}
+    - {command: [EVAL, "--b4", 0]}
+    - {command: [EVAL, "--b5", 0]}
+    - {command: [EVAL, "--b6", 0]}
+    - {command: [EVAL, "--b7", 0]}
+    - {command: [EVAL, "--b8", 0]}
+    - {command: [EVAL, "--b9", 0]}
+    - {command: [EVAL, "--b10", 0]}
+    - {command: [EVAL, "--b11", 0]}
+    - {command: [EVAL, "--b12", 0]}
+    - {command: [EVAL, "--b13", 0]}
+    - {command: [EVAL, "--b14", 0]}
+    - {command: [EVAL, "--b15", 0]}
+    - {command: [EVAL, "--b16", 0]}
+    - {command: [EVAL, "--b17", 0]}
+    - {command: [EVAL, "--b18", 0]}
+    - {command: [EVAL, "--b19", 0]}
+    - {command: [EVAL, "--b20", 0]}
+    - {command: [EVAL, "--b21", 0]}
+    - {command: [EVAL, "--b22", 0]}
+    - {command: [EVAL, "--b23", 0]}
+    - {command: [EVAL, "--b24", 0]}
+    - {command: [EVAL, "--b25", 0]}
+    - {command: [EVAL, "--b26", 0]}
+    - {command: [EVAL, "--b27", 0]}
+    - {command: [EVAL, "--b28", 0]}
+    - {command: [EVAL, "--b29", 0]}
+    - {command: [EVAL, "--b30", 0]}
+    - {command: [EVAL, "--b31", 0]}
+    - {command: [EVAL, "--b32", 0]}
+    - {command: [EVAL, "--b33", 0]}
+    - {command: [EVAL, "--b34", 0]}
+    - {command: [EVAL, "--b35", 0]}
+    - {command: [EVAL, "--b36", 0]}
+    - {command: [EVAL, "--b37", 0]}
+    - {command: [EVAL, "--b38", 0]}
+    - {command: [EVAL, "--b39", 0]}
+    - {command: [EVAL, "--b40", 0]}
+    - {command: [EVAL, "--b41", 0]}
+    - {command: [EVAL, "--b42", 0]}
+    - {command: [EVAL, "--b43", 0]}
+    - {command: [EVAL, "--b44", 0]}
+    - {command: [EVAL, "--b45", 0]}
+    - {command: [EVAL, "--b46", 0]}
+    - {command: [EVAL, "--b47", 0]}
+    - {command: [EVAL, "--b48", 0]}
+    - {command: [EVAL, "--b49", 0]}
+    - {command: [EVAL, "--b50", 0]}
+    - {command: [EVAL, "--b51", 0]}
+    - {command: [EVAL, "--b52", 0]}
+    - {command: [EVAL, "--b53", 0]}
+    - {command: [EVAL, "--b54", 0]}
+    - {command: [EVAL, "--b55", 0]}
+    - {command: [EVAL, "--b56", 0]}
+    - {command: [EVAL, "--b57", 0]}
+    - {command: [EVAL, "--b58", 0]}
+    - {command: [EVAL, "--b59", 0]}
+    - {command: [EVAL, "--b60", 0]}
+    - {command: [EVAL, "--b61", 0]}
+    - {command: [EVAL, "--b62", 0]}
+    - {command: [EVAL, "--b63", 0]}
+    - {command: [EVAL, "--b64", 0]}
+    - {command: [EVAL, "--b65", 0]}
+    - {command: [EVAL, "--b66", 0]}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='b1'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='b2'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='b3'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:70\r\n"}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "--bx1", 0]}
+    - {command: [EVAL, "--bx2", 0]}
+    - {command: [SCRIPT, FLUSH], expect: {equals: OK}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:0\r\n"}}
+    - {command: [EVAL, "--c1", 0]}
+    - {command: [EVAL, "--c2", 0]}
+    - {command: [EVAL, "--c3", 0]}
+    - {command: [EVAL, "--c4", 0]}
+    - {command: [EVAL, "--c5", 0]}
+    - {command: [EVAL, "--c6", 0]}
+    - {command: [EVAL, "--c7", 0]}
+    - {command: [EVAL, "--c8", 0]}
+    - {command: [EVAL, "--c9", 0]}
+    - {command: [EVAL, "--c10", 0]}
+    - {command: [EVAL, "--c11", 0]}
+    - {command: [EVAL, "--c12", 0]}
+    - {command: [EVAL, "--c13", 0]}
+    - {command: [EVAL, "--c14", 0]}
+    - {command: [EVAL, "--c15", 0]}
+    - {command: [EVAL, "--c16", 0]}
+    - {command: [EVAL, "--c17", 0]}
+    - {command: [EVAL, "--c18", 0]}
+    - {command: [EVAL, "--c19", 0]}
+    - {command: [EVAL, "--c20", 0]}
+    - {command: [EVAL, "--c21", 0]}
+    - {command: [EVAL, "--c22", 0]}
+    - {command: [EVAL, "--c23", 0]}
+    - {command: [EVAL, "--c24", 0]}
+    - {command: [EVAL, "--c25", 0]}
+    - {command: [EVAL, "--c26", 0]}
+    - {command: [EVAL, "--c27", 0]}
+    - {command: [EVAL, "--c28", 0]}
+    - {command: [EVAL, "--c29", 0]}
+    - {command: [EVAL, "--c30", 0]}
+    - {command: [EVAL, "--c31", 0]}
+    - {command: [EVAL, "--c32", 0]}
+    - {command: [EVAL, "--c33", 0]}
+    - {command: [EVAL, "--c34", 0]}
+    - {command: [EVAL, "--c35", 0]}
+    - {command: [EVAL, "--c36", 0]}
+    - {command: [EVAL, "--c37", 0]}
+    - {command: [EVAL, "--c38", 0]}
+    - {command: [EVAL, "--c39", 0]}
+    - {command: [EVAL, "--c40", 0]}
+    - {command: [EVAL, "--c41", 0]}
+    - {command: [EVAL, "--c42", 0]}
+    - {command: [EVAL, "--c43", 0]}
+    - {command: [EVAL, "--c44", 0]}
+    - {command: [EVAL, "--c45", 0]}
+    - {command: [EVAL, "--c46", 0]}
+    - {command: [EVAL, "--c47", 0]}
+    - {command: [EVAL, "--c48", 0]}
+    - {command: [EVAL, "--c49", 0]}
+    - {command: [EVAL, "--c50", 0]}
+    - {command: [EVAL, "--c51", 0]}
+    - {command: [EVAL, "--c52", 0]}
+    - {command: [EVAL, "--c53", 0]}
+    - {command: [EVAL, "--c54", 0]}
+    - {command: [EVAL, "--c55", 0]}
+    - {command: [EVAL, "--c56", 0]}
+    - {command: [EVAL, "--c57", 0]}
+    - {command: [EVAL, "--c58", 0]}
+    - {command: [EVAL, "--c59", 0]}
+    - {command: [EVAL, "--c60", 0]}
+    - {command: [EVAL, "--c61", 0]}
+    - {command: [EVAL, "--c62", 0]}
+    - {command: [EVAL, "--c63", 0]}
+    - {command: [EVAL, "--c64", 0]}
+    - {command: [EVAL, "--c65", 0]}
+    - {command: [EVAL, "--c66", 0]}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='c1'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='c2'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [EVAL, "local t={} for i=1,50000 do t[i]='c3'..i end return #t", 0],
+      expect: {equals: 50000}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:69\r\n"}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [INFO, memory], expect: {contains: "number_of_cached_scripts:0\r\n"}}
+    - {command: [INFO, memory], wait_s: 25, expect: {contains: "lazyfree_pending_objects:0\r\
+          \n"}}
+    - {command: [EVAL, "return 7", 0], expect: {equals: 7}}
+required_events: [flush-churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush-churn}

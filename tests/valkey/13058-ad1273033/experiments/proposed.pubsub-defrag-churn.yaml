@@ -1,0 +1,95 @@
+extends: [valkey.base]
+id: proposed.pubsub-defrag-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Active defrag scans populated pubsub and shard-pubsub kvstores (the new defragPubsubScanCallback
+    and staged activeDefragCycle) while the keyspace churns. Channel robjs are shared
+    between the server kvstore and client subscription dicts; after defrag reports
+    hits, publish fan-out counts, unsubscribe, resubscribe and big-collection defrag-later
+    integrity are verified, and liveness catches any assert, crash or sanitizer report.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pubsub
+  timeout_s: 900
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-02], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-03], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-04], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-05], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-06], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-07], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-08], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-09], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-10], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-11], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-12], connection: sub}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub2}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-01], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-02], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-03], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-04], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-05], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-06], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-07], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-08], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-09], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-10], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-11], connection: ssub}
+    - {command: [SSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-12], connection: ssub}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-01, m0], expect: {equals: 2}}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-02, m0], expect: {equals: 1}}
+    - {command: [SPUBLISH, df-sch-aaaaaaaaaaaaaaaaaaaa-01, m0], expect: {equals: 1}}
+    - {read: true, connection: sub}
+    - {read: true, connection: sub2}
+    - {read: true, connection: ssub}
+    - {command: [EVAL, "for i=1,3000 do redis.call('hset','df:bigh','f'..i,string.rep('v',60))\
+          \ redis.call('zadd','df:bigz',i,'m'..i..string.rep('z',50)) end return 1",
+        0], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,30000 do redis.call('set','df:frag:'..i,string.rep('x',58))\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,30000,2 do redis.call('del','df:frag:'..i) end return\
+          \ 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('info','stats') return tonumber(string.match(s,'total_active_defrag_time:(%d+)'))",
+        0], wait_s: 90, expect: {min: 1}}
+    - {command: [EVAL, "for i=2,30000,2 do redis.call('del','df:frag:'..i) end for\
+          \ i=1,30000,2 do redis.call('set','df:frag:'..i,string.rep('y',58)) end\
+          \ return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('info','stats') return tonumber(string.match(s,'active_defrag_hits:(%d+)'))",
+        0], wait_s: 240, expect: {min: 1}}
+    - {command: [CONFIG, SET, activedefrag, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('info','stats') return tonumber(string.match(s,'total_active_defrag_time:(%d+)'))",
+        0], wait_s: 60, expect: {min: 1}}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-01, m1], expect: {equals: 2}}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-07, m1], expect: {equals: 1}}
+    - {command: [SPUBLISH, df-sch-aaaaaaaaaaaaaaaaaaaa-01, m1], expect: {equals: 1}}
+    - {command: [SPUBLISH, df-sch-aaaaaaaaaaaaaaaaaaaa-12, m1], expect: {equals: 1}}
+    - {read: true, connection: sub}
+    - {read: true, connection: ssub}
+    - {command: [PUBSUB, NUMSUB, df-ch-aaaaaaaaaaaaaaaaaaaa-01]}
+    - {command: [UNSUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-01, m2], expect: {equals: 1}}
+    - {command: [UNSUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub2}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-01, m2], expect: {equals: 0}}
+    - {command: [SUBSCRIBE, df-ch-aaaaaaaaaaaaaaaaaaaa-01], connection: sub}
+    - {command: [PUBLISH, df-ch-aaaaaaaaaaaaaaaaaaaa-01, m3], expect: {equals: 1}}
+    - {command: [SUNSUBSCRIBE, df-sch-aaaaaaaaaaaaaaaaaaaa-01], connection: ssub}
+    - {command: [SPUBLISH, df-sch-aaaaaaaaaaaaaaaaaaaa-01, m2], expect: {equals: 0}}
+    - {read: true, connection: sub}
+    - {command: [HLEN, 'df:bigh'], expect: {equals: 3000}}
+    - {command: [ZCARD, 'df:bigz'], expect: {equals: 3000}}
+    - {command: [CONFIG, SET, activedefrag, "no"], expect: {equals: OK}}
+required_events: [pubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pubsub}

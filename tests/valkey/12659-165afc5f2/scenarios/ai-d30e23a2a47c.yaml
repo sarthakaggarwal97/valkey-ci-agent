@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 820a4e45f1c4..165afc5f2a2b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d30e23a2a47c
+seed: 202
+experiment:
+  id: proposed.quicklist-fill-plain-compare
+  inputs:
+    fill: -1
+    at_limit: 4096
+    large: 4097
+    compress_depth: 2
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

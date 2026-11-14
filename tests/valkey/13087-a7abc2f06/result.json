@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a7abc2f067f9ad124124b5a80cc106fc24c60a85",
+  "parent": "763827c98144fa83b4fc50eb4cae7ec4d63e7925",
+  "pr": 13087,
+  "pr_repo": "redis/redis",
+  "subject": "SCRIPT FLUSH run truly async, close lua interpreter in bio (#13087)",
+  "date": "2024-02-28",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 15,
+    "executed": 15,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.0628,
+  "findings": [],
+  "recorded": []
+}

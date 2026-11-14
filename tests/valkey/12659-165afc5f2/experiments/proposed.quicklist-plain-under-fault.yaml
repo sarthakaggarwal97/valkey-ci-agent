@@ -1,0 +1,58 @@
+extends: [valkey.base]
+id: proposed.quicklist-plain-under-fault
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed lists whose elements exceed the fill-based limit (plain quicklist
+    nodes), SIGKILL the primary or a replica under writes, and verify AOF reload,
+    resync, and the list contents
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: primary}
+components:
+- use: valkey.action.commands
+  id: seed-lists
+  config:
+    instances: primary
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i = 1, 40 do redis.call('RPUSH', KEYS[1], string.rep('x',\
+          \ 9000) .. i) end for i = 1, 200 do redis.call('RPUSH', KEYS[2], 'small'\
+          \ .. i) end for i = 1, 40 do redis.call('RPUSH', KEYS[2], string.rep('y',\
+          \ 9000) .. i) end return redis.call('LLEN', KEYS[1]) + redis.call('LLEN',\
+          \ KEYS[2])", 2, biglist, mixlist], expect: {equals: 280}}
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, seed-lists, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: verify-lists
+  depends_on: [settle]
+  config:
+    instances: primary
+    timeout_s: 30
+    commands:
+    - {command: [LLEN, biglist], expect: {equals: 40}}
+    - {command: [LLEN, mixlist], expect: {equals: 240}}
+    - {command: [EVAL, "local t = redis.call('LRANGE', KEYS[1], 0, -1) for i = 1,\
+          \ 40 do if t[i] ~= string.rep('x', 9000) .. i then return 'bad-' .. i end\
+          \ end return 'ok'", 1, biglist], expect: {equals: ok}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}
+- {evidence_id: valkey.command.sequence, source: verify-lists}
