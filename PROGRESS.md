@@ -48,10 +48,8 @@ Updated 2026-11-14T07:20+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-14T07:20:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43557798302): 2 merge(s) tested, 0 without a code change.
+[2026-11-14T07:20:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43570617590): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1659](https://github.com/valkey-io/valkey-search/pull/1659) ([tests](tests/valkey-search/1659-fdce3b53b/)): Apply queued MULTI/EXEC mutations before forking for a snapshot (#1659): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1700](https://github.com/valkey-io/valkey-search/pull/1700) ([tests](tests/valkey-search/1700-068a0a845/)): test: cover FT.HYBRID LOAD projection on JSON indexes (#1700): 2 of 2 test(s) reached the change
 
 ## Totals
 

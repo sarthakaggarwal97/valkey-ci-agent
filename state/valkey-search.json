@@ -695,5 +695,5 @@
 },
 "failed": {
 },
-"last_run": {"at": "2026-11-14T07:20:08+00:00", "cost_usd": 18.8353, "merges": ["fdce3b53b25167aa705e289aafa31f468ca055aa", "068a0a845815040761c1f50b9178a5aa83868934"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43557798302"}
+"last_run": {"at": "2026-11-14T07:20:59+00:00", "cost_usd": 0.0, "merges": [], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43570617590"}
 }
