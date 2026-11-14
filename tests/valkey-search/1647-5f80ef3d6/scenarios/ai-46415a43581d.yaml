@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 77c11dcad99b..5f80ef3d64ac.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-46415a43581d
+seed: 105
+experiment:
+  id: proposed.search-vector-huge-pages-chunk-churn
+  inputs:
+    docs: 1500
+    cap: 1024
+    del_lo: 400
+    del_hi: 1100
+    remain: 800
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

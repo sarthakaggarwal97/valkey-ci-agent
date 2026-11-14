@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5f80ef3d64acd0d32bf405375c0615188935bea9",
+  "parent": "77c11dcad99ba2954ca4aa65517faa1da9a358e8",
+  "pr": 1647,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allocate vector index memory in transparent huge pages (#1647)",
+  "date": "2026-11-13",
+  "unstable": "c98c0e2e6c271a24c829d17b2ed94d64c576c33f",
+  "module_head": "92b44712de13155b54b6486009521fad98653372",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.0078,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e1e890516d25",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b642b01e05ef",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b642b01e05ef",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 77c11dcad99b..5f80ef3d64ac.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-79b3ba07bb1f
+seed: 103
+experiment:
+  id: proposed.search-vector-huge-pages-lifecycle
+  inputs:
+    resp: 2
+    docs: 50000
+    total: 50300
+    initial_cap: 4096
+    hnsw_block_size: 10240
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-14T03:24+00:00.
+Updated 2026-11-14T03:43+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2243 | 297 | #35 (2024-03-26) | 272 | 247.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 2 | 0.6 |
-| valkey-io/valkey-search | 687 | 1 | f8106e72e984 (2024-11-27) | 14 | 48.0 |
+| valkey-io/valkey-search | 688 | 0 | f8106e72e984 (2024-11-27) | 15 | 48.1 |
 
 ## Last runs
 
@@ -48,16 +48,16 @@ Updated 2026-11-14T03:24+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-14T01:36:57+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43535775954): 1 merge(s) tested, 2 without a code change.
+[2026-11-14T03:43:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43541652957): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1647](https://github.com/valkey-io/valkey-search/pull/1647): to retry, the job left no result
+- [valkey-io/valkey-search#1647](https://github.com/valkey-io/valkey-search/pull/1647) ([tests](tests/valkey-search/1647-5f80ef3d6/)): Allocate vector index memory in transparent huge pages (#1647): 6 of 6 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 900 of 1435 tested (63%)
+- Merges whose tests reached the change: 901 of 1436 tested (63%)
 - Changed-line coverage: median 100% of 927 merge(s) measured, 67 under 50%
 - Recall: 233 parents flagged of 367 fix merges
-- Claude: $610.15 in the last 24 hours, $6849.08 in the last 7 days, $10557.23 in all
+- Claude: $619.15 in the last 24 hours, $6858.09 in the last 7 days, $10566.24 in all
 - Issues filed: 78
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -141,4 +141,4 @@ Updated 2026-11-14T03:24+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#1647](https://github.com/valkey-io/valkey-search/pull/1647): attempt 0 of 3, the job left no result
+None.

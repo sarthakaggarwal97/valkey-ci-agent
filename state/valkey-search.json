@@ -688,10 +688,10 @@
   "76d8315d17068f1b6578cf774709362502a79fb7": {"at": "2026-11-13T22:37:46+00:00", "outcome": "no-code-change", "pr": 1710, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Disable unit test code coverage job in CI (#1710)"},
   "77c11dcad99ba2954ca4aa65517faa1da9a358e8": {"at": "2026-11-13T22:37:46+00:00", "outcome": "no-code-change", "pr": 1705, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "test(vector-registry): wait for backfill in hdel/rename expiry test (#1705)"},
   "3affff4b0195f82470241ccbbcdedafa5d76a23d": {"at": "2026-11-14T01:36:57+00:00", "outcome": "no-code-change", "pr": 1711, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Fix flaky test_dropindex_synchronize_consistency_check_first (#1711)"},
-  "92b44712de13155b54b6486009521fad98653372": {"at": "2026-11-14T01:36:57+00:00", "outcome": "no-code-change", "pr": 1713, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Fix intermittent test_StringPoolStats failure (#1713)"}
+  "92b44712de13155b54b6486009521fad98653372": {"at": "2026-11-14T01:36:57+00:00", "outcome": "no-code-change", "pr": 1713, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Fix intermittent test_StringPoolStats failure (#1713)"},
+  "5f80ef3d64acd0d32bf405375c0615188935bea9": {"at": "2026-11-14T03:43:32+00:00", "cost_usd": 9.0078, "coverage": null, "findings": [], "folder": "tests/valkey-search/1647-5f80ef3d6", "hunted": 6, "outcome": "tested", "pr": 1647, "pr_repo": "valkey-io/valkey-search", "proposed": 6, "proven": 6, "recall": true, "repo": "valkey-io/valkey-search", "subject": "Allocate vector index memory in transparent huge pages (#1647)"}
 },
 "failed": {
-  "5f80ef3d64acd0d32bf405375c0615188935bea9": {"attempts": 0, "cost_usd": 0.0, "date": "2026-11-13", "error": "the job left no result", "misses": 1, "parent": "77c11dcad99ba2954ca4aa65517faa1da9a358e8", "pr": 1647, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "sha": "5f80ef3d64acd0d32bf405375c0615188935bea9", "subject": "Allocate vector index memory in transparent huge pages (#1647)"}
 },
-"last_run": {"at": "2026-11-14T01:36:57+00:00", "cost_usd": 0.0, "merges": ["5f80ef3d64acd0d32bf405375c0615188935bea9"], "skipped": 2, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43535775954"}
+"last_run": {"at": "2026-11-14T03:43:32+00:00", "cost_usd": 9.0078, "merges": ["5f80ef3d64acd0d32bf405375c0615188935bea9"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43541652957"}
 }

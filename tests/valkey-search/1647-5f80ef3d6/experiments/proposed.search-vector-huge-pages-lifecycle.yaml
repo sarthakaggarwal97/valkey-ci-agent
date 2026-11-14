@@ -1,0 +1,114 @@
+extends: [valkey.liveness]
+id: proposed.search-vector-huge-pages-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Vector index chunk lifecycle under the transparent-huge-page allocator: build
+    HNSW and FLAT indexes, grow past INITIAL_CAP, run KNN and VECTOR_RANGE queries
+    (query vectors now bypass the index allocator), toggle search.vector-chunk-huge-pages
+    so heap and huge-page chunks mix in one allocator, overwrite, delete everything,
+    reuse the freed space, and compare every reply with the parent module build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    docs: {type: integer, minimum: 400, maximum: 60000, default: 1500}
+    total: {type: integer, minimum: 500, maximum: 60300, default: 1800, description: phase-2
+        doc count; scenarios keep total = docs + 300}
+    initial_cap: {type: integer, minimum: 1, maximum: 1000000, default: 1024}
+    hnsw_block_size: {type: integer, minimum: 1, maximum: 1000000, default: 10240}
+components:
+- use: valkey.action.commands
+  id: lifecycle
+  timeout_s: 900
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config:
+      disable-thp: "no"
+      search.hnsw-block-size: {$ref: inputs.hnsw_block_size}
+    commands:
+    - {command: [CONFIG, SET, search.vector-chunk-huge-pages, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - command: [FT.CREATE, idxh, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, L2, M, 8, EF_CONSTRUCTION,
+        32, INITIAL_CAP, {$ref: inputs.initial_cap}]
+      expect: {equals: OK}
+    - command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 8, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, L2, INITIAL_CAP, {$ref: inputs.initial_cap}]
+      expect: {equals: OK}
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) local\
+          \ o=tonumber(ARGV[3]) for i=s,e do redis.call('HSET','doc:'..i,'vec',struct.pack('<f',i+o)..string.rep(struct.pack('<f',0.5),7))\
+          \ end return 'OK'", 0, 0, {$ref: inputs.docs}, 0]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 300
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxf, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxh, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idxf, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idxh, "@vec:[VECTOR_RANGE 100 $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2, LIMIT, 0, 20]
+      compare: unordered
+    - {command: [FT.INFO, idxh], compare: skip}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [CONFIG, SET, search.vector-chunk-huge-pages, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) local\
+          \ o=tonumber(ARGV[3]) for i=s,e do redis.call('HSET','doc:'..i,'vec',struct.pack('<f',i+o)..string.rep(struct.pack('<f',0.5),7))\
+          \ end return 'OK'", 0, {$ref: inputs.docs}, {$ref: inputs.total}, 0]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [{$ref: inputs.total}]}
+    - command: [FT.SEARCH, idxf, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [{$ref: inputs.total}]}
+    - command: [FT.SEARCH, idxh, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) local\
+          \ o=tonumber(ARGV[3]) for i=s,e do redis.call('HSET','doc:'..i,'vec',struct.pack('<f',i+o)..string.rep(struct.pack('<f',0.5),7))\
+          \ end return 'OK'", 0, 0, {$ref: inputs.docs}, 0.25]
+      expect: {equals: OK}
+    - {command: [CONFIG, SET, search.vector-chunk-huge-pages, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) for i=s,e\
+          \ do redis.call('DEL','doc:'..i) end return 'OK'", 0, 0, {$ref: inputs.total}]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idxf, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [0]}
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) local\
+          \ o=tonumber(ARGV[3]) for i=s,e do redis.call('HSET','doc:'..i,'vec',struct.pack('<f',i+o)..string.rep(struct.pack('<f',0.5),7))\
+          \ end return 'OK'", 0, 0, {$ref: inputs.docs}, 0]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 300
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxh, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - {command: [HSET, "doc:bad", vec, abc], expect: {equals: 1}}
+    - {command: [HSET, "doc:empty", vec, ""], expect: {equals: 1}}
+    - {command: [FT.DROPINDEX, idxh], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idxf], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lifecycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lifecycle}

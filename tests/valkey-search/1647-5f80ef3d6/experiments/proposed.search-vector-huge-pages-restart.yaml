@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.search-vector-huge-pages-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Build vector indexes whose chunks live in huge pages, SAVE, restart each private
+    server from its RDB, and compare: the module's RDB load reconstructs every vector
+    through the new allocator, and the index must answer the same counts and KNN results
+    as the parent build.
+inputs:
+  properties:
+    docs: {type: integer, minimum: 100, maximum: 20000, default: 1200}
+components:
+- use: valkey.action.commands
+  id: reload
+  timeout_s: 900
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      appendonly: "no"
+      disable-thp: "no"
+    commands:
+    - {command: [CONFIG, SET, search.vector-chunk-huge-pages, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - command: [FT.CREATE, idxh, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, L2, M, 8, EF_CONSTRUCTION,
+        32, INITIAL_CAP, 1024]
+      expect: {equals: OK}
+    - command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 8, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, L2, INITIAL_CAP, 1024]
+      expect: {equals: OK}
+    - command: [EVAL, "local s=tonumber(ARGV[1])+1 local e=tonumber(ARGV[2]) for i=s,e\
+          \ do redis.call('HSET','doc:'..i,'vec',struct.pack('<f',i)..string.rep(struct.pack('<f',0.5),7))\
+          \ end return 'OK'", 0, 0, {$ref: inputs.docs}]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 300
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxf, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxh, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - command: [FT.SEARCH, idxh, "*", LIMIT, 0, 0]
+      wait_s: 300
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxf, "*", LIMIT, 0, 0]
+      wait_s: 120
+      expect: {equals: [{$ref: inputs.docs}]}
+    - command: [FT.SEARCH, idxh, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idxf, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - {command: [FT.INFO, idxh], compare: skip}
+    - {command: [CONFIG, GET, search.vector-chunk-huge-pages], expect_difference: true,
+      expect: {equals: [search.vector-chunk-huge-pages, "yes"]}}
+    - {command: [FT.DROPINDEX, idxh], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idxf], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}
