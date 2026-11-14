@@ -173,6 +173,68 @@ def test_the_scrubbed_environment_reaches_the_isolated_account(checkout):
     assert result.returncode == 0, result.stderr
 
 
+@needs_user
+def test_a_kept_home_outlives_the_command_and_the_sweep_for_a_resumed_session(checkout, monkeypatch):
+    """The CLI keeps a session's transcript in its home; a resumed session needs it in the next command."""
+    monkeypatch.setenv(isolation.USER_ENV, _USER)
+    checkout.chmod(0o700)
+
+    def as_account(home: str, script: str) -> subprocess.CompletedProcess[str]:
+        invocation = isolation.as_user(_USER, {}, ["sh", "-c", script], home=home, cwd=checkout)
+        return subprocess.run(list(invocation.argv), env=invocation.env, capture_output=True, text=True, check=False)
+
+    with isolation.kept_home(checkout) as kept:
+        with isolation.handed_to(_USER, checkout, home=kept) as home:
+            assert home == kept
+            as_account(home, 'mkdir -p "$HOME/.claude/projects/p" && echo transcript > "$HOME/.claude/projects/p/s.jsonl"')
+        # Between the commands the home is the workflow user's: the sweep of the account's files left it alone.
+        transcript = Path(kept) / ".claude" / "projects" / "p" / "s.jsonl"
+        assert transcript.read_text() == "transcript\n" and transcript.stat().st_uid == os.getuid()
+        with isolation.handed_to(_USER, checkout, home=kept) as home:
+            result = as_account(home, 'cat "$HOME/.claude/projects/p/s.jsonl"')
+        assert result.stdout == "transcript\n", result.stderr
+    assert not Path(kept).exists()
+
+
+def test_without_an_account_there_is_no_kept_home(monkeypatch, tmp_path):
+    monkeypatch.delenv(isolation.USER_ENV, raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    with isolation.kept_home(tmp_path / "repo") as home:
+        assert home == ""
+
+
+def test_a_kept_home_is_handed_back_not_removed(monkeypatch):
+    """With root faked: the kept home gets the checkout's treatment (hard links out, chown back), a fresh one is removed."""
+    rooted = []
+    monkeypatch.setattr(isolation, "_as_root", lambda *argv: rooted.append(argv))
+    me = isolation.pwd.getpwuid(os.getuid())
+    monkeypatch.setattr(isolation.pwd, "getpwnam", lambda user: me)
+    monkeypatch.setattr(isolation, "kill_all", lambda user: None)
+    monkeypatch.setattr(isolation, "_remove_files_of", lambda user: None)
+    monkeypatch.setattr(isolation, "_traversable", lambda user, directory: True)
+    work = Path(tempfile.mkdtemp(prefix="ci-fix-test-", dir="/tmp"))
+    repo = work / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    kept = work / "kept"
+    kept.mkdir()
+
+    with isolation.handed_to("agent", repo, home=str(kept)) as home:
+        assert home == str(kept)
+    removals = [argv for argv in rooted if argv[0] == "rm"]
+    assert removals == []
+    assert ("find", str(kept), "-xdev", "-mindepth", "1") == next(argv for argv in rooted if argv[0] == "find")[:5]
+    assert any(argv[:1] == ("chown",) and argv[-1] == str(kept) for argv in rooted)
+
+    rooted.clear()
+    monkeypatch.setattr(isolation.tempfile, "mkdtemp", lambda **_kw: str(work / "fresh"))
+    (work / "fresh").mkdir()
+    with isolation.handed_to("agent", repo) as home:
+        assert home == str(work / "fresh")
+    assert ("rm", "-rf", "--", str(work / "fresh")) in rooted
+    shutil.rmtree(work)
+
+
 def test_file_cleanup_drops_roots_already_covered_by_an_ancestor(monkeypatch):
     calls = []
     monkeypatch.setattr(isolation, "_WRITABLE_ROOTS", ("/tmp", "/var/tmp"))

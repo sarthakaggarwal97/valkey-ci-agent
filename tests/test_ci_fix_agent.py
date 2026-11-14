@@ -353,7 +353,11 @@ def test_the_review_is_told_when_a_release_branchs_patch_is_not_an_upstream_chan
     assert "written for this branch" not in seen["prompt"]
 def _stream(result: str, *, returncode: int = 1) -> SimpleNamespace:
     """A session's stream as the CLI prints it: events, then the result."""
-    events = [{"type": "assistant", "message": {}}, {"type": "result", "subtype": "success", "result": result}]
+    events = [
+        {"type": "system", "subtype": "init", "session_id": "0b7e-session"},
+        {"type": "assistant", "message": {}},
+        {"type": "result", "subtype": "success", "result": result, "session_id": "0b7e-session"},
+    ]
     return SimpleNamespace(stdout="\n".join(json.dumps(event) for event in events), stderr="", returncode=returncode)
 
 
@@ -371,29 +375,116 @@ def test_only_a_model_api_error_worth_another_try_is_one(result, again) -> None:
     assert bool(agent_mod.api_error(_stream(result).stdout)) is again
 
 
-def test_a_fix_session_that_ended_on_a_model_api_error_says_so(tmp_path, monkeypatch) -> None:
+def test_the_session_id_is_read_from_the_stream_and_only_a_plain_one(tmp_path) -> None:
+    assert agent_mod.session_id(_stream("x").stdout) == "0b7e-session"
+    assert agent_mod.session_id("not json\n") == ""
+    assert agent_mod.session_id(json.dumps({"type": "system", "session_id": "../etc; rm"})) == ""
+
+
+def test_a_fix_session_that_ended_on_a_model_api_error_says_so_and_names_its_session(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(agent_mod, "run_agent", lambda *_args, **_kwargs: _stream(_UNAVAILABLE))
 
-    with pytest.raises(agent_mod.ModelUnavailable, match="API Error: 503"):
+    with pytest.raises(agent_mod.ModelUnavailable, match="API Error: 503") as raised:
         agent_mod.run_fix_agent(_task(), str(tmp_path), "log")
+    assert raised.value.session_id == "0b7e-session"
 
 
-def test_a_review_that_ended_on_a_model_api_error_is_run_once_more(tmp_path, monkeypatch) -> None:
+def test_a_resumed_fix_session_is_told_so_and_the_cli_continues_it(tmp_path, monkeypatch) -> None:
+    seen = {}
+    monkeypatch.setattr(
+        agent_mod, "run_agent",
+        lambda profile, prompt, **kw: seen.update(prompt=prompt, **kw) or _result({"action": "refuse"}),
+    )
+
+    agent_mod.run_fix_agent(_task(), str(tmp_path), "log", resume="0b7e-session", home="/w/home")
+
+    assert seen["resume"] == "0b7e-session" and seen["home"] == "/w/home"
+    assert seen["prompt"].startswith("Your session ended on a model API error")
+    assert "Fix one exact failed GitHub Actions job" in seen["prompt"]  # the task again, with its new file paths
+
+
+def test_a_resumed_session_gets_at_least_the_time_the_failed_one_used(monkeypatch) -> None:
+    """A session that died 39 minutes in needs about that long again, not the six its first budget left."""
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(agent_mod.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(agent_mod.time, "sleep", lambda seconds: clock.__setitem__("now", clock["now"] + seconds))
+    calls: list[tuple[str, int | None]] = []
+
+    def run(home, resume, timeout):
+        calls.append((resume, timeout))
+        if len(calls) == 1:
+            clock["now"] += 39 * 60
+            raise agent_mod.ModelUnavailable("API Error: 503", "s-1")
+        return "done"
+
+    # 45 minutes for the session, 100 to the deadline: the resume gets the 39 it used, not the 6 left.
+    assert agent_mod.resumed(run, "/repo", 45 * 60, 1000.0 + 100 * 60) == "done"
+    assert calls == [("", 45 * 60), ("s-1", 39 * 60)]
+
+    # Only what the deadline leaves, when that is less; the pause comes off it.
+    calls.clear()
+    clock["now"] = 1000.0
+    agent_mod.resumed(run, "/repo", 45 * 60, 1000.0 + 50 * 60)
+    assert calls[1] == ("s-1", 11 * 60 - agent_mod.API_ERROR_PAUSE_S)
+
+    # The failed session used little: the resume gets the rest of its budget.
+    calls.clear()
+    clock["now"] = 1000.0
+
+    def quick(home, resume, timeout):
+        calls.append((resume, timeout))
+        if len(calls) == 1:
+            clock["now"] += 5 * 60
+            raise agent_mod.ModelUnavailable("API Error: 503", "s-1")
+        return "done"
+
+    agent_mod.resumed(quick, "/repo", 45 * 60, 1000.0 + 65 * 60)
+    assert calls[1] == ("s-1", 40 * 60)
+
+
+def test_a_session_is_resumed_at_most_twice_and_only_when_it_has_an_id(monkeypatch) -> None:
+    monkeypatch.setattr(agent_mod, "API_ERROR_PAUSE_S", 0)
+    calls: list[str] = []
+
+    def dies(home, resume, timeout):
+        calls.append(resume)
+        raise agent_mod.ModelUnavailable("API Error: 503", "s-1")
+
+    with pytest.raises(agent_mod.ModelUnavailable):
+        agent_mod.resumed(dies, "/repo", 600, None)
+    assert calls == ["", "s-1", "s-1"] and agent_mod.MAX_RESUMES == 2
+
+    def nameless(home, resume, timeout):
+        calls.append(resume)
+        raise agent_mod.ModelUnavailable("API Error: 503")
+
+    calls.clear()
+    with pytest.raises(agent_mod.ModelUnavailable):
+        agent_mod.resumed(nameless, "/repo", 600, None)
+    assert calls == [""]
+
+
+def test_a_review_that_ended_on_a_model_api_error_is_resumed(tmp_path, monkeypatch) -> None:
     """The candidate has already passed its test: a 503 is no reason to throw the attempt away."""
     from scripts.ci_fix.models import FixCandidate
 
     sessions = iter([_stream(_UNAVAILABLE), _result({"approved": True, "reasoning": "fine"})])
-    prompts, slept = [], []
-    monkeypatch.setattr(agent_mod, "run_agent", lambda _profile, prompt, **_kw: prompts.append(prompt) or next(sessions))
+    calls, slept = [], []
+    monkeypatch.setattr(
+        agent_mod, "run_agent", lambda _profile, prompt, **kw: calls.append((prompt, kw)) or next(sessions),
+    )
     monkeypatch.setattr(agent_mod.time, "sleep", slept.append)
     candidate = FixCandidate(action=CandidateAction.PATCH, patch="diff", failing_check="t", root_cause="race")
 
     approved, reasoning = agent_mod.review_candidate(candidate, str(tmp_path), "log", timeout=600)
 
     assert approved and reasoning == "fine"
-    assert len(prompts) == 2 and prompts[0] == prompts[1] and slept == [60]
+    assert len(calls) == 2 and slept == [60]
+    assert calls[0][1]["resume"] == "" and calls[1][1]["resume"] == "0b7e-session"
+    assert calls[1][0].startswith("Your session ended on a model API error") and calls[0][0] in calls[1][0]
+    assert calls[1][1]["timeout"] <= 600 - 60
 
-    # Twice is a failed attempt, as any review that judged nothing is.
+    # Past the resumes is a failed attempt, as any review that judged nothing is.
     monkeypatch.setattr(agent_mod, "run_agent", lambda *_args, **_kwargs: _stream(_UNAVAILABLE))
     with pytest.raises(RuntimeError, match="the review agent failed"):
         agent_mod.review_candidate(candidate, str(tmp_path), "log")
@@ -512,6 +603,11 @@ def test_a_fix_from_an_issue_is_asked_for_without_a_run_or_a_job(tmp_path, monke
     assert "The issue is the specification, and the test written from it" in prompt
     assert "may be changed only when the issue says that expectation is wrong; name every such change" in prompt
     assert "Prefer a fix in the test or the test harness" not in prompt
+    # A test it adds has to be one code runs: plain make builds no gtest.
+    assert (
+        "a Tcl test under tests/, since code builds with plain `make` and runs Tcl tests only, so a test under "
+        "src/unit/ is never built or run." in prompt
+    )
     assert "Never commit, push, create a branch, or modify `.git`." in prompt
 
 

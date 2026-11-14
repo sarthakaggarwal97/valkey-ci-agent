@@ -95,7 +95,7 @@ def _plan(head: str) -> FixPlan:
     return FixPlan(front_door=FrontDoor.FACTORY, task=task, brief=brief)
 
 
-def _test_writer(task, brief, repo_dir, *, feedback="", timeout=None, guide=""):
+def _test_writer(task, brief, repo_dir, *, feedback="", timeout=None, guide="", **_kwargs):
     path = Path(repo_dir, "tests/unit/value.tcl")
     path.write_text(path.read_text() + "test {value check} {\n    assert_equal right [r get k]\n}\n", encoding="utf-8")
     return TestCandidate("test", _TEST, summary="shows the stale GET", expects="GET returns the new value")

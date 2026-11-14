@@ -189,11 +189,15 @@ def run_agent(
     model: str | None = None,
     evidence_dir: str | Path | None = None,
     extra_dirs: tuple[str, ...] = (),
+    resume: str = "",
+    home: str = "",
 ) -> AgentRunResult:
     """Run Claude Code under a named capability profile.
 
     The profile controls tool permissions, timeout, effort, and audit labels.
     ``extra_dirs`` are directories besides ``cwd`` a confined profile may read.
+    ``resume`` continues that session, in the same ``home`` for an isolated
+    profile (see ``claude_code.run_claude_code``).
     Optional evidence is written after the process exits so generated files in
     the working tree cannot influence the prompt that just ran.
     """
@@ -202,7 +206,10 @@ def run_agent(
     resolved_model = _resolve_claude_model(model)
     # run_claude_code logs the working directory and the exit; this names
     # which agent it was.
-    logger.info("Running the %s agent (model %s)", profile_name, resolved_model or "default")
+    logger.info(
+        "%s the %s agent (model %s)", f"Resuming session {resume} of" if resume else "Running",
+        profile_name, resolved_model or "default",
+    )
     limits = [limit for limit in (timeout, profile.timeout) if limit is not None]
     effective_timeout = min(limits) if limits else None
     stdout, stderr, rc = run_claude_code(
@@ -218,6 +225,8 @@ def run_agent(
         confined=profile.confined,
         extra_dirs=extra_dirs,
         run_as=isolated_user() if profile.isolated else "",
+        resume=resume,
+        home=home,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
     result = AgentRunResult(

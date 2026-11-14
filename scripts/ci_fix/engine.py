@@ -43,9 +43,8 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from scripts.ci_fix.agent import (
-    API_ERROR_PAUSE_S,
     AgentTimeout,
-    ModelUnavailable,
+    resumed,
     review_candidate,
     run_fix_agent,
 )
@@ -566,22 +565,13 @@ def _fix_loop(
         agent_timeout = remaining - reserve
         agent_timeout = min(agent_timeout, _MAX_AGENT_ROUND_S)
         try:
-            try:
-                outcome = agent_round(
+            outcome = resumed(
+                lambda home, resume, timeout: agent_round(
                     task, repo_dir, original_head, job_log, context, feedback,
-                    attempt=attempt, timeout=max(60, agent_timeout), agent_func=agent_func,
-                )
-            except ModelUnavailable as exc:
-                # The session judged nothing, and may have died mid-edit: run it
-                # once more, on the tree as the working commit has it.
-                logger.warning("CI-fix round %d: %s; running the session once more", attempt, exc)
-                restore(repo_dir)
-                time.sleep(API_ERROR_PAUSE_S)
-                agent_timeout = min(int(deadline - time.monotonic()) - reserve, _MAX_AGENT_ROUND_S)
-                outcome = agent_round(
-                    task, repo_dir, original_head, job_log, context, feedback.replace(_KEPT_TREE, _RESET_TREE),
-                    attempt=attempt, timeout=max(60, agent_timeout), agent_func=agent_func,
-                )
+                    attempt=attempt, timeout=timeout or 60, agent_func=agent_func, resume=resume, home=home,
+                ),
+                repo_dir, max(60, agent_timeout), deadline,
+            )
         except AgentTimeout:
             # A session that used its whole budget investigating found no
             # evidence-backed fix; a fresh one repeats the same reading.
@@ -704,13 +694,18 @@ def agent_round(
     attempt: int,
     timeout: int,
     agent_func: AgentFunc = run_fix_agent,
+    resume: str = "",
+    home: str = "",
 ) -> RoundOutcome:
     """Run the agent once and apply what it chose to the working tree.
 
     A patch is the agent's own edits; a port is cherry-picked into the tree.
     The caller undoes a port with :func:`restore` once it is done with it.
+    ``resume`` and ``home`` continue a session (``agent.resumed``).
     """
-    candidate = agent_func(task, repo_dir, job_log, feedback=feedback, timeout=timeout, context=context)
+    candidate = agent_func(
+        task, repo_dir, job_log, feedback=feedback, timeout=timeout, context=context, resume=resume, home=home,
+    )
     if attempt > 1 and candidate.action is CandidateAction.PORT:
         # An earlier round's patch is still in the tree; the agent has moved
         # on to porting instead.

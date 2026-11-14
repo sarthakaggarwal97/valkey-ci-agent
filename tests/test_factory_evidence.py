@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -75,7 +76,7 @@ def _writing(*edits, action="test", test=_TEST, **fields):
     rounds = iter(edits)
     feedback: list[str] = []
 
-    def agent(task, brief, repo_dir, *, feedback="", timeout=None, guide=""):
+    def agent(task, brief, repo_dir, *, feedback="", timeout=None, guide="", **_kwargs):
         agent.feedback.append(feedback)
         edit = next(rounds)
         if edit is not None:
@@ -233,6 +234,52 @@ def test_a_session_that_runs_out_refuses_and_a_crashed_first_session_fails(tmp_p
 
     with pytest.raises(RuntimeError, match="the CLI died"):
         _establish(tmp_path, crashing)
+
+
+def test_a_session_that_died_on_a_model_api_error_is_resumed_with_its_test_in_place(tmp_path, monkeypatch):
+    from scripts.ci_fix import agent as agent_mod
+    from scripts.ci_fix.agent import ModelUnavailable
+
+    monkeypatch.setattr(agent_mod, "API_ERROR_PAUSE_S", 0)
+    calls: list[tuple[str, bool]] = []
+
+    def agent(task, brief, repo_dir, *, resume="", **_kwargs):
+        written = "value check" in (Path(repo_dir) / "tests" / "unit" / "value.tcl").read_text()
+        calls.append((resume, written))
+        if len(calls) == 1:
+            _adds_test(Path(repo_dir))
+            raise ModelUnavailable("the evidence agent's session ended on a model API error", "s-1")
+        return TestCandidate(action="test", test=_TEST, summary="shows the stale GET", expects="the new value")
+
+    evidence, _repo_dir = _establish(tmp_path, agent)
+
+    assert isinstance(evidence, Evidence) and "+test {value check}" in evidence.patch
+    assert calls == [("", False), ("s-1", True)]  # resumed, with the half-written test still in the tree
+
+
+def test_the_evidence_agent_is_told_to_write_a_tcl_test_and_a_resumed_one_continues(tmp_path, monkeypatch):
+    """Code builds with plain make and runs Tcl tests: a gtest under src/unit/ would never be built or run."""
+    seen = {}
+    monkeypatch.setattr(
+        evidence_mod, "run_agent",
+        lambda profile, prompt, **kw: seen.update(prompt=prompt, **kw) or SimpleNamespace(
+            stdout='{"action": "refuse", "summary": "no"}', stderr="", returncode=0,
+        ),
+    )
+    repo, head = _repo(tmp_path)
+
+    evidence_mod.run_evidence_agent(_task(head), _brief(), repo)
+    assert (
+        "Code builds with plain `make` and runs Tcl tests only, so a C unit test under src/unit/ is never built "
+        "or run: write a Tcl test under tests/." in " ".join(seen["prompt"].split())
+    )
+    assert seen["prompt"].count("src/unit/") == 1  # nowhere else is one offered
+    assert seen["resume"] == "" and seen["home"] == ""
+
+    evidence_mod.run_evidence_agent(_task(head), _brief(), repo, resume="s-1", home="/w/home")
+    assert seen["resume"] == "s-1" and seen["home"] == "/w/home"
+    assert seen["prompt"].startswith("Your session ended on a model API error")
+    assert "Write a test that demonstrates an issue" in seen["prompt"]
 
 
 def test_the_agents_result_is_read_strictly():
