@@ -39,16 +39,22 @@ What you get back depends on whose PR it is. On a contributor's PR, or a PR
 from a fork, the bot never pushes anything. It posts the fix as a patch in a
 comment, and the author can apply it or not. On the bot's own PRs, meaning
 backport PRs and the PRs it opened to fix something, it pushes the fix as a
-new commit. A sweep PR carries only backports, so its fix goes to its CI-sweep
-PR instead ([Backports](backport.md#when-a-backport-prs-own-ci-fails)).
+new commit. A sweep PR carries only backports, so its fix goes to unstable
+first when unstable has the failing test, or else to its CI-sweep PR
+([Backports](backport.md#when-a-backport-prs-own-ci-fails)).
 
 ## Other ways a fix starts
 
-The bot also starts without being asked in two situations.
+The bot also starts without being asked in three situations.
 
 When one of the bot's own backport PRs fails CI, the backport workflow's
 hourly CI follow-up hands one failed job at a time to this bot. That is
 described in [Backports](backport.md#when-a-backport-prs-own-ci-fails).
+
+When a member of the contributors team reviews one of the bot's PRs into
+unstable, the daily CI Fix Upstream Upkeep has the bot change the fix as the
+review asks, verify it again, and answer on the PR. A review it couldn't act
+on is answered too; comment again to have it try once more.
 
 When the [Test Failure Detector](test-failure-detector.md) files an issue for
 a test that failed in Daily CI, the bot can try to fix that too. A maintainer
@@ -338,6 +344,7 @@ behaviour can be adjusted with these repository variables:
 | `CI_FIX_ISSUES_AUTO_DISPATCH` | unset | Set to `false` to stop the hourly dispatcher from starting fixes for detector issues. |
 | `CI_FIX_ISSUES_MAX_RUNS` | `2` | How many detector issue fixes can run at once. |
 | `CI_FIX_ISSUES_PUBLISH` | `comment` | `comment` posts the patch on the issue; `draft-pr` opens a draft PR. |
+| `CI_FIX_UPSTREAM_UPKEEP` | unset | Set to `false` to stop the daily rebase and review of the bot's PRs into unstable. |
 | `CI_AGENT_CLAUDE_MODEL` | unset | Use a different model, for example `opus`. |
 
 `CI_FIX_AGENT_USER` names the separate account; `scripts/ci_fix/job.sh`
@@ -353,16 +360,20 @@ another repository would need its own tokens and triggers.
 
 Every fix runs as the same three jobs in `ci-fix-run.yml`, driven by
 `scripts/ci_fix/run.py`: a plan job that pins down the failure and works out
-how to recreate the job, a fix job, and a publish job. The fix job is called
-`fix-in-job` when it recreates the failed job, `fix-in-container` when that
-job ran in a container, and `fix-local` when it falls back to the bot's own
-runner. The jobs pass their state to each other as JSON (`state.py`).
+how to recreate the job, a fix job, and a publish job. The fix job comes from
+`ci-fix-job.yml`, and is called `fix-in-job` when it recreates the failed
+job, `fix-in-container` when that job ran in a container, and `fix-local`
+when it falls back to the bot's own runner. A sweep PR's fix for a test
+unstable has too gets two more jobs before publish: `plan-upstream` finds
+unstable's own job of the same name, and `fix-upstream` makes the fix for
+unstable in it. The jobs pass their state to each other as JSON (`state.py`).
 
 Each way of starting a fix has a small front door that checks the request and
 turns it into the same `FixTask`: `main.py` for PR requests,
 `comment_poll.py` for picking up comments, `issues.py` and
-`issue_dispatch.py` for detector issues, and `scripts/backport/ci_followup.py`
-for backport PRs. `gate.py` parses commands and checks that the requester is
+`issue_dispatch.py` for detector issues, `scripts/backport/ci_followup.py`
+for backport PRs, and `upstream.py` for reviews of the bot's PRs into
+unstable. `upstream.py` also opens those PRs and keeps them up to date. `gate.py` parses commands and checks that the requester is
 allowed. `github_runs.py` and `issue_state.py` read the state of runs and
 issues.
 

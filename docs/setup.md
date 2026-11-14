@@ -27,6 +27,7 @@ These repository variables adjust its behaviour:
 | `CI_FIX_ISSUES_AUTO_DISPATCH` | Set to `false` to stop the CI fix bot from starting on detector issues by itself. |
 | `CI_FIX_ISSUES_MAX_RUNS` | How many detector issue fixes can run at once. Defaults to 2. |
 | `CI_FIX_ISSUES_PUBLISH` | How a detector issue's fix is shared: `comment` (the default) or `draft-pr`. |
+| `CI_FIX_UPSTREAM_UPKEEP` | Set to `false` to stop the daily rebase and review of the bot's PRs into unstable. |
 
 ### The model
 
