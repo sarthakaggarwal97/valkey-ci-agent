@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 965dc90b72a7..17904780ae5b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-21c1be2292a2
+seed: 12387
+experiment:
+  id: proposed.dict-iter-rehash-skip
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

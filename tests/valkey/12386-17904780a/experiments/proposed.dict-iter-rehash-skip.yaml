@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.dict-iter-rehash-skip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Iterate dicts pinned mid-rehash (grow and shrink) through every dictNext
+    consumer - SINTERSTORE/SUNIONSTORE/ZUNIONSTORE, SMEMBERS/HGETALL, KEYS, and SAVE
+    plus restart - and require no entry lost or duplicated; replies compared against
+    the parent build, which lacks the rehashed-slot skip
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rehash-iter
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {activerehashing: "no", set-max-listpack-entries: 0, set-max-intset-entries: 0,
+      hash-max-listpack-entries: 0, zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SADD, s, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13,
+        m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28,
+        m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43,
+        m44, m45, m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58,
+        m59, m60, m61, m62, m63, m64, m65, m66, m67, m68, m69, m70], expect: {equals: 70}}
+    - {command: [SINTERSTORE, si, s], expect: {equals: 70}}
+    - {command: [SUNIONSTORE, su, s], expect: {equals: 70}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6, f7, v7,
+        f8, v8, f9, v9, f10, v10, f11, v11, f12, v12, f13, v13, f14, v14, f15, v15,
+        f16, v16, f17, v17, f18, v18, f19, v19, f20, v20, f21, v21, f22, v22, f23,
+        v23, f24, v24, f25, v25, f26, v26, f27, v27, f28, v28, f29, v29, f30, v30,
+        f31, v31, f32, v32, f33, v33, f34, v34, f35, v35, f36, v36, f37, v37, f38,
+        v38, f39, v39, f40, v40, f41, v41, f42, v42, f43, v43, f44, v44, f45, v45,
+        f46, v46, f47, v47, f48, v48, f49, v49, f50, v50, f51, v51, f52, v52, f53,
+        v53, f54, v54, f55, v55, f56, v56, f57, v57, f58, v58, f59, v59, f60, v60,
+        f61, v61, f62, v62, f63, v63, f64, v64, f65, v65, f66, v66, f67, v67, f68,
+        v68, f69, v69, f70, v70], expect: {equals: 70}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [ZADD, z, 1, w1, 2, w2, 3, w3, 4, w4, 5, w5, 6, w6, 7, w7, 8, w8,
+        9, w9, 10, w10, 11, w11, 12, w12, 13, w13, 14, w14, 15, w15, 16, w16, 17,
+        w17, 18, w18, 19, w19, 20, w20, 21, w21, 22, w22, 23, w23, 24, w24, 25, w25,
+        26, w26, 27, w27, 28, w28, 29, w29, 30, w30, 31, w31, 32, w32, 33, w33, 34,
+        w34, 35, w35, 36, w36, 37, w37, 38, w38, 39, w39, 40, w40, 41, w41, 42, w42,
+        43, w43, 44, w44, 45, w45, 46, w46, 47, w47, 48, w48, 49, w49, 50, w50, 51,
+        w51, 52, w52, 53, w53, 54, w54, 55, w55, 56, w56, 57, w57, 58, w58, 59, w59,
+        60, w60, 61, w61, 62, w62, 63, w63, 64, w64, 65, w65, 66, w66, 67, w67, 68,
+        w68, 69, w69, 70, w70], expect: {equals: 70}}
+    - {command: [ZUNIONSTORE, zu, 1, z], expect: {equals: 70}}
+    - {command: [ZCARD, zu], expect: {equals: 70}}
+    - {command: [SREM, s, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13,
+        m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28,
+        m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43,
+        m44, m45, m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58,
+        m59, m60, m61, m62], expect: {equals: 62}}
+    - {command: [SINTERSTORE, si2, s], expect: {equals: 8}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [DEBUG, POPULATE, 1040], expect: {equals: OK}}
+    - {command: [KEYS, "key:*"], compare: unordered}
+    - {command: [DBSIZE], expect: {equals: 1047}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1047}}
+    - {command: [SCARD, s], expect: {equals: 8}}
+    - {command: [HLEN, h], expect: {equals: 70}}
+    - {command: [ZCARD, z], expect: {equals: 70}}
+    - {command: [SCARD, su], expect: {equals: 70}}
+    - {command: [GET, "key:1039"], expect: {equals: "value:1039"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rehash-iter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rehash-iter}

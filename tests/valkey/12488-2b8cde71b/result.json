@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b8cde71bb553713cf93794a0fb30a1618c0c955",
+  "parent": "f4549d1cf4830c0584f8e41369a8628842a67aec",
+  "pr": 12488,
+  "pr_repo": "redis/redis",
+  "subject": "Update supported version list. (#12488)",
+  "date": "2023-08-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3032,
+  "findings": [],
+  "recorded": [],
+  "reason": "Documentation-only change: it updates the supported-version table in SECURITY.md, normalizes unicode apostrophes to ASCII in SECURITY.md and CODE_OF_CONDUCT.md, fixes a comment in tests/integration/psync2-master-restart.tcl, and changes the same apostrophe character in two test-only string literals in tests/modules/infotest.c (output only in a crash-report INFO section of a test module). No server code, command behaviour, replies, replication, persistence or configuration is touched, so there is no changed behaviour for a scenario to reach."
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "17904780ae5b4793ad133020d6bfa7f4a266b20c",
+  "parent": "965dc90b72a710b2400184e123316c8d1c8d4cf5",
+  "pr": 12386,
+  "pr_repo": "redis/redis",
+  "subject": "skip the rehashed entries in dictNext (#12386)",
+  "date": "2023-08-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.0867,
+  "findings": [],
+  "recorded": []
+}

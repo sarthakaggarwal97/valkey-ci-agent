@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "965dc90b72a710b2400184e123316c8d1c8d4cf5",
+  "parent": "2b8cde71bb553713cf93794a0fb30a1618c0c955",
+  "pr": 12479,
+  "pr_repo": "redis/redis",
+  "subject": "change return type to be consistant (#12479)",
+  "date": "2023-08-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2437,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens the return type of rdbSaveMillisecondTime and rdbSaveDoubleValue from int to ssize_t to match rdbWriteRaw, which they delegate to. These functions write at most 8 and ~129 bytes respectively, so their return value (bytes written or -1) always fit in an int; every caller only checks for -1/negative, so no value, error path, RDB byte, or reply changes. It is a pure type-consistency refactor with no observable behaviour change, so no scenario is needed."
+}
