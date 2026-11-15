@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3a41580a247e4c55e5b6e2a6d5491f6b22bc6529",
+  "parent": "bfb689c8fb3ee3854e577d8fff524abf9d78894b",
+  "pr": 1721,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: add Quantile reducer to FT.Aggregate groupby stage (supersedes #947) (#1721)",
+  "date": "2026-11-14",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": "3a41580a247e4c55e5b6e2a6d5491f6b22bc6529",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 13.7975,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

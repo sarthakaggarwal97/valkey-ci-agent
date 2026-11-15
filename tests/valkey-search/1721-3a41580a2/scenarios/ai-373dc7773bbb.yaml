@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bfb689c8fb3e..3a41580a247e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-373dc7773bbb
+seed: 12
+experiment:
+  id: proposed.ft-aggregate-quantile-compare
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  base_port: 7100

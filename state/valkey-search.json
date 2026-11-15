@@ -1,6 +1,6 @@
 {
 "repo": "valkey-io/valkey-search",
-"pointer": {"cursor": "f8106e72e984983b3f534a5873ec65949da6f3e2", "cursor_date": "2024-11-27", "cursor_pr": null, "end": "f8106e72e984983b3f534a5873ec65949da6f3e2", "head": "bfb689c8fb3ee3854e577d8fff524abf9d78894b", "remaining": 0},
+"pointer": {"cursor": "f8106e72e984983b3f534a5873ec65949da6f3e2", "cursor_date": "2024-11-27", "cursor_pr": null, "end": "f8106e72e984983b3f534a5873ec65949da6f3e2", "head": "3a41580a247e4c55e5b6e2a6d5491f6b22bc6529", "remaining": 0},
 "done": {
   "ec01f05a1ef46a6db55c732da57f5516ce440bac": {"at": "2026-11-05T06:22:48+00:00", "outcome": "no-code-change", "pr": 1483, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Scoring compatibility tests CME (#1483)"},
   "6d1eb2667d214c4841a8c5c59b249b02bbbdd7b8": {"at": "2026-11-05T06:22:48+00:00", "outcome": "no-code-change", "pr": 1446, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "Remove stale local copy of the benchmark configs (#1446)"},
@@ -694,9 +694,10 @@
   "068a0a845815040761c1f50b9178a5aa83868934": {"at": "2026-11-14T07:20:08+00:00", "cost_usd": 5.7755, "coverage": null, "findings": [], "folder": "tests/valkey-search/1700-068a0a845", "hunted": 2, "outcome": "tested", "pr": 1700, "pr_repo": "valkey-io/valkey-search", "proposed": 2, "proven": 2, "recall": true, "repo": "valkey-io/valkey-search", "subject": "test: cover FT.HYBRID LOAD projection on JSON indexes (#1700)"},
   "41407640c9666664ad873ff97977393219d9bdd5": {"at": "2026-11-14T16:47:10+00:00", "outcome": "no-code-change", "pr": 1715, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "subject": "test(vector-registry): poll for KNN hits in different-dimensions drop test (#1715)"},
   "57ae2bcfffe6425e86a52801353adceabff912c6": {"at": "2026-11-14T21:46:15+00:00", "cost_usd": 14.9684, "coverage": null, "findings": [], "folder": "tests/valkey-search/923-57ae2bcff", "hunted": 4, "outcome": "tested", "pr": 923, "pr_repo": "valkey-io/valkey-search", "proposed": 4, "proven": 4, "recall": true, "repo": "valkey-io/valkey-search", "subject": "Implement metric to CPU consumption for remote query (#923)"},
-  "bfb689c8fb3ee3854e577d8fff524abf9d78894b": {"at": "2026-11-15T00:39:38+00:00", "cost_usd": 10.2372, "coverage": null, "findings": [], "folder": "tests/valkey-search/1719-bfb689c8f", "hunted": 2, "outcome": "tested", "pr": 1719, "pr_repo": "valkey-io/valkey-search", "proposed": 2, "proven": 2, "recall": true, "repo": "valkey-io/valkey-search", "subject": "Add COUNT_DISTINCTISH reducer with HyperLogLog (supersedes #948) (#1719)"}
+  "bfb689c8fb3ee3854e577d8fff524abf9d78894b": {"at": "2026-11-15T00:39:38+00:00", "cost_usd": 10.2372, "coverage": null, "findings": [], "folder": "tests/valkey-search/1719-bfb689c8f", "hunted": 2, "outcome": "tested", "pr": 1719, "pr_repo": "valkey-io/valkey-search", "proposed": 2, "proven": 2, "recall": true, "repo": "valkey-io/valkey-search", "subject": "Add COUNT_DISTINCTISH reducer with HyperLogLog (supersedes #948) (#1719)"},
+  "3a41580a247e4c55e5b6e2a6d5491f6b22bc6529": {"at": "2026-11-15T18:02:17+00:00", "cost_usd": 13.7975, "coverage": null, "findings": [], "folder": "tests/valkey-search/1721-3a41580a2", "hunted": 4, "outcome": "tested", "pr": 1721, "pr_repo": "valkey-io/valkey-search", "proposed": 4, "proven": 4, "recall": true, "repo": "valkey-io/valkey-search", "subject": "feat: add Quantile reducer to FT.Aggregate groupby stage (supersedes #947) (#1721)"}
 },
 "failed": {
 },
-"last_run": {"at": "2026-11-15T06:51:01+00:00", "cost_usd": 0.0, "merges": [], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43687250469"}
+"last_run": {"at": "2026-11-15T18:02:17+00:00", "cost_usd": 13.7975, "merges": ["3a41580a247e4c55e5b6e2a6d5491f6b22bc6529"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43731539586"}
 }

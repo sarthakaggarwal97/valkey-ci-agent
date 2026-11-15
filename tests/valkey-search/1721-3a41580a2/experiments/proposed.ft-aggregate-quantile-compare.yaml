@@ -1,0 +1,117 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-quantile-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE QUANTILE reducer (new in this change) compared against
+    the parent module build, which rejects the reducer at parse time
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: ["FT.CREATE", "idx", "ON", "HASH", "PREFIX", "1", "doc:", "SCHEMA",
+        "n", "NUMERIC", "cat", "TAG"], expect: {equals: OK}}
+    - {command: ["HSET", "doc:1", "n", "1", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:2", "n", "2", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:3", "n", "3", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:4", "n", "4", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:5", "n", "5", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:6", "n", "6", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:7", "n", "7", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:8", "n", "8", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:9", "n", "9", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:10", "n", "10", "cat", "a"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:11", "n", "-7.5", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:12", "n", "-7.5", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:13", "n", "-1", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:14", "n", "0", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:15", "n", "0", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:16", "n", "3.25", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:17", "n", "100", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:18", "n", "100", "cat", "b"], expect: {equals: 2}}
+    - {command: ["HSET", "doc:19", "cat", "c"], expect: {equals: 1}}
+    - {command: ["HSET", "doc:20", "cat", "c"], expect: {equals: 1}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "GROUPBY", "0", "REDUCE", "COUNT", "0",
+        "AS", "total"], wait_s: 60, expect: {equals: [1, ["total", "20"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "0", "AS", "q0", "REDUCE", "QUANTILE", "2", "@n", "0.25",
+        "AS", "q25", "REDUCE", "QUANTILE", "2", "@n", "0.5", "AS", "q50", "REDUCE",
+        "QUANTILE", "2", "@n", "0.75", "AS", "q75", "REDUCE", "QUANTILE", "2", "@n",
+        "1", "AS", "q100"], expect_difference: true, expect: {equals: [1, ["q0", "-7.5",
+            "q25", "0", "q50", "3.25", "q75", "8", "q100", "100"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "quantile", "2", "@n", "0.99", "AS", "p99"], expect_difference: true, expect: {
+        equals: [1, ["p99", "100"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "5e-1", "AS", "med"], expect_difference: true, expect: {
+        equals: [1, ["med", "3.25"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "2", "@n", "@cat", "GROUPBY",
+        "1", "@cat", "REDUCE", "QUANTILE", "2", "@n", "0.5", "AS", "med", "REDUCE",
+        "COUNT", "0", "AS", "cnt", "SORTBY", "2", "@cat", "ASC"], expect_difference: true,
+      expect: {equals: [3, ["cat", "a", "med", "5", "cnt", "10"], ["cat", "b", "med",
+            "0", "cnt", "8"], ["cat", "c", "med", "nan", "cnt", "2"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "@cat:{a}", "LOAD", "2", "@n", "@cat", "GROUPBY",
+        "1", "@cat", "REDUCE", "TOLIST", "1", "@n", "AS", "vals", "GROUPBY", "0",
+        "REDUCE", "QUANTILE", "2", "@vals", "0.5", "AS", "med"], expect_difference: true,
+      expect: {equals: [1, ["med", "5"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "0", "AS", "lo", "REDUCE", "QUANTILE", "2", "@n", "1",
+        "AS", "hi", "FILTER", "@lo<@hi"], expect_difference: true, expect: {equals: [
+          1, ["lo", "-7.5", "hi", "100"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@cat", "GROUPBY", "0",
+        "REDUCE", "QUANTILE", "2", "@cat", "0.5", "AS", "m"], expect_difference: true,
+      expect: {equals: [1, ["m", "nan"]]}}
+    - {command: ["FT.AGGREGATE", "idx", "@cat:{z}", "LOAD", "1", "@n", "GROUPBY",
+        "0", "REDUCE", "QUANTILE", "2", "@n", "0.5", "AS", "med"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "0.5"], expect_difference: true, expect: {error: false}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "1.5"], expect_difference: true, expect: {error: "must\
+          \ be between 0.0 and 1.0"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "-0.1"], expect_difference: true, expect: {error: "must\
+          \ be between 0.0 and 1.0"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "nan"], expect_difference: true, expect: {error: "must\
+          \ be between 0.0 and 1.0"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "inf"], expect_difference: true, expect: {error: "must\
+          \ be between 0.0 and 1.0"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "xyz"], expect_difference: true, expect: {error: "must\
+          \ be a numeric literal"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", ""], expect_difference: true, expect: {error: "must\
+          \ be a numeric literal"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "2", "@n", "0.5junk"], expect_difference: true, expect: {error: "must\
+          \ be a numeric literal"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "1", "@n"], expect_difference: true, expect: {error: "incorrect\
+          \ number of arguments"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "3", "@n", "0.5", "extra"], expect_difference: true, expect: {
+        error: "incorrect number of arguments"}}
+    - {command: ["FT.AGGREGATE", "idx", "*", "LOAD", "1", "@n", "GROUPBY", "0", "REDUCE",
+        "QUANTILE", "0"], expect_difference: true, expect: {error: "incorrect number\
+          \ of arguments"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}
