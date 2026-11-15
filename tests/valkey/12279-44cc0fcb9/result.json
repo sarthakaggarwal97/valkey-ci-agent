@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "44cc0fcb9d8bfa194f65f306bce7f91d17ada2ed",
+  "parent": "ac6bc5d1a87e66e2ff1f9b46f9850d48d7ff51cd",
+  "pr": 12279,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli --stat take dbnum value from CONFIG GET to output total keys (#12279)",
+  "date": "2023-08-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 12,
+    "percent": 80,
+    "uncovered": [
+      "src/redis-cli.c:8899",
+      "src/redis-cli.c:8900",
+      "src/redis-cli.c:9420"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5833,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: LeakSanitizer: detected",
+      "scenario": "ai-aeb7182a764f",
+      "seed": 12279,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "407cf7f564b273e3887a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81"
+    }
+  ],
+  "recorded": []
+}

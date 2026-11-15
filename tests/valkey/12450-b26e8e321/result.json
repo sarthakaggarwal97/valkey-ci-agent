@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b26e8e321346518574ed7093df1fb6b8be9fd7d9",
+  "parent": "9ce8c54d74f40bc5a70f210c2b14cf89c031ee10",
+  "pr": 12450,
+  "pr_repo": "redis/redis",
+  "subject": "Optimize ZRANGE offset location from linear search to skiplist jump. (#12450)",
+  "date": "2023-08-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 80,
+    "executed": 74,
+    "percent": 92,
+    "uncovered": [
+      "src/module.c:4883",
+      "src/module.c:4884",
+      "src/module.c:4947",
+      "src/module.c:4948",
+      "src/t_zset.c:552",
+      "src/t_zset.c:553"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.3353,
+  "findings": [],
+  "recorded": []
+}

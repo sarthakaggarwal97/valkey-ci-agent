@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.lrem-count-long-min
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    LREM with count LONG_MIN used to overflow on negation and remove every occurrence
+    from the tail; after the fix it is rejected with an out-of-range error and the
+    list is untouched. Compares the reply and the list state across the two builds,
+    plus the -LONG_MAX and LONG_MAX boundaries that must keep working on both.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    listpack: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: lrem
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: {$ref: inputs.listpack}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, l, a, x, b, x, c, x], expect: {equals: 6}}
+    - {command: [LREM, l, -9223372036854775808, x], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [LRANGE, l, 0, -1], expect_difference: true, expect: {equals: [a,
+          x, b, x, c, x]}}
+    - {command: [LLEN, l], expect_difference: true, expect: {equals: 6}}
+    - {command: [LREM, l, -9223372036854775807, x], expect: {equals: 3}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [RPUSH, l2, x, y, x], expect: {equals: 3}}
+    - {command: [LREM, l2, 9223372036854775807, x], expect: {equals: 2}}
+    - {command: [LREM, l2, -9223372036854775809, y], expect: {error: true}}
+    - {command: [LREM, l2, 9223372036854775808, y], expect: {error: true}}
+    - {command: [RPUSH, l3, x, x], expect: {equals: 2}}
+    - {command: [LREM, l3, -9223372036854775808, x], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [EXISTS, l3], expect_difference: true, expect: {equals: 1}}
+    - {command: [LREM, l3, 0, x], expect_difference: true, expect: {equals: 2}}
+    - {command: [EXISTS, l3], expect: {equals: 0}}
+    - {command: [LREM, missing, -9223372036854775808, x], expect_difference: true,
+      expect: {error: "out of range"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lrem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lrem}

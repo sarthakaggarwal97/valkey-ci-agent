@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.zrangebylex-offset-jump
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT and ZRANGE BYLEX on a skiplist-encoded
+    zset with LIMIT offsets on both sides of ZSKIPLIST_MAX_SEARCH (10), including
+    an empty-string member, compared against the parent build. The optimization must
+    not change any reply, so every reply has an expect with the ground-truth answer
+    and no command is marked expect_difference.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zlex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zl, 0, la, 0, lb, 0, lc, 0, ld, 0, le, 0, lf, 0, lg, 0, lh,
+        0, li, 0, lj, 0, lk, 0, ll, 0, lm, 0, ln, 0, lo, 0, lp, 0, lq, 0, lr, 0, ls,
+        0, lt, 0, lu, 0, lv, 0, lw, 0, lx, 0, ly, 0, lz], expect: {equals: 26}}
+    - {command: [OBJECT, ENCODING, zl], compare: skip, expect: {equals: skiplist}}
+    - {command: [ZRANGEBYLEX, zl, '-', '+', LIMIT, 10, 3], expect: {equals: [lk, ll,
+          lm]}}
+    - {command: [ZRANGEBYLEX, zl, '[lc', '[lt', LIMIT, 10, 4], expect: {equals: [
+          lm, ln, lo, lp]}}
+    - {command: [ZRANGEBYLEX, zl, '(lc', '[lt', LIMIT, 10, 2], expect: {equals: [
+          ln, lo]}}
+    - {command: [ZRANGEBYLEX, zl, '[lc', '[lt', LIMIT, 17, 5], expect: {equals: [
+          lt]}}
+    - {command: [ZRANGEBYLEX, zl, '[lc', '[lt', LIMIT, 18, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, zl, '[lc', '[lt', LIMIT, 30, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, zl, '-', '[lk', LIMIT, 10, 2], expect: {equals: [lk]}}
+    - {command: [ZREVRANGEBYLEX, zl, '[lt', '[lc', LIMIT, 9, 2], expect: {equals: [
+          lk, lj]}}
+    - {command: [ZREVRANGEBYLEX, zl, '[lt', '[lc', LIMIT, 10, 3], expect: {equals: [
+          lj, li, lh]}}
+    - {command: [ZREVRANGEBYLEX, zl, '+', '-', LIMIT, 20, 10], expect: {equals: [
+          lf, le, ld, lc, lb, la]}}
+    - {command: [ZREVRANGEBYLEX, zl, '[lt', '[lc', LIMIT, 17, 5], expect: {equals: [
+          lc]}}
+    - {command: [ZREVRANGEBYLEX, zl, '[lt', '[lc', LIMIT, 19, 5], expect: {equals: []}}
+    - {command: [ZREVRANGEBYLEX, zl, '+', '(lx', LIMIT, 12, 4], expect: {equals: []}}
+    - {command: [ZLEXCOUNT, zl, '[lc', '[lt'], expect: {equals: 18}}
+    - {command: [ZLEXCOUNT, zl, '-', '+'], expect: {equals: 26}}
+    - {command: [ZLEXCOUNT, zl, '(lz', '+'], expect: {equals: 0}}
+    - {command: [ZRANGE, zl, '[lc', '[lt', BYLEX, LIMIT, 12, 2], expect: {equals: [
+          lo, lp]}}
+    - {command: [ZRANGE, zl, '[lt', '[lc', BYLEX, REV, LIMIT, 13, 2], expect: {equals: [
+          lg, lf]}}
+    - {command: [ZADD, zl, 0, ''], expect: {equals: 1}}
+    - {command: [ZRANGEBYLEX, zl, '-', '+', LIMIT, 0, 2], expect: {equals: ['', la]}}
+    - {command: [ZRANGEBYLEX, zl, '-', '[lk', LIMIT, 11, 2], expect: {equals: [lk]}}
+    - {command: [ZREVRANGEBYLEX, zl, '+', '-', LIMIT, 26, 3], expect: {equals: ['']}}
+    - {command: [ZLEXCOUNT, zl, '-', '+'], expect: {equals: 27}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zlex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zlex}

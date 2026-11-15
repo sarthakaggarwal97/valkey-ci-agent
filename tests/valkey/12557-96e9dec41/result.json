@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96e9dec41996ebb67eaf0796db18595d97f92299",
+  "parent": "90e9fc387c81d48d3d82ea7fcd2d3b6d896bf923",
+  "pr": 12557,
+  "pr_repo": "redis/redis",
+  "subject": "Bump codespell from 2.2.4 to 2.2.5 (#12557)",
+  "date": "2023-09-08",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2854,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI dependency bump (codespell 2.2.4 -> 2.2.5) plus the typo fixes it flagged: every hunk edits comments in C sources or Tcl test files except one, which adds a space to the SENTINEL CONFIG usage-error string in sentinel.c. No executable behaviour, reply semantics, replication, persistence, or data path changes; the only string edit is cosmetic and reachable only in Sentinel mode, which the fuzzer deployments do not run. Nothing to test."
+}

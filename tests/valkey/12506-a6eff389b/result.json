@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a6eff389b50ace5ae7671003dcc8baf2afe01fb0",
+  "parent": "1407ac1f3ece8f7e4094f92e649e5d0b7c5e5bde",
+  "pr": 12506,
+  "pr_repo": "redis/redis",
+  "subject": "redis.conf: Add data loss warning to \"appendonly\" (#12506)",
+  "date": "2023-08-22",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2054,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a documentation comment to redis.conf (a warning about toggling appendonly in the config file of an existing database). No source code, configuration default, or runtime behaviour changes, so there is nothing for a scenario to exercise."
+}

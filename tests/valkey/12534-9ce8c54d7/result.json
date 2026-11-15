@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9ce8c54d74f40bc5a70f210c2b14cf89c031ee10",
+  "parent": "7519960527d8749edad6f0aa296f829fbbcf4bdc",
+  "pr": 12534,
+  "pr_repo": "redis/redis",
+  "subject": "Update sort_ro reply_schema to mention the null reply (#12534)",
+  "date": "2023-08-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2514,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects documentation metadata: sort_ro.json's reply_schema now mentions the null element that SORT_RO with GET already returned, sort.json gets a whitespace-only description fix, and a TCL test is extended. No C code or generated command table changes, so server behaviour, replies, replication and persistence are identical on both builds \u2014 there is nothing a scenario could observe differing."
+}

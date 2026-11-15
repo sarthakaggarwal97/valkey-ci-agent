@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.client-buffer-oom-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    INFO stats gains client_query_buffer_limit_disconnections and client_output_buffer_limit_disconnections;
+    the output-buffer counter rises once per client the server closes for output buffer
+    OOM, holds still on a normal disconnect, and CONFIG RESETSTAT clears both.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: oom-stats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local q=string.match(s,'client_query_buffer_limit_disconnections:(%d+)')\
+          \ local o=string.match(s,'client_output_buffer_limit_disconnections:(%d+)')\
+          \ return (q or 'absent')..':'..(o or 'absent')", 0], expect_difference: true,
+      expect: {equals: "0:0"}}
+    - {command: [SETRANGE, big, 99999, x], expect: {equals: 100000}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 10 0 0"], expect: {
+        equals: OK}}
+    - {command: [GET, big], connection: victim1, expect: {exists: false}}
+    - {command: [GET, big], connection: victim2, expect: {exists: false}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [INFO, stats], compare: skip}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local q=string.match(s,'client_query_buffer_limit_disconnections:(%d+)')\
+          \ local o=string.match(s,'client_output_buffer_limit_disconnections:(%d+)')\
+          \ return (q or 'absent')..':'..(o or 'absent')", 0], expect_difference: true,
+      expect: {equals: "0:2"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [QUIT], connection: victim3, expect: {exists: false}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local q=string.match(s,'client_query_buffer_limit_disconnections:(%d+)')\
+          \ local o=string.match(s,'client_output_buffer_limit_disconnections:(%d+)')\
+          \ return (q or 'absent')..':'..(o or 'absent')", 0], expect_difference: true,
+      expect: {equals: "0:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [oom-stats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom-stats}

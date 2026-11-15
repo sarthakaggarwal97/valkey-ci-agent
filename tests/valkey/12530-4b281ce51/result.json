@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4b281ce519974061d22eef7a9a8072d3611e64f9",
+  "parent": "e792653753dc62b5a00822121e585511542a024b",
+  "pr": 12530,
+  "pr_repo": "redis/redis",
+  "subject": "Align CONFIG RESETSTAT/REWRITE tips with SET. (#12530)",
+  "date": "2023-08-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.6074,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3c3b8471743c",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3c3b8471743c",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3c3b8471743c",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7768e4cb8bc0",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7768e4cb8bc0",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7768e4cb8bc0",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-808d39e3554e",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-808d39e3554e",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-808d39e3554e",
+      "build": "unstable",
+      "seed": 5,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

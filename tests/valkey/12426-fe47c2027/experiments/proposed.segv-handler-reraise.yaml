@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.segv-handler-reraise
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG SEGFAULT enters the refactored sigsegvHandler (mutex guard) and
+    the signal re-raise path in bugReportEnd, identically on both builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: seg
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {crash-log-enabled: "yes"}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [DEBUG, SEGFAULT], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seg}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e3d4b30d09dc8dc1c560794750f28689cc4f510b",
+  "parent": "4b281ce519974061d22eef7a9a8072d3611e64f9",
+  "pr": 12476,
+  "pr_repo": "redis/redis",
+  "subject": "Add two stats to count client input and output buffer oom. (#12476)",
+  "date": "2023-08-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.118,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c1f77939d8c7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oom-stats' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (QUIT on connection victim3)"
+    },
+    {
+      "scenario": "ai-d4524fbe58f7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oom-stats' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (QUIT on connection victim3)"
+    }
+  ]
+}

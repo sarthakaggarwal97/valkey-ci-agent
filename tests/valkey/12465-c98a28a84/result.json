@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c98a28a8480feeb00ccca80d23fcbe6d1718f6ed",
+  "parent": "16988208bd6d0b7dcebcc79a988b5dfd0f3419a4",
+  "pr": 12465,
+  "pr_repo": "redis/redis",
+  "subject": "Fix LREM count LONG_MIN overflow minor issue (#12465)",
+  "date": "2023-08-21",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.7813,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ae0c9b2145ae",
+      "build": "unstable",
+      "seed": 124651,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ae0c9b2145ae",
+      "build": "unstable",
+      "seed": 124652,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ae0c9b2145ae",
+      "build": "unstable",
+      "seed": 124653,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6fbcb4bbde88",
+      "build": "unstable",
+      "seed": 124652,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6fbcb4bbde88",
+      "build": "unstable",
+      "seed": 124653,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6fbcb4bbde88",
+      "build": "unstable",
+      "seed": 124654,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

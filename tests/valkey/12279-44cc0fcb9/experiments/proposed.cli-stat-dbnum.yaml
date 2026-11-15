@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.cli-stat-dbnum
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --stat now calls CONFIG GET databases before the stat loop;
+    exercise the new getDatabases() success path (RESP2 array assert, RESP3 map assert)
+    and its error fallback to 16, compared against the parent's valkey-cli
+components:
+- use: valkey.action.tools
+  id: stat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: ["-p", "$port", "ACL", "SETUSER", "no-info", "on",
+        ">pw1", "allkeys", "allchannels", "+@all", "-info"], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: ["-p", "$port", "ACL", "SETUSER", "no-info-config",
+        "on", ">pw2", "allkeys", "allchannels", "+@all", "-info", "-config"], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: ["-p", "$port", "--user", "no-info", "--pass", "pw1",
+        "--no-auth-warning", "--stat"], expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: ["-3", "-p", "$port", "--user", "no-info", "--pass",
+        "pw1", "--no-auth-warning", "--stat"], expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: ["-p", "$port", "--user", "no-info-config", "--pass",
+        "pw2", "--no-auth-warning", "--stat"], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: "use default value 16 instead"}}}
+    - {tool: valkey-cli, args: ["-3", "-p", "$port", "--user", "no-info-config", "--pass",
+        "pw2", "--no-auth-warning", "--stat"], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: "use default value 16 instead"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: stat}

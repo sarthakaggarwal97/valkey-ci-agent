@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 370d38016f89..49f7d173b432.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5421d15ebcbb
+seed: 12533001
+experiment:
+  id: proposed.module-config-register-lifecycle
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

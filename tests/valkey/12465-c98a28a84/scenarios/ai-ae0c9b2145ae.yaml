@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 16988208bd6d..c98a28a8480f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ae0c9b2145ae
+seed: 124651
+experiment:
+  id: proposed.lrem-count-long-min
+  inputs:
+    resp: 2
+    listpack: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

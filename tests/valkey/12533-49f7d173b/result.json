@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "49f7d173b432408c55b40bc529556c9aeff8fc53",
+  "parent": "370d38016f89c747fb8f22070ba021e82583988e",
+  "pr": 12533,
+  "pr_repo": "redis/redis",
+  "subject": "Remove unnecessary use of sds and mem copy in module.c (#12533)",
+  "date": "2023-08-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0195,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5421d15ebcbb",
+      "build": "unstable",
+      "seed": 12533001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5421d15ebcbb",
+      "build": "unstable",
+      "seed": 12533002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5421d15ebcbb",
+      "build": "unstable",
+      "seed": 12533003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93165332b91c",
+      "build": "unstable",
+      "seed": 12533002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93165332b91c",
+      "build": "unstable",
+      "seed": 12533003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93165332b91c",
+      "build": "unstable",
+      "seed": 12533004,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

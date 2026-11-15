@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.command-tips-admin
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    COMMAND INFO reports the new request/response policy tips on CLIENT SETINFO/SETNAME
+    and ACL DELUSER/SAVE/SETUSER, and LATENCY RESET's response policy changed from
+    all_succeeded to agg_sum; the commands themselves still behave as before despite
+    the edited command-table rows.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: tips
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, INFO, "acl|deluser"], expect_difference: true, expect: {
+        contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, "acl|save"], expect_difference: true, expect: {contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, "acl|setuser"], expect_difference: true, expect: {
+        contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, "client|setinfo"], expect_difference: true, expect: {
+        contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, "client|setname"], expect_difference: true, expect: {
+        contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, "latency|reset"], expect_difference: true, expect: {
+        contains: "response_policy:agg_sum"}}
+    - {command: [COMMAND, INFO, CLIENT], expect_difference: true, expect: {contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, ACL], expect_difference: true, expect: {contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, LATENCY], expect_difference: true, expect: {contains: "response_policy:agg_sum"}}
+    - {command: [COMMAND, INFO, "acl|getuser"], expect: {exists: true}}
+    - {command: [COMMAND, INFO, "latency|latest"], expect: {contains: "request_policy:all_nodes"}}
+    - {command: [CLIENT, SETNAME, conn-a], expect: {equals: OK}}
+    - {command: [CLIENT, GETNAME], expect: {equals: conn-a}}
+    - {command: [CLIENT, SETINFO, lib-name, fuzzlib], expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-ver, "1.0"], expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, "bad name"], expect: {error: true}}
+    - {command: [ACL, SETUSER, tipuser, on, ">pw", "~key:*", "+get", "+set"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, tipuser, badrule], expect: {error: true}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [ACL, DELUSER, tipuser, nosuchuser], expect: {equals: 1}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [LATENCY, RESET], expect: {max: 0}}
+    - {command: [LATENCY, RESET, command, fork], expect: {max: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tips.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tips}

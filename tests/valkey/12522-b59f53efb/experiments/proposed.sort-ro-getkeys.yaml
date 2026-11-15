@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.sort-ro-getkeys
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    sortROGetKeys must set result->numkeys: COMMAND GETKEYS and GETKEYSANDFLAGS must
+    report the sort key for SORT_RO, and ACL per-key permission checks must apply
+    to SORT_RO. On the parent build numkeys stays 0, so GETKEYS replies an empty array
+    and the ACL key check is skipped entirely.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, GETKEYS, SORT_RO, abc], expect_difference: true, expect: {
+        equals: [abc]}}
+    - {command: [COMMAND, GETKEYS, SORT_RO, k, BY, "w_*", LIMIT, "0", "5", GET, "g_*",
+        GET, "#", ALPHA, DESC], expect_difference: true, expect: {equals: [k]}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, SORT_RO, abc], expect_difference: true,
+      expect: {equals: [[abc, [RO, access]]]}}
+    - {command: [COMMAND, GETKEYS, SORT, abc], expect: {equals: [abc]}}
+    - {command: [COMMAND, GETKEYS, SORT, abc, STORE, def], expect: {equals: [abc,
+          def]}}
+    - {command: [RPUSH, denied, "3", "1", "2"], expect: {equals: 3}}
+    - {command: [RPUSH, "allowed:l", "3", "1", "2"], expect: {equals: 3}}
+    - {command: [ACL, SETUSER, u1, on, ">pw", "~allowed:*", "+sort_ro", "+auth"],
+      expect: {equals: OK}}
+    - {command: [AUTH, u1, pw], connection: restricted, expect: {equals: OK}}
+    - {command: [SORT_RO, "allowed:l"], connection: restricted, expect: {equals: [
+          "1", "2", "3"]}}
+    - {command: [SORT_RO, denied], connection: restricted, expect_difference: true,
+      expect: {error: "keys"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [getkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getkeys}

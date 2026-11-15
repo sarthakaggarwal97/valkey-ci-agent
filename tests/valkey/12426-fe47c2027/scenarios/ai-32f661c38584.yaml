@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44cc0fcb9d8b..fe47c2027ba5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-32f661c38584
+seed: 7201
+experiment:
+  id: proposed.crash-handler-signal
+  inputs:
+    crash_sub: PANIC
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

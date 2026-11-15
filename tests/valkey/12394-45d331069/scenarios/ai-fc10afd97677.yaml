@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c98a28a8480f..45d331069440.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fc10afd97677
+seed: 12394
+experiment:
+  id: proposed.bitcount-arg-before-key
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

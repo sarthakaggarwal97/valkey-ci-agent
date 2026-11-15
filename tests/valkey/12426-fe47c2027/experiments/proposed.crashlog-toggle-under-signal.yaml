@@ -1,0 +1,41 @@
+extends: [valkey.base]
+id: proposed.crashlog-toggle-under-signal
+deployment:
+  modes: [standalone, cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Toggle crash-log-enabled at runtime (repeatedly re-registering and
+    removing the fatal-signal handlers via the new setupSigSegvHandler/removeSigSegvHandlers)
+    while a replica is signalled and restarted under writes; graceful SIGTERM shutdown
+    must still work, no acknowledged write lost, no crash
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGTERM}
+    toggles: {type: integer, minimum: 0, maximum: 20, default: 12}
+components:
+- use: valkey.workload.config-churn
+  id: crashlog-churn
+  config:
+    changes: {$ref: inputs.toggles}
+    keys: {crash-log-enabled: ["yes", "no"]}
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, crashlog-churn, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}

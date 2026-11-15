@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.crash-handler-signal
+deployment:
+  modes: [standalone]
+metadata:
+  description: A deliberate crash drives the refactored signal handler and crash-report
+    teardown; the connection closes on both builds instead of hanging
+inputs:
+  properties:
+    crash_sub: {type: string, enum: [SEGFAULT, PANIC, ASSERT], default: SEGFAULT}
+components:
+- use: valkey.action.commands
+  id: crash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, {$ref: inputs.crash_sub}], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [crash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: crash}

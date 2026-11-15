@@ -1,0 +1,104 @@
+extends: [valkey.liveness]
+id: proposed.zrangebyscore-offset-jump
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ZRANGEBYSCORE, ZREVRANGEBYSCORE, ZCOUNT, ZRANGE BYSCORE and GEOSEARCH on skiplist-encoded
+    zsets with LIMIT offsets on both sides of ZSKIPLIST_MAX_SEARCH (10), compared
+    against the parent build. The optimization must not change any reply, so every
+    deterministic reply has an expect with the ground-truth answer and no command
+    is marked expect_difference.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zscore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, z, 0, e00, 1, e01, 2, e02, 3, e03, 4, e04, 5, e05, 6, e06,
+        7, e07, 8, e08, 9, e09, 10, e10, 11, e11, 12, e12, 13, e13, 14, e14, 15, e15,
+        16, e16, 17, e17, 18, e18, 19, e19, 20, e20, 21, e21, 22, e22, 23, e23, 24,
+        e24, 25, e25, 26, e26, 27, e27, 28, e28, 29, e29, 30, e30, 31, e31, 32, e32,
+        33, e33, 34, e34, 35, e35, 36, e36, 37, e37, 38, e38, 39, e39, 40, e40, 41,
+        e41, 42, e42, 43, e43, 44, e44, 45, e45, 46, e46, 47, e47, 48, e48, 49, e49,
+        50, e50, 51, e51, 52, e52, 53, e53, 54, e54, 55, e55, 56, e56, 57, e57, 58,
+        e58, 59, e59], expect: {equals: 60}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: skiplist}}
+    - {command: [ZRANGEBYSCORE, z, 0, 59, LIMIT, 0, 3], expect: {equals: [e00, e01,
+          e02]}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, LIMIT, 9, 2], expect: {equals: [e19, e20]}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, LIMIT, 10, 2], expect: {equals: [e20, e21]}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, LIMIT, 11, 3], expect: {equals: [e21, e22,
+          e23]}}
+    - {command: [ZRANGEBYSCORE, z, '(10', 50, LIMIT, 10, 2], expect: {equals: [e21,
+          e22]}}
+    - {command: [ZRANGEBYSCORE, z, '-inf', '+inf', LIMIT, 55, 10], expect: {equals: [
+          e55, e56, e57, e58, e59]}}
+    - {command: [ZRANGEBYSCORE, z, 30, 40, LIMIT, 11, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z, 30, 40, LIMIT, 40, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z, 55, '+inf', LIMIT, 12, 2], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, LIMIT, 11, 0], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, LIMIT, 10, -1], expect: {equals: [e20,
+          e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32, e33, e34, e35,
+          e36, e37, e38, e39, e40, e41, e42, e43, e44, e45, e46, e47, e48, e49, e50]}}
+    - {command: [ZRANGEBYSCORE, z, 10, 50, WITHSCORES, LIMIT, 12, 2]}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 0, 2], expect: {equals: [e50,
+          e49]}}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 9, 2], expect: {equals: [e41,
+          e40]}}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 10, 3], expect: {equals: [e40,
+          e39, e38]}}
+    - {command: [ZREVRANGEBYSCORE, z, '(50', '(10', LIMIT, 10, 2], expect: {equals: [
+          e39, e38]}}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 40, 5], expect: {equals: [e10]}}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 45, 5], expect: {equals: []}}
+    - {command: [ZREVRANGEBYSCORE, z, 50, 10, LIMIT, 52, 5], expect: {equals: []}}
+    - {command: [ZREVRANGEBYSCORE, z, '+inf', '-inf', LIMIT, 10, 3], expect: {equals: [
+          e49, e48, e47]}}
+    - {command: [ZCOUNT, z, 10, 50], expect: {equals: 41}}
+    - {command: [ZCOUNT, z, '(10', '(50'], expect: {equals: 39}}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 60}}
+    - {command: [ZCOUNT, z, 60, 100], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 10, 50, BYSCORE, LIMIT, 10, 2], expect: {equals: [e20,
+          e21]}}
+    - {command: [ZRANGE, z, 50, 10, BYSCORE, REV, LIMIT, 12, 2], expect: {equals: [
+          e38, e37]}}
+    - {command: [ZRANGEBYSCORE, z, 100, 200, LIMIT, 0, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, nokey, '-inf', '+inf', LIMIT, 11, 2], expect: {equals: []}}
+    - {command: [ZADD, zt, 1, lo1, 2, lo2, 5, t01, 5, t02, 5, t03, 5, t04, 5, t05,
+        5, t06, 5, t07, 5, t08, 5, t09, 5, t10, 5, t11, 5, t12, 5, t13, 5, t14, 5,
+        t15, 9, hi1, 9, hi2], expect: {equals: 19}}
+    - {command: [ZRANGEBYSCORE, zt, 5, 5, LIMIT, 11, 2], expect: {equals: [t12, t13]}}
+    - {command: [ZREVRANGEBYSCORE, zt, 5, 5, LIMIT, 12, 3], expect: {equals: [t03,
+          t02, t01]}}
+    - {command: [ZRANGEBYSCORE, zt, '(2', '(9', LIMIT, 10, 10], expect: {equals: [
+          t11, t12, t13, t14, t15]}}
+    - {command: [ZREVRANGEBYSCORE, zt, '(9', '(2', LIMIT, 14, 3], expect: {equals: [
+          t01]}}
+    - {command: [ZCOUNT, zt, 5, 5], expect: {equals: 15}}
+    - {command: [ZADD, z1, 7, only], expect: {equals: 1}}
+    - {command: [ZREVRANGEBYSCORE, z1, 10, 0, LIMIT, 0, 5], expect: {equals: [only]}}
+    - {command: [ZREVRANGEBYSCORE, z1, 10, 0, LIMIT, 1, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z1, 7, 7, LIMIT, 0, 1], expect: {equals: [only]}}
+    - {command: [GEOADD, geo, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania], expect: {equals: 2}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 200, km, ASC], expect: {
+        equals: [Catania, Palermo]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 100, km, ASC], expect: {
+        equals: [Catania]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zscore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zscore}

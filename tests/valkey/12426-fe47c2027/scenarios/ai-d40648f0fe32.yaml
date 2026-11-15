@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44cc0fcb9d8b..fe47c2027ba5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d40648f0fe32
+seed: 7101
+experiment:
+  id: proposed.crash-handler-signal
+  inputs:
+    crash_sub: SEGFAULT
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

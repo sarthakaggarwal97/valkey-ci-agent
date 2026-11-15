@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.config-resetstat-rewrite-tips
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG RESETSTAT and CONFIG REWRITE advertise request_policy:all_nodes
+    and response_policy:all_succeeded command tips, like CONFIG SET
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: tips
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, INFO, "config|resetstat"], expect_difference: true, expect: {
+        contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, "config|resetstat"], expect_difference: true, expect: {
+        contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, "config|rewrite"], expect_difference: true, expect: {
+        contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, "config|rewrite"], expect_difference: true, expect: {
+        contains: "response_policy:all_succeeded"}}
+    - {command: [COMMAND, INFO, "config|set"], expect: {contains: "request_policy:all_nodes"}}
+    - {command: [COMMAND, INFO, "config|get"], expect: {exists: true}}
+    - {command: [COMMAND, INFO, "config|help"], expect: {exists: true}}
+    - {command: [COMMAND, INFO, CONFIG], expect: {exists: true}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tips.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tips}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "370d38016f89c747fb8f22070ba021e82583988e",
+  "parent": "b26e8e321346518574ed7093df1fb6b8be9fd7d9",
+  "pr": 12447,
+  "pr_repo": "redis/redis",
+  "subject": "Fix potential crash on failed OpenSSL init (#12447)",
+  "date": "2023-08-31",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2447,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a NULL check after SSL_CTX_new in createSSLContext (src/tls.c). SSL_CTX_new only returns NULL when OpenSSL itself fails to initialize or allocate \u2014 an out-of-memory or broken-OpenSSL-installation condition, not anything reachable through server configuration, commands, replication, or faults. On a healthy host with a working OpenSSL, every TLS scenario (enabling tls-port, connecting, reconfiguring certs) takes the ctx != NULL path on both builds and behaves identically, so a compared sequence or a fault scenario cannot reach the changed branch. The fuzzer has no component that "
+}

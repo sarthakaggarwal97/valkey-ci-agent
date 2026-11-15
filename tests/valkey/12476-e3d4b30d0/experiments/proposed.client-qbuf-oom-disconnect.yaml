@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.client-qbuf-oom-disconnect
+deployment:
+  modes: [standalone]
+metadata:
+  description: A client whose query buffer exceeds client-query-buffer-limit is disconnected
+    and the new client_query_buffer_limit_disconnections stat counts it
+components:
+- use: valkey.workload.key-value
+  id: big-writes
+  config:
+    stable_keys: 0
+    mutable_keys: 20
+    preload_mutable: false
+    value_size: 1048576
+    rate: 100
+    op_timeout_s: 2
+    mix: {set: 1.0}
+- use: valkey.observer.info
+  id: info
+  config:
+    instances: primaries
+    sections: [stats]
+    interval_s: 0.1
+    expectations:
+    - {evidence_id: valkey.client.qbuf-oom, field: client_query_buffer_limit_disconnections,
+      min: 1, when: final, required: true}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [big-writes, info]
+  config: {seconds: 4}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.client.qbuf-oom, source: info}

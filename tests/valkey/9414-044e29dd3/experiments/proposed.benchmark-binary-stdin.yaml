@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-binary-stdin
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark -x sends the stdin argument with its full binary length
+    instead of truncating it at the first NUL byte
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 10, -c, 1, -x, set, 'k:embedded']
+      stdin: !!binary 'YWIAY2QAZWY='
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, STRLEN, 'k:embedded']
+      expect_difference: true
+      expect: {stdout: {equals: "8\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, --no-raw, GET, 'k:embedded']
+      expect_difference: true
+      expect: {stdout: {contains: '\x00cd\x00'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 10, -c, 1, -x, set, 'k:leading']
+      stdin: !!binary 'AGFiYw=='
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, STRLEN, 'k:leading']
+      expect_difference: true
+      expect: {stdout: {equals: "4\n"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 10, -c, 1, -x, set, 'k:empty']
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, STRLEN, 'k:empty']
+      expect: {stdout: {equals: "0\n"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 1000, -c, 10, -P, 16, -x, set, 'k:pipe']
+      stdin: !!binary 'AGJpbgBhcnkA'
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, STRLEN, 'k:pipe']
+      expect_difference: true
+      expect: {stdout: {equals: "9\n"}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

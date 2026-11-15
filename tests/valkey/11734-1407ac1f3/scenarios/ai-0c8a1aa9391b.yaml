@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 45d331069440..1407ac1f3ece.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c8a1aa9391b
+seed: 11735
+experiment:
+  id: proposed.bitops-missing-key-illegal-args
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "16988208bd6d0b7dcebcc79a988b5dfd0f3419a4",
+  "parent": "e532c95dfc3dd9f072b452db7b2d535cc2c12304",
+  "pr": 12505,
+  "pr_repo": "redis/redis",
+  "subject": "config.memkeys init for consistency (#12505)",
+  "date": "2023-08-21",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2654,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds an explicit `config.memkeys = 0;` in valkey-cli's main(), but `config` is a file-scope static struct (src/redis-cli.c:214) that C zero-initializes before main() runs, so the field was already 0 on every path. This is a pure consistency refactor with no behaviour change on either build, so there is nothing a scenario could observe."
+}

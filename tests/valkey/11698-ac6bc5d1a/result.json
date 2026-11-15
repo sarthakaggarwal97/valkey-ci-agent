@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ac6bc5d1a87e66e2ff1f9b46f9850d48d7ff51cd",
+  "parent": "17904780ae5b4793ad133020d6bfa7f4a266b20c",
+  "pr": 11698,
+  "pr_repo": "redis/redis",
+  "subject": "redis-cli: Fix print of keys per cluster host when over int max (#11698)",
+  "date": "2023-08-16",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2851,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure integer-overflow correctness fix in valkey-cli's `--cluster info` output: the per-host `dbsize`, the cluster-wide `keys` total, and their printf specifiers go from int/%d to long long/%lld. The two builds produce identical output for every value that fits in a 32-bit int; they only diverge once a single master's DBSIZE exceeds INT_MAX (~2.1 billion keys) or the summed total crosses 2^31. DBSIZE reports the real keyspace size and cannot be faked, so reaching the changed code requires inserting on the order of 2^31 live keys (>130 GB of memory on one node), which no fuzzer s"
+}

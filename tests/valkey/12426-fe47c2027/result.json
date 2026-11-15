@@ -1,0 +1,122 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fe47c2027ba53c1e814f0481a12ffee97106115a",
+  "parent": "44cc0fcb9d8bfa194f65f306bce7f91d17ada2ed",
+  "pr": 12426,
+  "pr_repo": "redis/redis",
+  "subject": "Signal handler attributes (#12426)",
+  "date": "2023-08-20",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 0,
+  "hunted": 12,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 37,
+    "executed": 29,
+    "percent": 78,
+    "uncovered": [
+      "src/debug.c:1069",
+      "src/debug.c:1165",
+      "src/debug.c:2122",
+      "src/debug.c:2126",
+      "src/debug.c:2129",
+      "src/debug.c:2132",
+      "src/debug.c:2133",
+      "src/debug.c:2275"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 8.7874,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in debugCommand",
+      "scenario": "ai-d40648f0fe32",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "562a1040ba833f8ebe5a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/165"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: DEBUG PANIC called at Unix time 1794709793 #debug.c:571",
+      "scenario": "ai-32f661c38584",
+      "seed": 7201,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "58fe00a1a71888adbe4b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/166"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: debug.c:588 '1 == 2' is not true",
+      "scenario": "ai-cc978f2643c0",
+      "seed": 7301,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "48299f5ad5b3e8f9a04f",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/167"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in debugCommand",
+      "scenario": "ai-4239600d7e6a",
+      "seed": 44001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "562a1040ba833f8ebe5a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/165"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: debug.c:588 '1 == 2' is not true",
+      "scenario": "ai-d87f4515a48e",
+      "seed": 44002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "48299f5ad5b3e8f9a04f",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/167"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: DEBUG PANIC called at Unix time 1794710633 #debug.c:571",
+      "scenario": "ai-340ff6a4ad61",
+      "seed": 44003,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates redis/redis#12426",
+      "fingerprint": "58fe00a1a71888adbe4b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/166"
+    }
+  ],
+  "recorded": []
+}

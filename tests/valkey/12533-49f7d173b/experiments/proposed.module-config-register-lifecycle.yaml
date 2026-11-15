@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.module-config-register-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Module config registration lifecycle after the sds removal in RM_Register{String,Bool,Enum,Numeric}Config:
+    registration of all four config types at OnLoad, the EBUSY failure path of each
+    register function outside OnLoad, CONFIG SET/GET of every type including rejected
+    values, then CONFIG REWRITE and a restart so the registered names are written
+    to and re-read from the config file. Replies are compared against the parent build
+    with the parent's module; no difference is expected, and the liveness oracle catches
+    a crash, double free or sanitizer report from the changed alloc/free paths.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modcfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, "moduleconfigs.*"], compare: unordered-pairs}
+    - {command: [CONFIG, GET, moduleconfigs.nosuchconfig]}
+    - {command: [CONFIG, SET, moduleconfigs.mutable_bool, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.immutable_bool, yes], expect: {error: true}}
+    - {command: [CONFIG, SET, moduleconfigs.string, ""], expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.string]}
+    - {command: [CONFIG, SET, moduleconfigs.string, rejectisfreed], expect: {error: "rejectisfreed"}}
+    - {command: [CONFIG, SET, moduleconfigs.enum, two], expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.enum, nosuchvalue], expect: {error: true}}
+    - {command: [CONFIG, SET, moduleconfigs.flags, "one two four"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.numeric, 2000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.numeric, 2001], expect: {error: true}}
+    - {command: [CONFIG, SET, moduleconfigs.numeric, 1024], expect: {error: true}}
+    - {command: [CONFIG, SET, moduleconfigs.memory_numeric, 2mb], expect: {equals: OK}}
+    - {command: [block.register.configs.outside.onload], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, "moduleconfigs.*"], compare: unordered-pairs}
+    - {command: [CONFIG, SET, moduleconfigs.mutable_bool, yes], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modcfg}

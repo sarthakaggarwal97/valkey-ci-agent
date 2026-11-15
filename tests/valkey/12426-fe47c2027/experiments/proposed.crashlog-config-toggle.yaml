@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.crashlog-config-toggle
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET crash-log-enabled toggles the SIGSEGV handler at runtime
+    via setupSigSegvHandler/removeSigSegvHandlers; replies match across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: toggle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, crash-log-enabled], compare: unordered-pairs, expect: {
+        contains: "yes"}}
+    - {command: [CONFIG, SET, crash-log-enabled, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, crash-log-enabled], compare: unordered-pairs, expect: {
+        contains: "no"}}
+    - {command: [CONFIG, SET, crash-log-enabled, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, crash-log-enabled], compare: unordered-pairs, expect: {
+        contains: "yes"}}
+    - {command: [CONFIG, SET, crash-log-enabled, "no"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [toggle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle}

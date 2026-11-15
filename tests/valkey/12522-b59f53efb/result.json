@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b59f53efb31b36d0a307809f5d33bf66d66a4447",
+  "parent": "e3d4b30d09dc8dc1c560794750f28689cc4f510b",
+  "pr": 12522,
+  "pr_repo": "redis/redis",
+  "subject": "Fix sort_ro get-keys function return wrong key number (#12522)",
+  "date": "2023-08-30",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9681,
+  "findings": [],
+  "recorded": []
+}

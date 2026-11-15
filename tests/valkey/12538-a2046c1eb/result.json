@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a2046c1eb1bcfcdeffadfffffad3b1f635965652",
+  "parent": "044e29dd3472b6cbfca3915d445f484658effbb6",
+  "pr": 12538,
+  "pr_repo": "redis/redis",
+  "subject": "Check shard_id pointer validity in updateShardId (#12538)",
+  "date": "2023-09-02",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6091,
+  "findings": [],
+  "recorded": [],
+  "reason": "The guard added to updateShardId only matters when ext_shardid is NULL, which happens solely in clusterProcessPingExtensions when a peer's gossip message carries no shard-id extension. writePingExt appends the shard-id extension unconditionally and myself->shard_id is always populated, so every node built from either the change or its parent always advertises a shard-id. The fuzzer runs only these two modern builds, so no node ever sends a shard-id-less gossip; the NULL branch is reachable only from a pre-7.2 peer (the rolling-upgrade case) or a crafted malformed cluster bus packet, and the cl"
+}

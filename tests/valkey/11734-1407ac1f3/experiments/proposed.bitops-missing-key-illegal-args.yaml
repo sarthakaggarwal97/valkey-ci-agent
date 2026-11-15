@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.bitops-missing-key-illegal-args
+deployment:
+  modes: [standalone]
+metadata:
+  description: BITPOS with a non-existing or wrong-type key and illegal arguments
+    returns a parse error instead of 0/-1 or WRONGTYPE; BITCOUNT refactor and the
+    missing-key 0/-1 semantics for legal arguments stay unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bitops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [BITPOS, nk, 1, a], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITPOS, nk, 0, a], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITPOS, nk, 0, 0, b], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITPOS, nk, 0, 0, 1, hello], expect_difference: true, expect: {error: "syntax"}}
+    - {command: [BITPOS, nk, 0, 0, 1, hello, hello2], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [BITPOS, nk, 1, 0, -1, BYTE, extra], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [RPUSH, wt, a, b, c], expect: {equals: 3}}
+    - {command: [BITPOS, wt, 1, a, b], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITPOS, wt, 0, 0, 1, hello], expect_difference: true, expect: {error: "syntax"}}
+    - {command: [BITPOS, wt, 0, 0, 1, hello, hello2], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [BITPOS, nk, 0], expect: {equals: 0}}
+    - {command: [BITPOS, nk, 1], expect: {equals: -1}}
+    - {command: [BITPOS, nk, 0, 0, -1, BIT], expect: {equals: 0}}
+    - {command: [BITPOS, nk, 1, -5, -2], expect: {equals: -1}}
+    - {command: [BITPOS, nk, 1, 9223372036854775807], expect: {equals: -1}}
+    - {command: [BITPOS, nk, 0, 0, 9223372036854775807, BIT], expect: {equals: 0}}
+    - {command: [BITPOS, nk, 2, a], expect: {error: "must be 1 or 0"}}
+    - {command: [BITPOS, wt, 0], expect: {error: "WRONGTYPE"}}
+    - {command: [BITPOS, wt, 1, 0, -1, BIT], expect: {error: "WRONGTYPE"}}
+    - {command: [BITCOUNT, nk], expect: {equals: 0}}
+    - {command: [BITCOUNT, nk, 0, 1000, BIT], expect: {equals: 0}}
+    - {command: [BITCOUNT, nk, -6, -7], expect: {equals: 0}}
+    - {command: [BITCOUNT, nk, a, b], expect: {error: "not an integer"}}
+    - {command: [BITCOUNT, nk, 0], expect: {error: "syntax"}}
+    - {command: [BITCOUNT, nk, 0, 1, hello], expect: {error: "syntax"}}
+    - {command: [BITCOUNT, nk, 0, 1, hello, hello2], expect: {error: "syntax"}}
+    - {command: [BITCOUNT, wt], expect: {error: "WRONGTYPE"}}
+    - {command: [BITCOUNT, wt, -6, -7], expect: {error: "WRONGTYPE"}}
+    - {command: [BITCOUNT, wt, a, b], expect: {error: "not an integer"}}
+    - {command: [SET, str, xxxx], expect: {equals: OK}}
+    - {command: [BITCOUNT, str, 0, -1], expect: {equals: 16}}
+    - {command: [BITCOUNT, str, -6, -15, BIT], expect: {equals: 0}}
+    - {command: [BITPOS, str, 1, 9223372036854775807, 9223372036854775807], expect: {
+        equals: -1}}
+    - {command: [SET, intkey, 12345], expect: {equals: OK}}
+    - {command: [BITCOUNT, intkey], expect: {equals: 17}}
+    - {command: [BITPOS, intkey, 1], expect: {equals: 2}}
+    - {command: [SET, k01, !!binary "AP8="], expect: {equals: OK}}
+    - {command: [BITCOUNT, k01], expect: {equals: 8}}
+    - {command: [BITPOS, k01, 1], expect: {equals: 8}}
+    - {command: [BITPOS, k01, 0], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bitops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bitops}

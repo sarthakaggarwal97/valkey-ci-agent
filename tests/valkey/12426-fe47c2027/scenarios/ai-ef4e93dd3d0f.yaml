@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44cc0fcb9d8b..fe47c2027ba5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ef4e93dd3d0f
+seed: 124262
+experiment:
+  id: proposed.crashlog-toggle-under-signal
+  inputs:
+    signal: SIGKILL
+    toggles: 20
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    crash-log-enabled: 'no'

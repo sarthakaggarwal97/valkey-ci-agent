@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.module-acl-category-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module-declared ACL category (aclcheck.so's foocategory) resolves
+    in ACL CAT, SETUSER, GETUSER, DRYRUN and in a real authenticated client's permission
+    check, compared with the parent build where the category does not exist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclcat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, CAT], expect_difference: true, expect: {contains: foocategory}}
+    - {command: [ACL, CAT, foocategory], expect_difference: true, compare: unordered,
+      expect: {contains: aclcheck.module.command.test.add.new.aclcategories}}
+    - {command: [ACL, SETUSER, j8, on, ">password", "~*", "-@all", "+@foocategory"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, j8, aclcheck.module.command.test.add.new.aclcategories],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, jcase, on, ">password", "-@all", "+@FOOCATEGORY"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, j9, on, ">password", "-@all", "+@foocategory", "-@foocategory",
+        "+@foocategory", "-@foocategory"], expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, GETUSER, j9], expect_difference: true, expect: {contains: "-@foocategory"}}
+    - {command: [ACL, SETUSER, nofoo, on, ">password", "~*", "-@all", "+@read"], expect: {
+        equals: OK}}
+    - {command: [ACL, DRYRUN, nofoo, aclcheck.module.command.test.add.new.aclcategories],
+      expect_difference: true, expect: {contains: "no permissions"}}
+    - {command: [AUTH, j8, password], connection: aclu, expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [aclcheck.module.command.test.add.new.aclcategories], connection: aclu,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, somekey, v], connection: aclu, expect_difference: true, expect: {
+        error: "no permissions"}}
+    - {command: [ACL, DELUSER, j8, jcase, j9, nofoo], expect_difference: true, expect: {
+        equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclcat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclcat}

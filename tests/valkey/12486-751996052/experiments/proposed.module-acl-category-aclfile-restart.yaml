@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.module-acl-category-aclfile-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A user granted a module-declared ACL category is written by ACL SAVE
+    into the aclfile and survives a restart, which must load the module before parsing
+    +@foocategory from the ACL file at startup
+components:
+- use: valkey.action.commands
+  id: aclsave
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    server_config: {aclfile: users.acl}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, fooadmin, on, ">pw", "~*", "-@all", "+@foocategory"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, compare: unordered, expect: {
+        contains: "+@foocategory"}}
+    - {command: [ACL, DRYRUN, fooadmin, aclcheck.module.command.test.add.new.aclcategories],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, CAT], expect_difference: true, expect: {contains: foocategory}}
+    - {command: [AUTH, fooadmin, pw], connection: fa, expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [aclcheck.module.command.test.add.new.aclcategories], connection: fa,
+      expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclsave}

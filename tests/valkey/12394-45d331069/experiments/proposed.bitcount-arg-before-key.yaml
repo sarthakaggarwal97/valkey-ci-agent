@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.bitcount-arg-before-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: BITCOUNT validates its range and BIT|BYTE arguments before key lookup
+    and type check
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bitcount
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, s, foobar], expect: {equals: OK}}
+    - {command: [SET, empty, ""], expect: {equals: OK}}
+    - {command: [RPUSH, fields, a], expect: {equals: 1}}
+    - {command: [BITCOUNT, nokey, a, b], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITCOUNT, nokey, 0, 0, junk], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [BITCOUNT, nokey, 99999999999999999999, 1], expect_difference: true,
+      expect: {error: "not an integer"}}
+    - {command: [BITCOUNT, fields, a, b], expect_difference: true, expect: {error: "not\
+          \ an integer"}}
+    - {command: [BITCOUNT, fields, 0, 0, junk], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [BITCOUNT, fields, -9223372036854775808, 9223372036854775807, bits],
+      expect_difference: true, expect: {error: "syntax"}}
+    - {command: [BITCOUNT, nokey], expect: {equals: 0}}
+    - {command: [BITCOUNT, nokey, 0, 0], expect: {equals: 0}}
+    - {command: [BITCOUNT, nokey, -1, -2], expect: {equals: 0}}
+    - {command: [BITCOUNT, nokey, 0, -1, BIT], expect: {equals: 0}}
+    - {command: [BITCOUNT, fields], expect: {error: WRONGTYPE}}
+    - {command: [BITCOUNT, fields, 0, 0], expect: {error: WRONGTYPE}}
+    - {command: [BITCOUNT, fields, 0, 0, BIT], expect: {error: WRONGTYPE}}
+    - {command: [BITCOUNT, s, a, b], expect: {error: "not an integer"}}
+    - {command: [BITCOUNT, s, 0, 0, junk], expect: {error: "syntax"}}
+    - {command: [BITCOUNT, s], expect: {equals: 26}}
+    - {command: [BITCOUNT, s, 0, 0], expect: {equals: 4}}
+    - {command: [BITCOUNT, s, 1, 1], expect: {equals: 6}}
+    - {command: [BITCOUNT, s, 0, -5], expect: {equals: 10}}
+    - {command: [BITCOUNT, s, 5, 30, BIT], expect: {equals: 17}}
+    - {command: [BITCOUNT, s, -1, -2], expect: {equals: 0}}
+    - {command: [BITCOUNT, s, -9223372036854775808, 9223372036854775807], expect: {
+        equals: 26}}
+    - {command: [BITCOUNT, s, -9223372036854775808, 9223372036854775807, BIT], expect: {
+        equals: 26}}
+    - {command: [BITCOUNT, s, 9223372036854775807, 9223372036854775807], expect: {
+        equals: 0}}
+    - {command: [BITCOUNT, s, 2147483648, 4294967296], expect: {equals: 0}}
+    - {command: [BITCOUNT, s, 2147483648, 4294967296, BIT], expect: {equals: 0}}
+    - {command: [BITCOUNT, empty, 0, -1], expect: {equals: 0}}
+    - {command: [BITCOUNT, empty, -1, -2, BIT], expect: {equals: 0}}
+    - {command: [BITCOUNT, s, 1], expect: {error: "syntax"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bitcount.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bitcount}
