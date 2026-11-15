@@ -1,23 +1,20 @@
 # Fuzzer walk
 
-Updated 2026-11-15T07:30+00:00.
+Updated 2026-11-15T15:44+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 242 | 239.9 |
+| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 172 | 228.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.6 |
-| valkey-io/valkey-search | 693 | 0 | f8106e72e984 (2024-11-27) | 3 | 17.6 |
+| valkey-io/valkey-search | 693 | 0 | f8106e72e984 (2024-11-27) | 3 | 8.7 |
 
 ## Last runs
 
 ### valkey-io/valkey
 
-[2026-11-15T07:30:30+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43687246616): 3 merge(s) tested, 0 without a code change.
+[2026-11-15T15:44:47+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43731535419): 0 merge(s) tested, 0 without a code change.
 
-- [redis/redis#12386](https://github.com/redis/redis/pull/12386) ([tests](tests/valkey/12386-17904780a/)): skip the rehashed entries in dictNext (#12386): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12479](https://github.com/redis/redis/pull/12479) ([tests](tests/valkey/12479-965dc90b7/)): change return type to be consistant (#12479): declined: The change only widens the return type of rdbSaveMillisecondTime and rdbSaveDoubleValue from int to ssize_t to match rdbWriteRaw, which they delegate to. These functions write at most 8 and ~129 bytes respectively, so their return value (bytes written or -1) always fit in an int; every cal
-- [redis/redis#12488](https://github.com/redis/redis/pull/12488) ([tests](tests/valkey/12488-2b8cde71b/)): Update supported version list. (#12488): declined: Documentation-only change: it updates the supported-version table in SECURITY.md, normalizes unicode apostrophes to ASCII in SECURITY.md and CODE_OF_CONDUCT.md, fixes a comment in tests/integration/psync2-master-restart.tcl, and changes the same apostrophe character in two test-only string
 
 ### valkey-io/valkey-bloom
 
@@ -39,7 +36,7 @@ Updated 2026-11-15T07:30+00:00.
 - Merges whose tests reached the change: 992 of 1588 tested (62%)
 - Changed-line coverage: median 100% of 1063 merge(s) measured, 79 under 50%
 - Recall: 262 parents flagged of 411 fix merges
-- Claude: $920.01 in the last 24 hours, $5865.17 in the last 7 days, $11631.83 in all
+- Claude: $629.51 in the last 24 hours, $5444.78 in the last 7 days, $11631.83 in all
 - Issues filed: 84
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
