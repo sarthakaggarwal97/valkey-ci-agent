@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-15T21:07+00:00.
+Updated 2026-11-15T23:23+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 102 | 220.6 |
+| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 51 | 216.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.6 |
-| valkey-io/valkey-search | 694 | 0 | f8106e72e984 (2024-11-27) | 3 | 5.6 |
+| valkey-io/valkey-search | 696 | 0 | f8106e72e984 (2024-11-27) | 4 | 5.9 |
 
 ## Last runs
 
@@ -28,16 +28,16 @@ Updated 2026-11-15T21:07+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-15T18:02:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43731539586): 1 merge(s) tested, 0 without a code change.
+[2026-11-15T23:23:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43761875285): 1 merge(s) tested, 1 without a code change.
 
-- [valkey-io/valkey-search#1721](https://github.com/valkey-io/valkey-search/pull/1721) ([tests](tests/valkey-search/1721-3a41580a2/)): feat: add Quantile reducer to FT.Aggregate groupby stage (supersedes #947) (#1721): 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1433](https://github.com/valkey-io/valkey-search/pull/1433) ([tests](tests/valkey-search/1433-cb9e6042f/)): Add case function in aggregation expressions (#1433): 3 of 3 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 993 of 1589 tested (62%)
+- Merges whose tests reached the change: 994 of 1590 tested (63%)
 - Changed-line coverage: median 100% of 1063 merge(s) measured, 79 under 50%
 - Recall: 262 parents flagged of 411 fix merges
-- Claude: $380.62 in the last 24 hours, $5214.41 in the last 7 days, $11645.63 in all
+- Claude: $174.69 in the last 24 hours, $5097.73 in the last 7 days, $11655.24 in all
 - Issues filed: 84
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

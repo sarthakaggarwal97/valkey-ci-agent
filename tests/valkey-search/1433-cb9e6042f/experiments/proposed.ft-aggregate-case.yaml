@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-case
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    case() in FT.AGGREGATE APPLY and FILTER and in FT.CREATE FILTER, under search.emulate-release
+    1.3.0 (missing propagates, typed comparisons with the new kMixed dispatch) and
+    legacy 1.0.0 (missing reads as false, runtime-typed comparisons), compared against
+    the parent module build where case is an unknown function.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: case
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [HSET, "d:1", price, 10, qty, 2, label, a], expect: {equals: 3}}
+    - {command: [HSET, "d:2", price, 200, qty, 20, label, b], expect: {equals: 3}}
+    - {command: [HSET, "d:3", price, 5, label, c], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, price, NUMERIC,
+        qty, NUMERIC, label, TAG], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 0, REDUCE, COUNT, 0, AS, c], wait_s: 30,
+      expect: {equals: [1, [c, 3]]}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "case(1, @price, 'x') < 30", GROUPBY,
+        0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {equals: [1,
+          [c, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "case(0, @price, 'abc') == 'abc'",
+        GROUPBY, 0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {equals: [
+          1, [c, 3]]}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "case(case(0, 0, 1), @price, 'x')\
+          \ >= '5'", GROUPBY, 0, REDUCE, COUNT, 0, AS, c], expect_difference: true,
+      expect: {equals: [1, [c, 3]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(exists(@qty), @qty, -1)", AS,
+        q, GROUPBY, 0, REDUCE, SUM, 1, "@q", AS, s], expect_difference: true, expect: {
+        equals: [1, [s, 21]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(@qty, 1, 2)", AS, v, GROUPBY,
+        0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {equals: [1,
+          [c, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(@price < 'abc', 1, 2)", AS,
+        v], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(1, 10, 'abc') < 'b'", AS, v],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(1, 2)", AS, v], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case (1, 2, 3)", AS, v, GROUPBY,
+        0, REDUCE, SUM, 1, "@v", AS, s], expect_difference: true, expect: {equals: [
+          1, [s, 6]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case", AS, v], expect: {error: true}}
+    - {command: [FT.CREATE, fidx, ON, HASH, PREFIX, 1, "d:", FILTER, "case(1, @price,\
+          \ 'x') >= 100", SCHEMA, price, NUMERIC], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, fidx, "*", GROUPBY, 0, REDUCE, COUNT, 0, AS, c], wait_s: 15,
+      expect_difference: true, expect: {equals: [1, [c, 1]]}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.0.0], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case(@qty, 1, 2)", AS, v, GROUPBY,
+        0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {equals: [1,
+          [c, 3]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "case('abc', 1, 0)", AS, v, GROUPBY,
+        0, REDUCE, SUM, 1, "@v", AS, s], expect_difference: true, expect: {equals: [
+          1, [s, 0]]}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "case(1, @price, 'x') < 30", GROUPBY,
+        0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {equals: [1,
+          [c, 2]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [case.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: case}
