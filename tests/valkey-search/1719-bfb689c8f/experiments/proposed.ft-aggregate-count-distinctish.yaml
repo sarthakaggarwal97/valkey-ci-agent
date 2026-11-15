@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-count-distinctish
+deployment:
+  modes: [standalone]
+metadata:
+  description: COUNT_DISTINCTISH reducer (HyperLogLog) compared against the parent
+    module build - parser arity and case, per-type hashing (string/double/bool), nil
+    exclusion, -0.0/+0.0 canonicalization, duplicate collapsing, and the sparse-to-dense
+    sketch switch at 1024 registers under 3000-distinct-value groups
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, small, ON, HASH, PREFIX, 1, 'e:', SCHEMA, t, TAG, s, TAG,
+        n, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, big, ON, HASH, PREFIX, 1, 'd:', SCHEMA, t, TAG, s, TAG,
+        b, TAG, n, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, tiny, ON, HASH, PREFIX, 1, 'zz:', SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, 'e:1', t, g1, s, a, n, 1], expect: {equals: 3}}
+    - {command: [HSET, 'e:2', t, g1, s, a, n, 2], expect: {equals: 3}}
+    - {command: [HSET, 'e:3', t, g1, s, '', n, 2], expect: {equals: 3}}
+    - {command: [HSET, 'e:4', t, g1, n, 3], expect: {equals: 2}}
+    - {command: [HSET, 'e:5', t, g2, s, '1', n, 0], expect: {equals: 3}}
+    - {command: [HSET, 'e:6', t, g2, s, 'true', n, '-0'], expect: {equals: 3}}
+    - {command: [HSET, 'e:7', t, g3, n, 5], expect: {equals: 2}}
+    - {command: [HSET, 'e:8', t, g3, n, 5], expect: {equals: 2}}
+    - {command: [EVAL, "for i=1,3000 do redis.call('HSET','d:'..i,'n',tostring(i),'s','v'..i,'t',(i%2==0)\
+          \ and 'even' or 'odd','b',tostring(i%1100)) end return 3000", 0], expect: {
+        equals: 3000}}
+    - {command: [FT.AGGREGATE, small, '*', LOAD, 1, '@t', GROUPBY, 0, REDUCE, COUNT,
+        0, AS, c], wait_s: 30, expect: {equals: [1, [c, 8]]}}
+    - {command: [FT.AGGREGATE, big, '*', LOAD, 1, '@t', GROUPBY, 0, REDUCE, COUNT,
+        0, AS, c], wait_s: 90, expect: {equals: [1, [c, 3000]]}}
+    - {command: [FT.AGGREGATE, small, '*', LOAD, 3, '@t', '@s', '@n', GROUPBY, 1,
+        '@t', REDUCE, COUNT_DISTINCTISH, 1, '@s', AS, u, REDUCE, COUNT_DISTINCTISH,
+        1, '@n', AS, v, SORTBY, 2, '@t', ASC], expect_difference: true, expect: {
+        equals: [3, [t, g1, u, 2, v, 3], [t, g2, u, 2, v, 1], [t, g3, u, 0, v, 1]]}}
+    - {command: [FT.AGGREGATE, small, '@t:{g1}', LOAD, 1, '@s', GROUPBY, 0, REDUCE,
+        count_distinctish, 1, '@s', AS, u], expect_difference: true, expect: {equals: [
+          1, [u, 2]]}}
+    - {command: [FT.AGGREGATE, small, '@t:{g2}', LOAD, 1, '@n', GROUPBY, 0, REDUCE,
+        COUNT_DISTINCTISH, 1, '@n', AS, z], expect_difference: true, expect: {equals: [
+          1, [z, 1]]}}
+    - {command: [FT.AGGREGATE, small, '@t:{g1}', LOAD, 1, '@n', APPLY, '@n<3', AS,
+        lt, GROUPBY, 0, REDUCE, COUNT_DISTINCTISH, 1, '@lt', AS, u], expect_difference: true,
+      expect: {equals: [1, [u, 2]]}}
+    - {command: [FT.AGGREGATE, small, '*', LOAD, 1, '@t', GROUPBY, 1, '@t', REDUCE,
+        COUNT_DISTINCTISH, 0], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, small, '*', LOAD, 3, '@t', '@s', '@n', GROUPBY, 1,
+        '@t', REDUCE, COUNT_DISTINCTISH, 2, '@s', '@n'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, small, '*', LOAD, 1, '@t', GROUPBY, 1, '@t', REDUCE,
+        COUNT_DISTINCTISH, 1, '@missing', AS, u], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [FT.AGGREGATE, small, '@t:{g2}', LOAD, 1, '@s', GROUPBY, 0, REDUCE,
+        COUNT_DISTINCTISH, 1, '@s'], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, tiny, '*', LOAD, 1, '@t', GROUPBY, 0, REDUCE, COUNT_DISTINCTISH,
+        1, '@t', AS, u], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, big, '*', LOAD, 1, '@n', GROUPBY, 0, REDUCE, COUNT_DISTINCTISH,
+        1, '@n', AS, a, FILTER, '(@a>=2850)&&(@a<=3150)', GROUPBY, 0, REDUCE, COUNT,
+        0, AS, ok], expect_difference: true, expect: {equals: [1, [ok, 1]]}}
+    - {command: [FT.AGGREGATE, big, '*', LOAD, 1, '@s', GROUPBY, 0, REDUCE, COUNT_DISTINCTISH,
+        1, '@s', AS, a, FILTER, '(@a>=2850)&&(@a<=3150)', GROUPBY, 0, REDUCE, COUNT,
+        0, AS, ok], expect_difference: true, expect: {equals: [1, [ok, 1]]}}
+    - {command: [FT.AGGREGATE, big, '*', LOAD, 1, '@b', GROUPBY, 0, REDUCE, COUNT_DISTINCTISH,
+        1, '@b', AS, a, FILTER, '(@a>=1050)&&(@a<=1150)', GROUPBY, 0, REDUCE, COUNT,
+        0, AS, ok], expect_difference: true, expect: {equals: [1, [ok, 1]]}}
+    - {command: [FT.AGGREGATE, big, '*', LOAD, 2, '@t', '@n', GROUPBY, 1, '@t', REDUCE,
+        COUNT_DISTINCTISH, 1, '@n', AS, a, REDUCE, COUNT, 0, AS, cnt, FILTER, '((@a>=1430)&&(@a<=1570))&&(@cnt==1500)',
+        GROUPBY, 0, REDUCE, COUNT, 0, AS, ok], expect_difference: true, expect: {
+        equals: [1, [ok, 2]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}
