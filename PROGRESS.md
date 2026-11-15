@@ -1,40 +1,40 @@
 # Fuzzer walk
 
-Updated 2026-11-15T01:23+00:00.
+Updated 2026-11-15T01:40+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2490 | 51 | #11695 (2023-10-14) | 296 | 239.7 |
+| valkey-io/valkey | 2515 | 26 | #12557 (2023-09-08) | 321 | 243.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.6 |
-| valkey-io/valkey-search | 693 | 0 | f8106e72e984 (2024-11-27) | 8 | 23.3 |
+| valkey-io/valkey-search | 693 | 0 | f8106e72e984 (2024-11-27) | 6 | 23.3 |
 
 ## Last runs
 
 ### valkey-io/valkey
 
-[2026-11-14T23:19:07+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43643733893): 20 merge(s) tested, 9 without a code change.
+[2026-11-15T01:40:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43652637572): 20 merge(s) tested, 5 without a code change.
 
-- [redis/redis#12667](https://github.com/redis/redis/pull/12667) ([tests](tests/valkey/12667-88e83e517/)): Add DEBUG_ASSERTIONS option to custom assert (#12667): declined: The change only adds a debugServerAssertWithInfo macro that is a no-op unless the build is compiled with -DDEBUG_ASSERTIONS, plus CI workflow edits enabling that flag in GitHub Actions sanitizer jobs. In the builds under test the new assertion in getKeySlot expands to nothing, so the compi
-- [redis/redis#12750](https://github.com/redis/redis/pull/12750) ([tests](tests/valkey/12750-6258edebf/)): reset bucket_count when empty db (#12750): 3 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12741](https://github.com/redis/redis/pull/12741) ([tests](tests/valkey/12741-cf6ed3fee/)): fix the wrong judgement for activerehashing in standalone mode (#12741): 3 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12739](https://github.com/redis/redis/pull/12739) ([tests](tests/valkey/12739-53294e537/)): Fix genClusterDebugString minor sds leaks (#12739): declined: The change only adds sdsfree calls in genClusterDebugString, which is reachable solely from printCrashReport via logServerInfo while the server is already crashing (assert, panic, or fatal signal handler). It fixes a tiny sds leak in a process moments from aborting; the crash-report output
-- [redis/redis#12733](https://github.com/redis/redis/pull/12733) ([tests](tests/valkey/12733-0ffb9d2ea/)): Before evicted and before expired server events are not executed inside an execution unit. (#12733): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12722](https://github.com/redis/redis/pull/12722) ([tests](tests/valkey/12722-a888503b4/)): Remove unnecessary argument(tp) in gettimeofday() call for retrieving timezone (#12722): declined: The change edits only the non-Linux/non-Solaris branch of getTimeZone() in src/util.c, replacing gettimeofday(&tv, &tz) with gettimeofday(NULL, &tz). On Linux (where the fuzzer runs) this code is excluded by the preprocessor, so the builds under test are byte-for-byte equivalent on this pa
-- [redis/redis#12707](https://github.com/redis/redis/pull/12707) ([tests](tests/valkey/12707-282b82e9d/)): Handle all CLUSTER_REDIR_ error code when verifying script. (#12707): 2 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#11489](https://github.com/redis/redis/pull/11489) ([tests](tests/valkey/11489-28b6155ba/)): Fix the bug that write redis sensitive command information to redis_cli historyfile (#11489): declined: The change only alters which commands valkey-cli's interactive REPL withholds from its history file (isSensitiveCommand in src/redis-cli.c). That function's effect is gated on stdin being a tty: repl() enables history and resolves the history file only inside isatty(fileno(stdin)) (redis-c
-- [redis/redis#12536](https://github.com/redis/redis/pull/12536) ([tests](tests/valkey/12536-8878817d8/)): Optimize SCAN with MATCH when pattern implies cluster slot (#12536): 2 of 2 test(s) reached the change, coverage 93%
-- [redis/redis#12711](https://github.com/redis/redis/pull/12711) ([tests](tests/valkey/12711-e9f312e08/)): Change stat_client_qbuf_limit_disconnections to atomic. (#12711): declined: The change only converts the stat_client_qbuf_limit_disconnections counter from a plain long long to a redisAtomic long long, switching its single increment (readQueryFromClient), its reset (resetServerStats), and its INFO read (genRedisInfoString) to atomicIncr/atomicSet/atomicGet. It is 
-- [redis/redis#12702](https://github.com/redis/redis/pull/12702) ([tests](tests/valkey/12702-8d675950e/)): Don't crash when adding a forgotten node to blacklist twice (#12702): 1 of 4 test(s) reached the change, coverage 50%
-- [redis/redis#5692](https://github.com/redis/redis/pull/5692) ([tests](tests/valkey/5692-4bbb2b015/)): Optimize CPU cache efficiency on dict while it's being rehashed (#5692): 0 of 5 test(s) reached the change, coverage 100%
-- [redis/redis#12704](https://github.com/redis/redis/pull/12704) ([tests](tests/valkey/12704-f7fa48115/)): Optimize finding the slot for a given key count in a fenwick tree (#12704): 0 of 2 test(s) reached the change, coverage 100%
-- [redis/redis#12697](https://github.com/redis/redis/pull/12697) ([tests](tests/valkey/12697-4145d628b/)): Reduce dbBuckets operation time complexity from O(N) to O(1) (#12697): 2 of 8 test(s) reached the change, coverage 88%
-- [redis/redis#12694](https://github.com/redis/redis/pull/12694) ([tests](tests/valkey/12694-7d68208a6/)): Reset later item flag after defrag later is done (#12694): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12693](https://github.com/redis/redis/pull/12693) ([tests](tests/valkey/12693-ba900f6cb/)): Fix fd leak causing deleted files to remain open and eat disk space (#12693): 0 of 3 test(s) reached the change, coverage 100%
-- [redis/redis#12687](https://github.com/redis/redis/pull/12687) ([tests](tests/valkey/12687-372ea2187/)): Update comment around propagateDeletion (#12687): declined: The change only updates comments: it rewords the doc comment above propagateDeletion in src/db.c (expiry -> general implicit deletion wording) and adds an explanatory comment before moduleNotifyKeyspaceEvent in delKeysInSlot in src/cluster.c. No statements, data structures, configs or repl
-- [redis/redis#12660](https://github.com/redis/redis/pull/12660) ([tests](tests/valkey/12660-f3bf8485d/)): Fix resize hash table dictionary iterator (#12660): 2 of 4 test(s) reached the change, coverage 100%
-- [redis/redis#12671](https://github.com/redis/redis/pull/12671) ([tests](tests/valkey/12671-03345ddc7/)): Fix issue of listen before chmod on Unix sockets (CVE-2023-45145) (#12671): declined: The change only reorders chmod() before listen() in anetUnixServer (CVE-2023-45145), closing a microsecond-scale startup race where the Unix socket briefly listened with umask-default permissions before unixsocketperm was applied. TCP callers pass perm=0 and the chmod is guarded to AF_LOCA
-- [redis/redis#12655](https://github.com/redis/redis/pull/12655) ([tests](tests/valkey/12655-d27c7413a/)): remove heap allocations from signal handlers. (#12655): 0 of 6 test(s) reached the change, coverage 93%
+- [redis/redis#11695](https://github.com/redis/redis/pull/11695) ([tests](tests/valkey/11695-0270abda8/)): Replace cluster metadata with slot specific dictionaries (#11695): 1 of 15 test(s) reached the change, coverage 81%
+- [redis/redis#12577](https://github.com/redis/redis/pull/12577) ([tests](tests/valkey/12577-b784c5375/)): Unsubscribe all clients from replica for shard channel if the master ownership changes (#12577): 2 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12646](https://github.com/redis/redis/pull/12646) ([tests](tests/valkey/12646-b705049a7/)): Replace `emptyDb()` with new `emptyData()` (#12646): declined: The change edits only comments and documentation: a README line and comment text in src/db.c and src/replication.c that update references from emptyDb() to the new emptyData() name. No executable code, config, or protocol behaviour changes, so there is nothing a scenario could reach or dis
+- [redis/redis#12596](https://github.com/redis/redis/pull/12596) ([tests](tests/valkey/12596-77a65e82b/)): support XREAD[GROUP] with BLOCK option in scripts (#12596): 3 of 3 test(s) reached the change
+- [redis/redis#12604](https://github.com/redis/redis/pull/12604) ([tests](tests/valkey/12604-e5ef16137/)): Fix crash when running rebalance command in a mixed cluster of 7.0 and 7.2 (#12604): 0 of 4 test(s) reached the change, coverage 100%
+- [redis/redis#12571](https://github.com/redis/redis/pull/12571) ([tests](tests/valkey/12571-4de4fcf28/)): Fix redis-cli pubsub_mode and connect minor prompt / crash issue (#12571): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by redis/redis#12571 (recorded)
+- [redis/redis#12633](https://github.com/redis/redis/pull/12633) ([tests](tests/valkey/12633-8d92f7f2b/)): Support NO ONE block in REPLICAOF command json (#12633): 2 of 2 test(s) reached the change
+- [redis/redis#12611](https://github.com/redis/redis/pull/12611) ([tests](tests/valkey/12611-a2b0701d2/)): Fix compile on macOS 13 (#12611): declined: Build-only fix: the diff changes macOS version-detection preprocessor macros in src/config.h and src/debug.c, all guarded by #if defined(__APPLE__). On the Linux hosts the fuzzer runs on, the preprocessor output and compiled binary are identical to the parent, so no runtime path differs; t
+- [redis/redis#12630](https://github.com/redis/redis/pull/12630) ([tests](tests/valkey/12630-fe37e4fc8/)): Cleanup nested module keyspace notifications (#12630): declined: The change saves and restores sub->active around a module keyspace-notification callback instead of resetting it to 0. The flag is read in exactly one place, the dispatch condition (sub->active == 0 || module has REDISMODULE_OPTIONS_ALLOW_NESTED_KEYSPACE_NOTIFICATIONS). A nested re-invocat
+- [redis/redis#12539](https://github.com/redis/redis/pull/12539) ([tests](tests/valkey/12539-31c3172d9/)): Better standardize around assertions (#12539): declined: The change is a refactor of assertion infrastructure with no behavior change on any reachable path. It (1) replaces <assert.h> includes with redisassert.h in defrag.c, memtest.c, monotonic.c, rax.c, sds.c, siphash.c, zmalloc.c, server.c/h, so assert() routes to the existing _serverAssert l
+- [redis/redis#12541](https://github.com/redis/redis/pull/12541) ([tests](tests/valkey/12541-9d31768cb/)): Fix a couple of tabs that caused misindentation (#12541): declined: The change (#12541) only replaces tabs with spaces in indentation and one comment across cluster.c, config.c, redis-cli.c and zmalloc.c. No statement, expression, control flow, or string literal changes; the compiled binaries behave identically. A pure formatting fix needs no test scenario
+- [redis/redis#12623](https://github.com/redis/redis/pull/12623) ([tests](tests/valkey/12623-4ba9e18ef/)): fix crash in crash-report and other improvements (#12623): 0 of 7 test(s) reached the change, coverage 0%
+- [redis/redis#12622](https://github.com/redis/redis/pull/12622) ([tests](tests/valkey/12622-c2a4b7849/)): WAITAOF: Update fsynced_reploff_pending even if there's nothing to fsync (#12622): 2 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12620](https://github.com/redis/redis/pull/12620) ([tests](tests/valkey/12620-bfa3931a0/)): WAITAOF: Update fsynced_reploff_pending just before starting the initial AOFRW fork (#12620): 2 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12257](https://github.com/redis/redis/pull/12257) ([tests](tests/valkey/12257-f924bebd8/)): Rewrite huge printf calls to smaller ones for readability (#12257): 0 of 2 test(s) reached the change, coverage 84%
+- [redis/redis#12564](https://github.com/redis/redis/pull/12564) ([tests](tests/valkey/12564-8cdeddc81/)): Clear owner_not_claiming_slot bit for the slot in clusterDelSlot (#12564): 0 of 3 test(s) reached the change, coverage 100%
+- [redis/redis#12474](https://github.com/redis/redis/pull/12474) ([tests](tests/valkey/12474-24187ed8e/)): Fix overflow calculation for next timer event (#12474): declined: The fix casts a timer callback's returned period to monotime before multiplying by 1000 in processTimeEvents (ae.c), preventing 32-bit overflow when the returned period exceeds ~2,147,483 ms (~35.8 minutes). The only aeTimeProc that can return such a value is moduleTimerHandler, when a loa
+- [redis/redis#12453](https://github.com/redis/redis/pull/12453) ([tests](tests/valkey/12453-cc2be6399/)): Print stack trace from all threads in crash report (#12453): 0 of 11 test(s) reached the change, coverage 91%
+- [redis/redis#12569](https://github.com/redis/redis/pull/12569) ([tests](tests/valkey/12569-2aad03fa3/)): Use server.current_client to decide whether cluster commands should return TLS info. (#12569): declined: The change only alters which port cluster commands report — the TLS port vs. the plaintext port — and only for fake clients (Lua EVAL, module RM_call) whose connection is NULL; for real client connections server.current_client is that same client, so shouldReturnTlsInfo() returns exactly w
+- [redis/redis#12561](https://github.com/redis/redis/pull/12561) ([tests](tests/valkey/12561-4031a1873/)): Fix that slot return in CLUSTER SHARDS should be integer (#12561): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-15T01:23+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 974 of 1561 tested (62%)
-- Changed-line coverage: median 100% of 1040 merge(s) measured, 78 under 50%
-- Recall: 258 parents flagged of 405 fix merges
-- Claude: $971.17 in the last 24 hours, $6089.20 in the last 7 days, $11490.79 in all
+- Merges whose tests reached the change: 982 of 1574 tested (62%)
+- Changed-line coverage: median 100% of 1051 merge(s) measured, 79 under 50%
+- Recall: 260 parents flagged of 409 fix merges
+- Claude: $1044.85 in the last 24 hours, $6162.89 in the last 7 days, $11564.48 in all
 - Issues filed: 81
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

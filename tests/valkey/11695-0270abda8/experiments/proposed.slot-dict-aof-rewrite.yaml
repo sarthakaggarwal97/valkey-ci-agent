@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-aof-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite in plain AOF format (aof-use-rdb-preamble no) drives the
+    new dbIterator loop in rewriteAppendOnlyFileRio, DEBUG POPULATE drives the standalone
+    dbExpand branch, PERSIST drives removeExpire, DEBUG HTSTATS drives dbGetStats,
+    and a restart reloads the rewritten AOF; replies compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+      enable-debug-command: "yes"
+    commands:
+    - {command: [DEBUG, POPULATE, 3000], expect: {equals: OK}}
+    - {command: [SET, str1, hello], expect: {equals: OK}}
+    - {command: [RPUSH, list1, a, b, c], expect: {equals: 3}}
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [SADD, s1, a, b, c], expect: {equals: 3}}
+    - {command: [ZADD, z1, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [XADD, st1, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [SET, ex2, v, EX, 100000], expect: {equals: OK}}
+    - {command: [EXPIRE, str1, 100000], expect: {equals: 1}}
+    - {command: [EXPIRE, list1, 100000], expect: {equals: 1}}
+    - {command: [PERSIST, list1], expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_scheduled:0"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [DEBUG, HTSTATS, 0], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, HTSTATS, 0, full], compare: skip, expect: {error: false}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 3007}}
+    - {command: [LRANGE, list1, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [SMEMBERS, s1], compare: unordered}
+    - {command: [ZRANGE, z1, 0, -1], expect: {equals: [a, b]}}
+    - {command: [TTL, str1], compare: skip, expect: {min: 1}}
+    - {command: [TTL, list1], expect: {equals: -1}}
+    - {command: [PERSIST, str1], expect: {equals: 1}}
+    - {command: [TTL, ex2], compare: skip, expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

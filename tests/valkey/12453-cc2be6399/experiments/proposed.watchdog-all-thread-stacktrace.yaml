@@ -1,0 +1,52 @@
+extends: [valkey.base]
+id: proposed.watchdog-all-thread-stacktrace
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: >-
+    Fire the software watchdog under a live key-value workload and verify the server
+    survives the new all-thread stack trace collection (SIGUSR2 sent to every thread
+    by threads_mngr, backtrace+zmalloc in signal handlers, semaphore wait with 2s
+    timeout) with no crash, hang, threads_mngr error, or EINTR-broken AOF fsync, and
+    that acknowledged writes and the deployment state survive.
+inputs:
+  properties:
+    watchdog_period_ms: {type: integer, minimum: 50, maximum: 2000, default: 200}
+    instances: {type: string, enum: [primaries, all], default: primaries}
+startup_overlays:
+- overlay_id: enable-debug
+  server_config:
+    enable-debug-command: "yes"
+components:
+- use: valkey.action.commands
+  id: trigger
+  depends_on: [writes]
+  config:
+    instances: {$ref: inputs.instances}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, {$ref: inputs.watchdog_period_ms}],
+      expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, 0], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.observer.log
+  id: stack-logs
+  config:
+    instances: all
+    expect:
+    - {pattern: "WATCHDOG TIMER EXPIRED", evidence_id: valkey.watchdog.fired, min_count: 3,
+      required: true}
+    - {pattern: "STACK TRACE", evidence_id: valkey.watchdog.stacktrace-logged, required: true}
+    - {pattern: "bioProcessBackgroundJobs", evidence_id: valkey.watchdog.bio-thread-trace}
+    forbidden:
+    - {pattern: "threads_mngr: waiting for threads' output timed out"}
+    - {pattern: "threads_mngr: waiting for threads' output was interrupted by signal"}
+    - {pattern: "failed to open /proc/"}
+    - {pattern: "failed to find SigBlk or/and SigIgn"}
+    - {pattern: "Fail to fsync the AOF file"}
+required_events: [trigger.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trigger}

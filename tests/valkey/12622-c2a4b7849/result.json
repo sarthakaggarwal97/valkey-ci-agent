@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c2a4b784918587e853a50211f7d5173097ecb22a",
+  "parent": "bfa3931a04bddec8eb37c91c25d3a77c70e33000",
+  "pr": 12622,
+  "pr_repo": "redis/redis",
+  "subject": "WAITAOF: Update fsynced_reploff_pending even if there's nothing to fsync (#12622)",
+  "date": "2023-09-28",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5275,
+  "findings": [],
+  "recorded": []
+}

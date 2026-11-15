@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f924bebd8326..bfa3931a04bd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6e221012cc9a
+seed: 12620
+experiment:
+  id: proposed.waitaof-postponed-aofrw
+  inputs:
+    appendfsync: everysec
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

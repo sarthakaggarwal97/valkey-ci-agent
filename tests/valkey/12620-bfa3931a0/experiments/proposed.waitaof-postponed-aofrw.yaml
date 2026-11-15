@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.waitaof-postponed-aofrw
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    WAITAOF numlocal must unblock after an initial AOFRW that was postponed behind
+    an RDB child. fsynced_reploff_pending is now snapshotted at the AOFRW fork instead
+    of in startAppendOnly, so a write made between CONFIG SET appendonly yes and the
+    fork counts as fsynced once the rewrite finishes; on the parent the stale snapshot
+    leaves WAITAOF blocked until timeout.
+inputs:
+  properties:
+    appendfsync: {type: string, enum: [everysec, always], default: everysec}
+components:
+- use: valkey.action.commands
+  id: waitaof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      appendonly: "no"
+      appendfsync: {$ref: inputs.appendfsync}
+    timeout_s: 90
+    commands:
+    - {command: [SET, x, y], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "5000000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_rewrite_scheduled:1"}}
+    - {command: [SET, x, y2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "0"], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 15000], expect_difference: true, expect: {equals: [
+          1, 0]}}
+    - {command: [WAITAOF, 1, 0, 2000], expect_difference: true, expect: {equals: [
+          1, 0]}}
+    - {command: [SET, x, y3], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 15000], expect: {equals: [1, 0]}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [waitaof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: waitaof}

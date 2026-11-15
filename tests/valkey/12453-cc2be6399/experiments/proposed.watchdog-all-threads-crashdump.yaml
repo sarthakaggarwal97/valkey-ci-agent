@@ -1,0 +1,36 @@
+extends: [valkey.base]
+id: proposed.watchdog-all-threads-crashdump
+deployment:
+  modes: [standalone]
+metadata:
+  description: Trip the software watchdog repeatedly on a multi-threaded server under
+    writes so the all-thread stack-trace collector runs; it must not crash, hang,
+    or race
+inputs:
+  properties:
+    watchdog_period_ms: {type: integer, minimum: 0, maximum: 5000, default: 200}
+    sleep_s: {type: number, minimum: 0.1, maximum: 5, default: 0.5}
+components:
+- use: valkey.action.commands
+  id: watchdog
+  depends_on: [writes]
+  timeout_s: 60
+  config:
+    instances: primaries
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, {$ref: inputs.watchdog_period_ms}],
+      expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.sleep_s}], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, 0], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchdog}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e5ef16137415..77a65e82b20c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aa02a2806071
+seed: 2
+experiment:
+  id: proposed.xread-block-in-scripts
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

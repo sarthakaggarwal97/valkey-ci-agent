@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cli-pubsub-reconnect-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: Interactive valkey-cli that reconnects via the connect command while
+    in subscribe mode must not crash on a NULL context
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: "SUBSCRIBE chan\nconnect 127.0.0.1 1\n"
+      expect_difference: true
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, -3]
+      stdin: "SUBSCRIBE chan\nconnect 127.0.0.1 1\n"
+      expect_difference: true
+      expect: {exit: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

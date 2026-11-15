@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc2be6399729c098357add2c3f1b264047b5ac9f",
+  "parent": "2aad03fa399f520febb8b7db972459bc97484104",
+  "pr": 12453,
+  "pr_repo": "redis/redis",
+  "subject": "Print stack trace from all threads in crash report (#12453)",
+  "date": "2023-09-24",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 0,
+  "hunted": 11,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 142,
+    "executed": 130,
+    "percent": 91,
+    "uncovered": [
+      "src/debug.c:2425",
+      "src/debug.c:2487",
+      "src/debug.c:2489",
+      "src/debug.c:2513",
+      "src/debug.c:2514",
+      "src/debug.c:2556",
+      "src/debug.c:2557",
+      "src/threads_mngr.c:88",
+      "src/threads_mngr.c:161",
+      "src/threads_mngr.c:162",
+      "src/threads_mngr.c:166",
+      "src/threads_mngr.c:167"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.4903,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 5,
+    "recall": false
+  }
+}

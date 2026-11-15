@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.watchdog-stacktrace-collection
+deployment:
+  modes: [standalone]
+metadata:
+  description: Software watchdog raises repeated non-fatal SIGALRM stacktrace dumps;
+    the multi-thread collector must print one stack trace per dump and the server
+    must survive crash-report generation
+components:
+- use: valkey.action.commands
+  id: watchdog
+  config:
+    timeout_s: 40
+    commands:
+    - {command: [CONFIG, SET, hz, "100"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, "100"], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.25"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, "0"], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primary
+    expect:
+    - {pattern: "WATCHDOG TIMER EXPIRED", evidence_id: valkey.watchdog.fired, required: true}
+    - {pattern: "expected stacktraces", evidence_id: valkey.watchdog.stacktrace-count,
+      required: true}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchdog}
+- {evidence_id: valkey.watchdog.fired, source: logs}
+- {evidence_id: valkey.watchdog.stacktrace-count, source: logs}

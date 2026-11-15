@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-keyspace-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: Non-cluster dict[0] path, SCAN cursor parse changes, SWAPDB sub-dict
+    state transfer and async flush key counting compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyspace
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SCAN, "-1"], expect_difference: true, expect: {error: "invalid cursor"}}
+    - {command: [SCAN, " 1"], expect_difference: true, expect: {equals: ["0", []]}}
+    - {command: [HSCAN, h, "-1"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [SCAN, "18446744073709551616"], expect: {error: "invalid cursor"}}
+    - {command: [SET, k1, v], expect: {equals: OK}}
+    - {command: [SET, k2, v], expect: {equals: OK}}
+    - {command: [SET, k3, v], expect: {equals: OK}}
+    - {command: [SETEX, e1, 10000, v], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [RANDOMKEY], compare: skip}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, d1, v], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [GET, d1], expect: {equals: v}}
+    - {command: [PERSIST, d1], expect: {equals: 0}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, z, v], expect: {equals: OK}}
+    - {command: [UNLINK, z], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyspace.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyspace}

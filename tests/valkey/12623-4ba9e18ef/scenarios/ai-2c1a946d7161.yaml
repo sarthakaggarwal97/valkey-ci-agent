@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2e0f6724e0d6..4ba9e18ef074.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c1a946d7161
+seed: 7001
+experiment:
+  id: proposed.watchdog-threadmgr-race
+  inputs:
+    sleep_s: 0.3
+    iterations: 40
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    watchdog-period: '50'
+    hz: '500'
+    io-threads: '4'
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '0'
+    lazyfree-lazy-user-flush: 'yes'
+    lazyfree-lazy-expire: 'yes'
+    appendonly: 'yes'
+    appendfsync: everysec

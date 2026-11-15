@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2aad03fa399f520febb8b7db972459bc97484104",
+  "parent": "4031a187321be26fc96c044fec3ee759841e8379",
+  "pr": 12569,
+  "pr_repo": "redis/redis",
+  "subject": "Use server.current_client to decide whether cluster commands should return TLS info. (#12569)",
+  "date": "2023-09-21",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.584,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters which port cluster commands report \u2014 the TLS port vs. the plaintext port \u2014 and only for fake clients (Lua EVAL, module RM_call) whose connection is NULL; for real client connections server.current_client is that same client, so shouldReturnTlsInfo() returns exactly what the old connIsTLS(c->conn) returned. The TLS and TCP ports are only distinct on a node that actually has a TLS listener, which requires a BUILD_TLS build started with tls-port and valid certificates (or tls-cluster yes). The fuzzer cannot provision any of that: it connects over plain TCP/Unix sockets with"
+}

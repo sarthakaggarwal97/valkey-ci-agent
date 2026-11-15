@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cluster-shards-slot-integer
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SHARDS returns slot range boundaries as RESP integers, not
+    bulk strings, across one and several slot ranges
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shards
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SHARDS], expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, SLOTS]}
+    - {command: [CLUSTER, DELSLOTS, 5000, 10000], expect: {equals: OK}}
+    - {command: [CLUSTER, SHARDS], expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, ADDSLOTS, 5000], expect: {equals: OK}}
+    - {command: [CLUSTER, SHARDS], expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shards.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shards}

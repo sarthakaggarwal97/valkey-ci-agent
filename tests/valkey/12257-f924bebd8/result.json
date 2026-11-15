@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f924bebd8326a04ec2ace560b54848e190516066",
+  "parent": "9fe63bdc803b8f1698e28287f8a5df2ba21e8be3",
+  "pr": 12257,
+  "pr_repo": "redis/redis",
+  "subject": "Rewrite huge printf calls to smaller ones for readability (#12257)",
+  "date": "2023-09-28",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 11,
+    "percent": 84,
+    "uncovered": [
+      "src/server.c:5735",
+      "src/server.c:5856"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.2233,
+  "findings": [],
+  "recorded": []
+}

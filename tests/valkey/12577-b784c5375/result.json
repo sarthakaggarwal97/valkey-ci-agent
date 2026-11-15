@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b784c5375e2a649b7ffcafcd913937d40006a671",
+  "parent": "b705049a7a759893ffae3857a9fb47358d90d26a",
+  "pr": 12577,
+  "pr_repo": "redis/redis",
+  "subject": "Unsubscribe all clients from replica for shard channel if the master ownership changes (#12577)",
+  "date": "2023-10-12",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6709,
+  "findings": [],
+  "recorded": []
+}

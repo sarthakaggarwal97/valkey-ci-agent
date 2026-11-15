@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "24187ed8e396625cc44a6bbeeb87e01aec55c27d",
+  "parent": "cc2be6399729c098357add2c3f1b264047b5ac9f",
+  "pr": 12474,
+  "pr_repo": "redis/redis",
+  "subject": "Fix overflow calculation for next timer event (#12474)",
+  "date": "2023-09-24",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.4887,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix casts a timer callback's returned period to monotime before multiplying by 1000 in processTimeEvents (ae.c), preventing 32-bit overflow when the returned period exceeds ~2,147,483 ms (~35.8 minutes). The only aeTimeProc that can return such a value is moduleTimerHandler, when a loaded module has created timers via RedisModule_CreateTimer more than ~35.8 minutes apart; serverCron returns at most 1000 ms (hz >= 1), evictionTimeProc returns 0 or AE_NOMORE, and valkey-benchmark's showThroughput returns a fixed 250 ms, so no non-module path can overflow and behaviour is bit-identical on bot"
+}

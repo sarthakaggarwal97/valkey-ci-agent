@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bfa3931a04bddec8eb37c91c25d3a77c70e33000",
+  "parent": "f924bebd8326a04ec2ace560b54848e190516066",
+  "pr": 12620,
+  "pr_repo": "redis/redis",
+  "subject": "WAITAOF: Update fsynced_reploff_pending just before starting the initial AOFRW fork (#12620)",
+  "date": "2023-09-28",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.1427,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2e0f6724e0d6..4ba9e18ef074.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0ac5d2a5fed1
+seed: 101
+experiment:
+  id: proposed.watchdog-stacktrace-survives
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    watchdog-period: 200
+    io-threads: 2
+    io-threads-do-reads: 'yes'

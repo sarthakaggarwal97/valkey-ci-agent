@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "31c3172d9b205d12216c27493806b6ac2b4986bd",
+  "parent": "9d31768cbb1702aaf47b068e3146f572021098de",
+  "pr": 12539,
+  "pr_repo": "redis/redis",
+  "subject": "Better standardize around assertions (#12539)",
+  "date": "2023-10-02",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3885,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a refactor of assertion infrastructure with no behavior change on any reachable path. It (1) replaces <assert.h> includes with redisassert.h in defrag.c, memtest.c, monotonic.c, rax.c, sds.c, siphash.c, zmalloc.c, server.c/h, so assert() routes to the existing _serverAssert logging handler instead of libc abort, and (2) adds likely() branch-prediction hints to the serverAssert/serverAssertWithInfo macros. Neither alters any command reply, data structure encoding, replication, persistence, or cluster behavior: the only observable difference is the diagnostics emitted when an asser"
+}

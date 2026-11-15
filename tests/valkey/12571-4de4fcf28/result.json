@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4de4fcf280648519239927d408624ea34953c0e0",
+  "parent": "8d92f7f2b7ff2d3e42425f65c5f65fe80888dfaf",
+  "pr": 12571,
+  "pr_repo": "redis/redis",
+  "subject": "Fix redis-cli pubsub_mode and connect minor prompt / crash issue (#12571)",
+  "date": "2023-10-11",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8951,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-f74e4a31b159",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by redis/redis#12571",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

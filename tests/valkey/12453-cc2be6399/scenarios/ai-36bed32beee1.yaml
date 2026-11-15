@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2aad03fa399f..cc2be6399729.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-36bed32beee1
+seed: 505
+experiment:
+  id: proposed.watchdog-all-thread-stacktrace
+  inputs:
+    instances: primaries
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    cluster-node-timeout: 5000

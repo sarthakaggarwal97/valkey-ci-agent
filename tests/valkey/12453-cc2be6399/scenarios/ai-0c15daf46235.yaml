@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2aad03fa399f..cc2be6399729.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c15daf46235
+seed: 7301
+experiment:
+  id: proposed.watchdog-all-threads-crashdump
+  inputs:
+    watchdog_period_ms: 60
+    sleep_s: 0.3
+    value_size: 64
+    mutation_rate: 1000
+    stable_keys: 1000
+    mutable_keys: 1000
+deployment:
+  mode: standalone
+  base_port: 7300
+  server_config:
+    enable-debug-command: 'yes'
+    io-threads: 2
+    io-threads-do-reads: 'yes'
+    hz: 500

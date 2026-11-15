@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b705049a7a75..b784c5375e2a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6f273cc19402
+seed: 102
+experiment:
+  id: proposed.shard-channel-replicate-switch
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

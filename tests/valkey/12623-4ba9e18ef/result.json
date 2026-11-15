@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4ba9e18ef0743eaa550691956ff911beae537243",
+  "parent": "2e0f6724e0d6b821789f8936531bab63eac1777e",
+  "pr": 12623,
+  "pr_repo": "redis/redis",
+  "subject": "fix crash in crash-report and other improvements (#12623)",
+  "date": "2023-10-02",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 20,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/debug.c:1842",
+      "src/debug.c:1875",
+      "src/debug.c:1883",
+      "src/debug.c:1884",
+      "src/debug.c:1885",
+      "src/debug.c:1914",
+      "src/debug.c:1915",
+      "src/threads_mngr.c:100",
+      "src/threads_mngr.c:141",
+      "src/threads_mngr.c:142",
+      "src/threads_mngr.c:143",
+      "src/threads_mngr.c:146",
+      "src/threads_mngr.c:148",
+      "src/threads_mngr.c:149",
+      "src/threads_mngr.c:151",
+      "src/threads_mngr.c:154",
+      "src/threads_mngr.c:155",
+      "src/threads_mngr.c:159",
+      "src/threads_mngr.c:180",
+      "src/threads_mngr.c:191"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.8097,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

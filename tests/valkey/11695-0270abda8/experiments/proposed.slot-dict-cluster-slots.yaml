@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-cluster-slots
+deployment:
+  modes: [standalone]
+metadata:
+  description: Two-node cluster sequence driving CLUSTER FLUSHSLOTS dbSize checks,
+    the cluster branch of dbExpand via DEBUG POPULATE, and delKeysInSlot via a higher-epoch
+    slot takeover from the other node; replies compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    server_config:
+      enable-debug-command: "yes"
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [SET, ex1, v, EX, 100000], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], expect: {equals: [foo]}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {error: "DB must be empty"}}
+    - {command: [DEBUG, POPULATE, 500], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 502}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 0, 16383], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: 30, expect: {contains: "cluster_state:ok"}}
+    - {command: [SET, foo, bar, EX, 100000], wait_s: 15, expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip, expect: {error: false}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], wait_s: 30, expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EXISTS, foo], compare: skip, expect: {error: MOVED}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

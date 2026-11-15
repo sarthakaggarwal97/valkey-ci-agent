@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-swapdb-blocked
+deployment:
+  modes: [standalone]
+metadata:
+  description: SWAPDB with clients blocked on BLPOP and XREADGROUP drives the dbFind(DB_MAIN)
+    lookups in scanDatabaseForReadyKeys and scanDatabaseForDeletedKeys; replies compared
+    against the parent build
+components:
+- use: valkey.action.commands
+  id: swapdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [RPUSH, mykey, a], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [XADD, s, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [XGROUP, CREATE, s, g, "$"], expect: {equals: OK}}
+    - {command: [BLPOP, mykey, 25], connection: blk}
+    - {command: [XREADGROUP, GROUP, g, c1, BLOCK, 25000, COUNT, 10, STREAMS, s, ">"],
+      connection: xb}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:2"}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {connection: blk, read: true, expect: {equals: [mykey, a]}}
+    - {connection: xb, read: true, expect: {error: true}}
+    - {command: [EXISTS, mykey], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [XLEN, s], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [XLEN, s], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [swapdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: swapdb}

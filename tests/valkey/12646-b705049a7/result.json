@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b705049a7a759893ffae3857a9fb47358d90d26a",
+  "parent": "77a65e82b20c9e61574e3b1193780e6c5aabe6e7",
+  "pr": 12646,
+  "pr_repo": "redis/redis",
+  "subject": "Replace `emptyDb()` with new `emptyData()` (#12646)",
+  "date": "2023-10-12",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2883,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comments and documentation: a README line and comment text in src/db.c and src/replication.c that update references from emptyDb() to the new emptyData() name. No executable code, config, or protocol behaviour changes, so there is nothing a scenario could reach or distinguish between the two builds."
+}

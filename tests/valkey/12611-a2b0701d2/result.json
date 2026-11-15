@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a2b0701d2cf64c62f9bb41c01ad44586f01c2c5b",
+  "parent": "fe37e4fc874a92dcf61b3b0de899ec6f674d2442",
+  "pr": 12611,
+  "pr_repo": "redis/redis",
+  "subject": "Fix compile on macOS 13 (#12611)",
+  "date": "2023-10-08",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1768,
+  "findings": [],
+  "recorded": [],
+  "reason": "Build-only fix: the diff changes macOS version-detection preprocessor macros in src/config.h and src/debug.c, all guarded by #if defined(__APPLE__). On the Linux hosts the fuzzer runs on, the preprocessor output and compiled binary are identical to the parent, so no runtime path differs; the change exists solely to make the source compile on macOS 13. No scenario can exercise it."
+}

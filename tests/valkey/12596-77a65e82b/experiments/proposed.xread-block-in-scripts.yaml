@@ -1,0 +1,139 @@
+extends: [valkey.liveness]
+id: proposed.xread-block-in-scripts
+deployment:
+  modes: [standalone]
+metadata:
+  description: XREAD/XREADGROUP with BLOCK inside EVAL and FCALL no longer error;
+    they serve synchronously or reply null, and the timeout argument is parsed
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: script-block
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [XGROUP, CREATE, s, g, "$", MKSTREAM], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','STREAMS',KEYS[1],'$')
+        if r == false then return 'NIL' end
+        return 'DATA'
+      - "1"
+      - s
+      expect: {equals: "NIL"}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','BLOCK','0','STREAMS',KEYS[1],'$')
+        if r == false then return 'NIL' end
+        if type(r) == 'table' and r.err then return 'ERR:' .. r.err end
+        return 'DATA'
+      - "1"
+      - s
+      expect_difference: true
+      expect: {equals: "NIL"}
+    - command:
+      - EVAL
+      - "return redis.call('xread','BLOCK','100','STREAMS',KEYS[1],'$')"
+      - "1"
+      - s
+      expect_difference: true
+      expect: {error: false}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','BLOCK','-5','STREAMS',KEYS[1],'$')
+        return r.err
+      - "1"
+      - s
+      expect_difference: true
+      expect: {contains: negative}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','BLOCK','abc','STREAMS',KEYS[1],'$')
+        return r.err
+      - "1"
+      - s
+      expect_difference: true
+      expect: {contains: "not an integer"}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','BLOCK','99999999999999999999','STREAMS',KEYS[1],'$')
+        return r.err
+      - "1"
+      - s
+      expect_difference: true
+      expect: {contains: "not an integer"}
+    - {command: [XADD, s, 1-1, a, 1], expect: {equals: 1-1}}
+    - command:
+      - EVAL
+      - |
+        local r = redis.call('xread','BLOCK','0','STREAMS',KEYS[1],'0')
+        return r[1][2][1][2][1] .. '=' .. r[1][2][1][2][2]
+      - "1"
+      - s
+      expect_difference: true
+      expect: {equals: a=1}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xread','BLOCK','0','STREAMS',KEYS[1],'$')
+        if r == false then return 'NIL' end
+        return 'DATA'
+      - "1"
+      - s
+      expect_difference: true
+      expect: {equals: "NIL"}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xreadgroup','GROUP','g','consumer1','BLOCK','0','STREAMS',KEYS[1],'>')
+        if r == false then return 'NIL' end
+        if type(r) == 'table' and r.err then return 'ERR' end
+        return 'ENTRIES:' .. #r[1][2]
+      - "1"
+      - s
+      expect_difference: true
+      expect: {equals: "ENTRIES:1"}
+    - {command: [XPENDING, s, g], expect_difference: true, expect: {contains: consumer1}}
+    - {command: [XACK, s, g, 1-1], expect_difference: true, expect: {equals: 1}}
+    - command:
+      - EVAL
+      - |
+        local r = redis.pcall('xreadgroup','GROUP','g','consumer1','BLOCK','0','STREAMS',KEYS[1],'>')
+        if r == false then return 'NIL' end
+        return 'DATA'
+      - "1"
+      - s
+      expect_difference: true
+      expect: {equals: "NIL"}
+    - command:
+      - FUNCTION
+      - LOAD
+      - |
+        #!lua name=xrblib
+        redis.register_function('xrb', function(keys, args)
+          local r = redis.pcall('xread','BLOCK','0','STREAMS',keys[1],'$')
+          if r == false then return 'NIL' end
+          if type(r) == 'table' and r.err then return 'ERR:' .. r.err end
+          return 'DATA'
+        end)
+      expect: {equals: xrblib}
+    - {command: [FCALL, xrb, "1", s], expect_difference: true, expect: {equals: "NIL"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [script-block.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: script-block}

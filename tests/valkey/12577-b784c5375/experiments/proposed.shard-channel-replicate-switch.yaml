@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.shard-channel-replicate-switch
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Moving a replica to another primary with CLUSTER REPLICATE must unsubscribe its
+    clients from shard channels the new shard does not own (sunsubscribe push); the
+    parent build leaves them silently subscribed to channels that can never deliver
+    again.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shardsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SSUBSCRIBE, mychannel], node: 2, connection: sub, wait_s: 30, expect: {
+        contains: ssubscribe}}
+    - {command: [SPUBLISH, mychannel, hello1], node: 2, expect: {equals: 1}}
+    - {connection: sub, node: 2, read: true, expect: {contains: smessage}}
+    - {command: [PUBSUB, SHARDCHANNELS], node: 2, expect: {equals: [mychannel]}}
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {connection: sub, node: 2, read: true, expect_difference: true, expect: {contains: sunsubscribe}}
+    - {command: [PUBSUB, SHARDCHANNELS], node: 2, expect_difference: true, expect: {
+        equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardsub}

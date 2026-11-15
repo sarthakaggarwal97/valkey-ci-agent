@@ -1,0 +1,38 @@
+extends: [valkey.base]
+id: proposed.watchdog-stacktrace-survives
+deployment:
+  modes: [standalone]
+metadata:
+  description: Repeated software-watchdog SIGALRM stack-trace collection across all
+    threads, while the main thread is blocked under writes, must not crash the server
+    or lose acknowledged data
+components:
+- use: valkey.action.commands
+  id: block
+  depends_on: [writes]
+  config:
+    instances: primary
+    timeout_s: 5
+    commands:
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.4"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [block]
+  config: {seconds: 3}
+required_events: [block.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: block}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8cdeddc81c6f26e600a4a80520084fceb5648a98",
+  "parent": "24187ed8e396625cc44a6bbeeb87e01aec55c27d",
+  "pr": 12564,
+  "pr_repo": "redis/redis",
+  "subject": "Clear owner_not_claiming_slot bit for the slot in clusterDelSlot (#12564)",
+  "date": "2023-09-26",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5325,
+  "findings": [],
+  "recorded": []
+}

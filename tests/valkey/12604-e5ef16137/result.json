@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e5ef161374155bb84a5720387836415ef3217963",
+  "parent": "4de4fcf280648519239927d408624ea34953c0e0",
+  "pr": 12604,
+  "pr_repo": "redis/redis",
+  "subject": "Fix crash when running rebalance command in a mixed cluster of 7.0 and 7.2 (#12604)",
+  "date": "2023-10-11",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6443,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

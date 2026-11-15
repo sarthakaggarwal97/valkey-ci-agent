@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f0c1c730d495..0270abda8255.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f98f46d8099a
+seed: 105
+experiment:
+  id: proposed.slot-dict-swapdb-blocked
+deployment:
+  mode: standalone
+  base_port: 7400

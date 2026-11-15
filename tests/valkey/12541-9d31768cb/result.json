@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d31768cbb1702aaf47b068e3146f572021098de",
+  "parent": "4ba9e18ef0743eaa550691956ff911beae537243",
+  "pr": 12541,
+  "pr_repo": "redis/redis",
+  "subject": "Fix a couple of tabs that caused misindentation (#12541)",
+  "date": "2023-10-02",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2306,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (#12541) only replaces tabs with spaces in indentation and one comment across cluster.c, config.c, redis-cli.c and zmalloc.c. No statement, expression, control flow, or string literal changes; the compiled binaries behave identically. A pure formatting fix needs no test scenario."
+}

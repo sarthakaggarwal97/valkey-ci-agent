@@ -1,0 +1,36 @@
+extends: [valkey.base]
+id: proposed.watchdog-threadmgr-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the software watchdog repeatedly while background threads thrash
+    the allocator, so a stacktrace collector misses the 2s window; the parent reads
+    an uninitialized g_output_array slot and crashes inside the crash report, the
+    fixed build zero-fills and survives
+inputs:
+  properties:
+    sleep_s: {type: number, default: 0.3}
+    iterations: {type: integer, default: 40}
+components:
+- use: valkey.action.commands
+  id: watchdog-storm
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, "50"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {error: false}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchdog-storm}

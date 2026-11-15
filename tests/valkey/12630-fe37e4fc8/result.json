@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fe37e4fc874a92dcf61b3b0de899ec6f674d2442",
+  "parent": "2cf50ddbad1b8169ed31c913d6e6c860e4736f80",
+  "pr": 12630,
+  "pr_repo": "redis/redis",
+  "subject": "Cleanup nested module keyspace notifications (#12630)",
+  "date": "2023-10-05",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1008,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change saves and restores sub->active around a module keyspace-notification callback instead of resetting it to 0. The flag is read in exactly one place, the dispatch condition (sub->active == 0 || module has REDISMODULE_OPTIONS_ALLOW_NESTED_KEYSPACE_NOTIFICATIONS). A nested re-invocation of the same subscriber, the only way prev_active can be 1, requires the ALLOW_NESTED option, and for such a module the condition short-circuits on the option and never reads active; a module without the option can never run nested, so its flag is never clobbered. The stale value is therefore unobservable:"
+}
