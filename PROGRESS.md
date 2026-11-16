@@ -28,9 +28,8 @@ Updated 2026-11-16T09:56+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-16T05:18:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43791016907): 1 merge(s) tested, 0 without a code change.
+[2026-11-16T09:56:51+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43844251406): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1723](https://github.com/valkey-io/valkey-search/pull/1723) ([tests](tests/valkey-search/1723-6e378bd78/)): Fix stem root distinct_docs undercount on concurrent deletes (#1722) (#1723): 2 of 5 test(s) reached the change
 
 ## Totals
 
