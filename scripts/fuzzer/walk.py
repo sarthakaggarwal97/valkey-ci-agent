@@ -961,6 +961,17 @@ def intended_crash(diff: str, cause: str) -> bool:
     return False
 
 
+_DELIBERATE_CRASH_RE = re.compile(r"DEBUG PANIC called|'1 == 2' is not true|crashed by signal: \d+ in debugCommand")
+_DELIBERATE_SUB_RE = re.compile(r"\b(SEGFAULT|PANIC|ASSERT)\b", re.IGNORECASE)
+
+
+def deliberate_crash(cause: str, *test_texts: str) -> bool:
+    """Whether a crash is the one a test asks for: DEBUG SEGFAULT, PANIC or ASSERT in its scenario or experiment
+    kills the server by design, on every build (fuzzer-walk #165-#167). The cause must be what those three leave
+    (their own panic text, the '1 == 2' assert, a signal in debugCommand), so a real crash elsewhere still files."""
+    return bool(_DELIBERATE_CRASH_RE.search(cause)) and any(_DELIBERATE_SUB_RE.search(t) for t in test_texts)
+
+
 def cli_steps(doc: dict[str, Any], experiments: dict[str, str], module: str) -> list[str] | None:
     """The valkey-cli steps that replay a test, when it is one plain command sequence on one server: commands of
     text, no other connection, node, raw bytes, restart or file. None otherwise."""
@@ -1315,6 +1326,8 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                         and intended_crash(change.diff, finding["detail"])):
                     # The change raises this panic on purpose, as valkey#5155's ValkeyModule_Calloc does on overflow.
                     finding["verdict"] = f"intended by {pr}: a panic the change adds"
+                if finding["rule"] == "crash" and deliberate_crash(finding["detail"], text, experiments.get(experiment_file, "")):
+                    finding["verdict"] = "intended by the test: it sends DEBUG SEGFAULT, PANIC or ASSERT"
                 builds = finding["builds"]
                 result["recall"] = result["recall"] or (builds["parent"] and not builds["merge"]
                                                         and finding["rule"] != "regressed-fix")

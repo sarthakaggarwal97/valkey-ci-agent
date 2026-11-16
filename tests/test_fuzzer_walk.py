@@ -1728,3 +1728,12 @@ def test_the_model_jobs_run_beside_the_walk_and_get_a_write_token_only_after_cla
     assert download["with"] == {"pattern": "walk-model-*", "path": "models"}
     recording = next(s for s in jobs["record"]["steps"] if s.get("name") == "Record the run")["run"]
     assert "--models models" in recording
+
+
+def test_deliberate_debug_crash_is_not_a_finding():
+    experiment = "- {command: [DEBUG, {$ref: inputs.crash_sub}]}\ninputs: {crash_sub: {enum: [SEGFAULT, PANIC, ASSERT]}}"
+    for cause in ("crash: crashed by signal: 11 in debugCommand", "crash: DEBUG PANIC called at Unix time 1794709793 #debug.c:571",
+                  "crash: debug.c:588 '1 == 2' is not true"):
+        assert walk.deliberate_crash(cause, "scenario", experiment)
+        assert not walk.deliberate_crash(cause, "scenario", "- {command: [DEBUG, OBJECT, k]}")  # the test did not ask
+    assert not walk.deliberate_crash("crash: crashed by signal: 11 in dictFind", "scenario", experiment)
