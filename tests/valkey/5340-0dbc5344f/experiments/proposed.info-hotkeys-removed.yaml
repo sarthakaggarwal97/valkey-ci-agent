@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.info-hotkeys-removed
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The INFO hotkeys section was removed; the parent still emits hotkeys_last_window_samples
+    and hotkeys_last_window_duration_ms, the change returns an empty reply for INFO
+    hotkeys, and the hotkeys configs and detection machinery keep working on both
+    builds with detection disabled, enabled at startup, enabled at runtime and reconfigured
+    live.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    startup_top_k: {type: integer, default: 0}
+components:
+- use: valkey.action.commands
+  id: info-hotkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hotkeys-top-k: {$ref: inputs.startup_top_k}
+      hotkeys-window-seconds: 1
+      hotkeys-sampling-percentage: 100
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, hotkeys], expect_difference: true, expect: {equals: ""}}
+    - {command: [CONFIG, GET, hotkeys-top-k], expect: {exists: true}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 10], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 100], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 1], expect: {equals: OK}}
+    - {command: [MSET, k1, v1, k2, v2, k3, v3], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [INFO, hotkeys], expect_difference: true, expect: {equals: ""}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 2], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [INFO, hotkeys], expect_difference: true, expect: {equals: ""}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 0], expect: {equals: OK}}
+    - {command: [INFO, hotkeys], expect_difference: true, expect: {equals: ""}}
+    - {command: [INFO, everything], compare: skip, expect: {exists: true}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-hotkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-hotkeys}

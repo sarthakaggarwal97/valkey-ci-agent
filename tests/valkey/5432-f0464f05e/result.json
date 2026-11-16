@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f0464f05e1e55f7795a6313d40d8e6084821af69",
+  "parent": "ec905ca5128f77e4d2827482ab0a8fb00ed35419",
+  "pr": 5432,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow a module thread holding the GIL to replicate during a forkless save (#5432)",
+  "date": "2026-11-16",
+  "unstable": "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8845,
+  "findings": [],
+  "recorded": []
+}

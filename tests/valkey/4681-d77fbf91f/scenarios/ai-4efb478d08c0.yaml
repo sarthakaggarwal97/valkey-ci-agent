@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eb47ae3132cd..d77fbf91f3c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4efb478d08c0
+seed: 467401
+experiment:
+  id: proposed.priority-subnets-admission-count
+deployment:
+  mode: standalone
+  base_port: 7000

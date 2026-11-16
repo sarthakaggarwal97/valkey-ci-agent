@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f0464f05e1e5..0dbc5344ffbf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64b3c50a005a
+seed: 534001
+experiment:
+  id: proposed.info-hotkeys-removed
+  inputs:
+    resp: 2
+    startup_top_k: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

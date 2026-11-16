@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d77fbf91f3c6..9d8f3c003ca8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-206135dab5f9
+seed: 7001
+experiment:
+  id: proposed.slot-export-fork-fail-pipe-reset
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: cluster
+  base_port: 7000

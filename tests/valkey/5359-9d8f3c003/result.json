@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2",
+  "parent": "d77fbf91f3c647e5541be8819e7e52e088479bf8",
+  "pr": 5359,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reset slot migration snapshot pipes when the snapshot fork fails (#5359)",
+  "date": "2026-11-16",
+  "unstable": "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4178,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: cluster_migrateslots.c:1717 'server.slot_migration_pipe_read == -1 && server.slot_migration_child_exit_pipe == -1' is not true",
+      "scenario": "ai-206135dab5f9",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5359",
+      "fingerprint": "a74e487a7003ca559b25",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-206135dab5f9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'export' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (CLUSTER COUNTKEYSINSLOT 16383 on node 1)"
+    }
+  ]
+}

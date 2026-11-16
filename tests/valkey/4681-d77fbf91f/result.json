@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d77fbf91f3c647e5541be8819e7e52e088479bf8",
+  "parent": "eb47ae3132cdb110a20b120373082c15f104c9d7",
+  "pr": 4681,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix dynamic priority-subnets demotion of replicas/slot migration links and counter drift (#4674) (#4681)",
+  "date": "2026-11-16",
+  "unstable": "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 3,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.3427,
+  "findings": [],
+  "recorded": []
+}
