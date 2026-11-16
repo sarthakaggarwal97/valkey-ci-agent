@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -92,6 +95,46 @@ def test_verify_records_every_outcome_with_unique_marker() -> None:
     assert upload["with"]["path"] == "markers/*.json"
     assert "steps.record.outputs.slug" in upload["with"]["name"]
     assert "steps.record.outputs.outcome == 'error'" in steps[fail_index]["if"]
+
+
+def test_verify_records_survivors_under_actions_errexit(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python"
+    fake_python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    output = tmp_path / "output"
+
+    result = subprocess.run(
+        ["bash", "-e", "-c", _step("verify", step_id="record")["run"]],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CVES_JSON": '["CVE-1"]',
+            "LINE": "9.2",
+            "VARIANT": "debian",
+            "PLATFORM": "linux/amd64",
+            "BUILD_OUTCOME": "success",
+            "GITHUB_OUTPUT": str(output),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    marker = json.loads((tmp_path / "markers/9.2-debian-linux-amd64.json").read_text(encoding="utf-8"))
+    assert marker == {
+        "line": "9.2",
+        "variant": "debian",
+        "platform": "linux/amd64",
+        "outcome": "survivors",
+    }
+    assert output.read_text(encoding="utf-8").splitlines() == [
+        "outcome=survivors",
+        "slug=linux-amd64",
+    ]
 
 
 def test_collect_reconciles_markers_against_same_plan() -> None:
