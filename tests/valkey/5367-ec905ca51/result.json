@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ec905ca5128f77e4d2827482ab0a8fb00ed35419",
+  "parent": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "pr": 5367,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ignore SYNCSLOTS FINISH for an already finished import job (#5367)",
+  "date": "2026-11-15",
+  "unstable": "ec905ca5128f77e4d2827482ab0a8fb00ed35419",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.0563,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: kvstore.c:955 '!ht || hashtableSize(ht) == 0' is not true",
+      "scenario": "ai-ee0425a377b8",
+      "seed": 5367,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #5367",
+      "fingerprint": "b8898436a27483938a6d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: kvstore.c:955 '!ht || hashtableSize(ht) == 0' is not true",
+      "scenario": "ai-2ca2ace8167d",
+      "seed": 5368,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #5367",
+      "fingerprint": "b8898436a27483938a6d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: kvstore.c:955 '!ht || hashtableSize(ht) == 0' is not true",
+      "scenario": "ai-d65d1f591a36",
+      "seed": 5369,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #5367",
+      "fingerprint": "b8898436a27483938a6d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168"
+    }
+  ],
+  "recorded": []
+}

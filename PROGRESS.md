@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-16T09:56+00:00.
+Updated 2026-11-16T12:02+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 0 | 200.4 |
+| valkey-io/valkey | 2542 | 0 | #12477 (2023-08-14) | 1 | 193.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.6 |
 | valkey-io/valkey-search | 697 | 0 | f8106e72e984 (2024-11-27) | 4 | 4.0 |
@@ -13,8 +13,10 @@ Updated 2026-11-16T09:56+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-16T02:15:55+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43791012310): 0 merge(s) tested, 0 without a code change.
+[2026-11-16T12:02:14+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43844244269): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#5367](https://github.com/valkey-io/valkey/pull/5367) ([tests](tests/valkey/5367-ec905ca51/)): Ignore SYNCSLOTS FINISH for an already finished import job (#5367): 0 of 5 test(s) reached the change, coverage 100%; [crash, predates #5367](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168)
+- model `slot-migration` for [valkey-io/valkey#5367](https://github.com/valkey-io/valkey/pull/5367): no model change: The rule checked is RApply in model.tla (model.tla:256-271), the model of the replica applying SYNCSLOTS FINISH from the target's replication stream — the function the change touches, clusterCommandSyncSlotsFinish, is in claims.yaml's scope and is carried by RApply's "finish" case: 
 
 ### valkey-io/valkey-bloom
 
@@ -33,11 +35,11 @@ Updated 2026-11-16T09:56+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 995 of 1591 tested (63%)
-- Changed-line coverage: median 100% of 1063 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 995 of 1592 tested (62%)
+- Changed-line coverage: median 100% of 1064 merge(s) measured, 79 under 50%
 - Recall: 263 parents flagged of 412 fix merges
-- Claude: $47.11 in the last 24 hours, $4724.12 in the last 7 days, $11678.94 in all
-- Issues filed: 84
+- Claude: $53.52 in the last 24 hours, $4538.47 in the last 7 days, $11685.34 in all
+- Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -72,6 +74,7 @@ Updated 2026-11-16T09:56+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/165
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/166
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/167
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -122,7 +125,7 @@ Updated 2026-11-16T09:56+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98
-- Model updates: 0 asked for, 0 with no model change, 0 rejected, 0 failed; 0 pull request(s)
+- Model updates: 1 asked for, 1 with no model change, 0 rejected, 0 failed; 0 pull request(s)
 
 ## Retries
 

@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-after-replicated-flushall
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replicated FLUSHALL fails a replica's slot-import tracking job before
+    the target's SYNCSLOTS FINISH arrives; the replica must settle on failed exactly
+    once, stay in sync, and not crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: finish-after-flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {cluster-allow-replica-migration: "no"}
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.2.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5061, 5061, NODE, "<node.2.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, wait_s: 30, expect: {contains: success},
+      compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 30, expect: {contains: success},
+      compare: skip}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}:k", v], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.2.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 2, wait_s: 30, expect: {contains: waiting-for-paused},
+      compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 30, expect: {contains: occurring-on-primary},
+      compare: skip}
+    - {command: [FLUSHALL, SYNC], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 2, wait_s: 30, expect: {contains: failed},
+      compare: skip}
+    - {command: [SET, "{bar}:marker", after-finish], node: 2, expect: {equals: OK}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, "{bar}:marker"], node: 1, wait_s: 30, expect: {equals: after-finish},
+      compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, expect: {contains: failed},
+      compare: skip}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 0], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [finish-after-flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish-after-flush}

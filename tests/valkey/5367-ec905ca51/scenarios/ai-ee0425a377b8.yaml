@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9e58c3bea205..ec905ca5128f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ee0425a377b8
+seed: 5367
+experiment:
+  id: proposed.syncslots-finish-already-finished
+  inputs:
+    resp: 2
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
