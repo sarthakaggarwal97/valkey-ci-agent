@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-16T02:15+00:00.
+Updated 2026-11-16T05:18+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 26 | 212.3 |
+| valkey-io/valkey | 2541 | 0 | #12477 (2023-08-14) | 3 | 208.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.6 |
-| valkey-io/valkey-search | 696 | 0 | f8106e72e984 (2024-11-27) | 3 | 5.9 |
+| valkey-io/valkey-search | 697 | 0 | f8106e72e984 (2024-11-27) | 4 | 4.0 |
 
 ## Last runs
 
@@ -28,16 +28,16 @@ Updated 2026-11-16T02:15+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-15T23:23:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43761875285): 1 merge(s) tested, 1 without a code change.
+[2026-11-16T05:18:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43791016907): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1433](https://github.com/valkey-io/valkey-search/pull/1433) ([tests](tests/valkey-search/1433-cb9e6042f/)): Add case function in aggregation expressions (#1433): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1723](https://github.com/valkey-io/valkey-search/pull/1723) ([tests](tests/valkey-search/1723-6e378bd78/)): Fix stem root distinct_docs undercount on concurrent deletes (#1722) (#1723): 2 of 5 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 994 of 1590 tested (63%)
+- Merges whose tests reached the change: 995 of 1591 tested (63%)
 - Changed-line coverage: median 100% of 1063 merge(s) measured, 79 under 50%
-- Recall: 262 parents flagged of 411 fix merges
-- Claude: $90.76 in the last 24 hours, $5010.83 in the last 7 days, $11655.24 in all
+- Recall: 263 parents flagged of 412 fix merges
+- Claude: $55.74 in the last 24 hours, $4864.04 in the last 7 days, $11678.94 in all
 - Issues filed: 84
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.stem-root-drain-nostem-survivor
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A stem root whose distinct_docs drains to zero while a NOSTEM field still holds
+    the literal word must drop its stem-tree target (text_index.cc DeleteKeyData fix);
+    the parent leaves a stale root behind, visible in FT._DEBUG TEXTINFO STEM, and
+    pollutes the root a later re-add creates.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, a, TEXT, b,
+        TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", a, runs], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", b, runs], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@a:runs", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@b:runs", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], expect: {equals: [[run, [runs]]]}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@a:runs", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@b:runs", NOCONTENT], expect: {equals: [1, "doc:2"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [HSET, "doc:3", a, running], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@a:running", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], expect_difference: true, expect: {
+        equals: [[run, [running]]]}}
+    - {command: [HSET, "doc:4", a, jumping], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", b, jumping], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@a:jumping", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:4"]}}
+    - {command: [FT.SEARCH, idx, "@b:jumping", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:5"]}}
+    - {command: [HSET, "doc:4", a, walked], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@a:jumping", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@b:jumping", NOCONTENT], expect: {equals: [1, "doc:5"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, jump], expect_difference: true, expect: {
+        equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}

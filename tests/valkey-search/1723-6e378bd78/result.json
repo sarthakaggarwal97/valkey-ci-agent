@@ -1,0 +1,26 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6e378bd78db69ce9d2f2b23318370e3d5e7c4cce",
+  "parent": "ab8e70a22275bea81709286876ad94e4b8b28d47",
+  "pr": 1723,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix stem root distinct_docs undercount on concurrent deletes (#1722) (#1723)",
+  "date": "2026-11-15",
+  "unstable": "9e58c3bea205875758b15fe3b712a0bcd4f97f17",
+  "module_head": "6e378bd78db69ce9d2f2b23318370e3d5e7c4cce",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 23.694,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet",
+  "recall_round": {
+    "tests": 2,
+    "recall": true
+  }
+}

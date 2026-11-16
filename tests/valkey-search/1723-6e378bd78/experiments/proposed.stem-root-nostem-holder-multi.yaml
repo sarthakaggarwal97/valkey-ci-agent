@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.stem-root-nostem-holder-multi
+deployment:
+  modes: [standalone]
+metadata:
+  description: Multiple inflections of one stem root, last stemmed doc deleted while
+    a NOSTEM field keeps one inflection alive
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: ["FT.CREATE", idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT,
+        title, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "running runs"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", title, runs], expect: {equals: 1}}
+    - {command: ["FT._DEBUG", TEXTINFO, idx, STEM, run], wait_s: 30, expect: {contains: runs}}
+    - {command: ["FT._DEBUG", TEXTINFO, idx, PREFIX, runs, WITHKEYS], wait_s: 30,
+      expect: {contains: "doc:2"}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: ["FT._DEBUG", TEXTINFO, idx, STEM, run], wait_s: 30, expect_difference: true,
+      expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}
