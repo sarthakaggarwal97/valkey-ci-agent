@@ -179,6 +179,17 @@ def _publish_update(
 ) -> FixResult:
     if task.target.fix_branch:
         return _publish_ci_sweep(gh, task, candidate, git_env=git_env)
+    expected_fix_branch = ci_sweep.fix_branch_for(
+        task.target.branch,
+        task.failure.base_branch,
+    )
+    if expected_fix_branch:
+        return _refused(
+            task,
+            candidate,
+            "Refusing to push directly to a backport sweep branch; "
+            f"its fix must use {expected_fix_branch} or the default-branch flow.",
+        )
 
     def check() -> str:
         return _validate_pr_target(gh, task, require_bot=True)

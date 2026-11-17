@@ -60,7 +60,7 @@ def _task(kind: TargetKind, *, issue: int = 0) -> FixTask:
             branch=(
                 f"agent/ci-fix/issue-{issue}-100-1"
                 if issue
-                else "agent/backport/sweep/9.0"
+                else "backport/7-to-9.0"
             ),
             expected_sha=_HEAD,
         ),
@@ -81,7 +81,7 @@ def _pr(
         base=SimpleNamespace(ref="9.0"),
         head=SimpleNamespace(
             sha=head_sha,
-            ref="agent/backport/sweep/9.0",
+            ref="backport/7-to-9.0",
             repo=SimpleNamespace(full_name=head_repo),
         ),
     )
@@ -642,7 +642,32 @@ _RUN = "https://github.com/valkey-io/valkey/actions/runs/100"
 
 def _sweep_task() -> FixTask:
     task = _task(TargetKind.UPDATE_PR)
-    return replace(task, target=replace(task.target, fix_branch=_CI_SWEEP))
+    return replace(
+        task,
+        target=replace(
+            task.target,
+            branch="agent/backport/sweep/9.0",
+            fix_branch=_CI_SWEEP,
+        ),
+    )
+
+
+def test_a_stale_plan_never_pushes_directly_to_a_sweep_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = _sweep_task()
+    task = replace(task, target=replace(task.target, fix_branch=""))
+    monkeypatch.setattr(
+        publish_mod,
+        "push_candidate",
+        lambda *_a, **_k: pytest.fail("nothing may be pushed"),
+    )
+
+    result = publish_candidate(_gh()[0], task, _candidate(), git_env={})
+
+    assert result.kind is ResultKind.REFUSED
+    assert "Refusing to push directly to a backport sweep branch" in result.summary
+    assert _CI_SWEEP in result.summary
 
 
 def _commit(sha: str, message: str) -> SimpleNamespace:
@@ -668,6 +693,7 @@ _PUSHED = _commit("d" * 40, f"Fix unit/x\n\nCI-Fix-Job: unit tests\nCI-Fix-Run: 
 def _ci_sweep_gh(*, branch_sha: str = "", closed=(), pushed=(_PUSHED,)):
     """A repository whose CI-sweep branch, after the push, adds ``pushed`` to the sweep's head."""
     sweep = _pr()
+    sweep.head.ref = "agent/backport/sweep/9.0"
     sweep.body = "# Backport sweep for 9.0\n\n## Applied\n\n| a |\n\n---\n*Generated*"
     sweep.edit = MagicMock()
     gh, repo = _gh(pr=sweep)
