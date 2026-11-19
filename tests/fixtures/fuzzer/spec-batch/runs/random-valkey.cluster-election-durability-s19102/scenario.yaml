@@ -1,0 +1,82 @@
+# valkey-fuzzer generated scenario: valkey.cluster-election-durability, seed 19102 (attempt 0).
+# Reproduce with: valkey-fuzzer run scenario.yaml
+scenario_id: valkey.cluster-election-durability-seed19102
+seed: 19102
+experiment:
+  id: valkey.cluster-election-durability
+  inputs:
+    config_changes: 3
+    election: kill_primary
+    restart_delay_s: 0.02428
+    save_behavior: best-effort
+    second_election: kill_primary
+    second_election_delay_s: 1.736
+    shard: 2
+    vote_occurrence: 2
+deployment:
+  mode: cluster
+  primaries: 4
+  replicas_per_primary: 2
+  instance_configs:
+    primary:
+      hz: '10'
+      events-per-io-thread: '0'
+      io-threads: '2'
+      io-threads-always-active: 'yes'
+      io-threads-do-reads: 'no'
+      min-io-threads-avoid-copy-reply: '7'
+      min-string-size-avoid-copy-reply: '16384'
+      min-string-size-avoid-copy-reply-threaded: '64'
+      prefetch-batch-max-size: '128'
+      active-defrag-ignore-bytes: 100mb
+      active-defrag-threshold-lower: '10'
+      activedefrag: 'no'
+      lazyfree-lazy-eviction: 'no'
+      lazyfree-lazy-expire: 'yes'
+      lazyfree-lazy-server-del: 'yes'
+      lazyfree-lazy-user-del: 'no'
+      lazyfree-lazy-user-flush: 'yes'
+      maxmemory-policy: allkeys-lfu
+      replica-lazy-flush: 'no'
+    replica:
+      hz: '10'
+      events-per-io-thread: '0'
+      io-threads: '4'
+      io-threads-always-active: 'no'
+      io-threads-do-reads: 'yes'
+      min-io-threads-avoid-copy-reply: '2'
+      min-string-size-avoid-copy-reply: '64'
+      min-string-size-avoid-copy-reply-threaded: '64'
+      prefetch-batch-max-size: '128'
+      active-defrag-ignore-bytes: 100mb
+      active-defrag-threshold-lower: '0'
+      activedefrag: 'no'
+      lazyfree-lazy-eviction: 'no'
+      lazyfree-lazy-expire: 'no'
+      lazyfree-lazy-server-del: 'no'
+      lazyfree-lazy-user-del: 'no'
+      lazyfree-lazy-user-flush: 'no'
+      maxmemory-policy: allkeys-lru
+      replica-lazy-flush: 'no'
+  server_config:
+    hash-max-listpack-entries: '2'
+    hash-max-listpack-value: '8'
+    list-compress-depth: '1'
+    list-max-listpack-size: '-5'
+    set-max-intset-entries: '2'
+    set-max-listpack-entries: '2'
+    set-max-listpack-value: '8'
+    stream-node-max-bytes: '4096'
+    stream-node-max-entries: '100'
+    zset-max-listpack-entries: '2'
+    zset-max-listpack-value: '64'
+    aof-rewrite-incremental-fsync: 'yes'
+    commandlog-reply-larger-than: 9223372036854775807
+    hotkeys-top-k: 729
+    hotkeys-window-seconds: 165
+    no-appendfsync-on-rewrite: 'yes'
+    replica-ignore-disk-write-errors: 'no'
+  base_port: 11240
+  base_data_dir: /tmp/valkey-fuzzer/artifacts/batch/work/w2/data
+  loopback_block: 3
+  valkey_binary: /opt/valkey/src/valkey-server

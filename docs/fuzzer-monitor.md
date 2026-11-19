@@ -8,7 +8,8 @@ run by hand to tell them apart doesn't scale, so the fuzzer monitor does a
 first pass and files an issue on `valkey-io/valkey-fuzzer` when a run looks
 like a real problem.
 
-The monitor only ever creates and updates issues. It never changes code in
+The monitor creates and updates issues and, when told the pull request a PR
+batch tested, one comment on that pull request. It never changes code in
 either repository.
 
 ## How it works
@@ -37,7 +38,12 @@ reads the batch folder in it:
   `<seed>-<deployment id>-valkey-N.stdio.log`;
 - `batch/experiments/<id>.yaml`, in a PR batch, the experiments the
   [proposals](fuzzer-proposals.md) wrote for the change (their IDs start
-  with `proposed.`).
+  with `proposed.`);
+- `batch/runs/<id>/conform.json`, for a run whose plan names a spec bundle,
+  what `valkey-fuzzer spec conform` found when the run ended, per bundle;
+  `batch/conformance/<bundle>.json`, the bundle's report over every run
+  checked against it; and the summary's `conformance`, a digest per bundle
+  (see [Spec conformance](#spec-conformance)).
 
 It reads every run report and starts with a quick scan of each. From a
 report it takes the outcome, each component that failed or errored with its
@@ -173,6 +179,19 @@ on the two builds is recorded for a human rather than triaged. The [replay
 of merged pull requests](fuzzer-replay.md) triages each merge's batch this
 way.
 
+With `--pr OWNER/NAME#NUMBER`, the pull request the batch tested also gets
+the batch's [spec conformance](#spec-conformance) as a comment. The token
+comes from `--pr-token` or `PR_TOKEN`, else the one that reads the batch; it
+needs to write pull request comments on that repository:
+
+```bash
+PR_TOKEN=... python -m scripts.fuzzer.main --fuzzer-repo OWNER/valkey-fuzzer --pr-batch-run <run id> \
+  --change "valkey-io/valkey#1234" --pr valkey-io/valkey#1234
+```
+
+The replay and the walk pass no `--pr`: a merge is not a pull request
+waiting for review, and their issues are unchanged.
+
 ## Runs that test a change
 
 A PR batch can run experiments the proposals wrote for the change, which
@@ -208,6 +227,40 @@ evidence), which the replay's triage results keep.
 The fuzzer's other scheduled workflow, Valkey Experiments Live, uploads only
 its pytest output, so the monitor doesn't watch it.
 
+## Spec conformance
+
+A run whose plan names a spec bundle (a component with `spec: <protocol>`)
+is checked against the bundle's TLA+ model by `valkey-fuzzer spec conform`
+as it ends: the run's observed states, rebuilt through the bundle's
+`mapping.yaml`, must satisfy each claimed property. For a bundle whose
+claims are approved, a claim violated under its `holds_when` fails the run,
+so the monitor files it like any other failure signature; a draft's
+findings never fail a run.
+
+The monitor reads that output and puts it in its JSON result, per run, as
+`spec`: one entry per bundle with its conform `status`, whether its claims
+are `approved`, why it was not checked, and each claim the runs evaluated:
+
+- `violated`: a run that met the claim's `holds_when` violated it;
+- `holds`: runs met it and none violated it;
+- `not-claimed`: no run met it (a violation outside the claim is reported
+  by the fuzzer, but decides nothing).
+
+A violated claim names its first violating run and that run's first bad
+step: the state, the model action, the mapping's evidence and the fields it
+captured, and the Valkey log line the step came from. The step keeps only
+the record's time and fields, so the monitor finds the line among the run
+report's events: the one logged at that time whose named groups are all
+among the step's fields and that agrees with the most of them. A step from
+a fault (a kill) or a state sample has no log line, and neither does one
+that two lines of the same millisecond match equally; the comment says so.
+
+With `--pr`, that is the pull request comment. It opens with
+`<!-- valkey-ci-agent:fuzzer-spec-conform -->`; a later run finds the
+comment by it and edits it in place, so a pull request has one. A violated
+claim of an approved bundle is a **failure**; one of a draft bundle is
+**informational**. A batch whose runs named no bundle posts nothing.
+
 ## Configuration
 
 The monitor uses the shared secrets described in [setup.md](setup.md). The
@@ -218,9 +271,10 @@ one repository.
 ## Where the code lives
 
 `scripts/fuzzer/main.py` is the entry point. `batch.py` reads the batch
-folder. `analyzer.py` does the work: the quick scan, the findings, cloning
-the source, and calling Claude with the read-only `fuzzer_analysis_readonly`
-profile, or the tool-less `fuzzer_root_cause_text_only` one for the root
-cause question. `issue_renderer.py` writes the issue, and
+folder and rolls up its spec conformance (`spec_results`). `analyzer.py`
+does the work: the quick scan, the findings, cloning the source, and
+calling Claude with the read-only `fuzzer_analysis_readonly` profile, or the
+tool-less `fuzzer_root_cause_text_only` one for the root cause question.
+`issue_renderer.py` writes the issue and the spec conformance comment, and
 `models.py` holds the data types. Downloading artifacts, cloning, the
 fingerprint and issue updates all come from `scripts/common/`.

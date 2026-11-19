@@ -5,11 +5,15 @@ import copy
 
 import pytest
 
-from scripts.fuzzer.batch import REPORT_KEYS, read_batch
+from scripts.fuzzer.batch import REPORT_KEYS, _log_line, read_batch, read_batch_dir, spec_results
 from tests.fuzzer_batch_fixture import (
     BATCH,
     CRASH,
     CRASH_REPORT,
+    SPEC_BATCH,
+    SPEC_HOLDS,
+    SPEC_LOG_LINE,
+    SPEC_VIOLATED,
     batch_files,
     batch_summary,
     crash_report,
@@ -202,3 +206,62 @@ def test_the_experiments_the_proposals_brought_are_read_by_file_name(tmp_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(payload)
     assert read_batch_dir(tmp_path).experiments == batch.experiments
+
+
+def _spec_files() -> dict[str, bytes]:
+    return {p.relative_to(SPEC_BATCH).as_posix(): p.read_bytes() for p in SPEC_BATCH.rglob("*") if p.is_file()}
+
+
+def test_spec_conform_output_is_read_beside_the_summary_and_the_reports():
+    batch = read_batch_dir(SPEC_BATCH)
+    assert batch.problem is None and [run.report_problem for run in batch.runs] == [None, None]
+    assert batch.run(SPEC_VIOLATED).conformance["cluster-election"]["status"] == "fail"
+    assert batch.run(SPEC_HOLDS).conformance["cluster-election"]["status"] == "pass"
+    assert batch.conformance_reports["cluster-election"]["kind"] == "spec-conformance"
+    assert batch.conformance["cluster-election"]["approved"] is True
+    # A batch whose runs named no spec bundle has none of it.
+    plain = read_batch(batch_files(), "batch/")
+    assert (plain.conformance, plain.conformance_reports, spec_results(plain)) == ({}, {}, [])
+
+
+def test_spec_results_give_each_claims_verdict_and_the_first_bad_step_with_its_log_line():
+    [bundle] = spec_results(read_batch_dir(SPEC_BATCH))
+    assert (bundle["bundle"], bundle["approved"], bundle["status"], bundle["problem"], bundle["report"]) == (
+        "cluster-election", True, "fail", None, "conformance/cluster-election.json",
+    )
+    assert [(c["claim"], c["verdict"]) for c in bundle["claims"]] == [
+        ("OneWinnerPerEpoch", "holds"), ("VoteOncePerEpoch", "holds"), ("NoVoteLostInCrash", "violated"),
+    ]
+    violated = bundle["claims"][2]
+    assert (violated["runs"], violated["claimed_runs"], violated["violated_runs"]) == (2, 1, 1)
+    assert violated["first"] == {
+        "run": SPEC_VIOLATED, "state": 17, "action": "ReceiveVote", "evidence": "acked",
+        "fields": {"instance_id": "valkey-8", "voter": "valkey-0", "epoch": 15, "acks": 1, "quorum": 3},
+        "log_line": SPEC_LOG_LINE,
+    }
+
+
+def test_a_claim_no_run_met_is_not_claimed():
+    # Without the run that met NoVoteLostInCrash's claim, the other broke it only outside its claim.
+    files = {path: data for path, data in _spec_files().items() if path != f"runs/{SPEC_VIOLATED}/conform.json"}
+    [bundle] = spec_results(read_batch(files))
+    assert {c["claim"]: c["verdict"] for c in bundle["claims"]}["NoVoteLostInCrash"] == "not-claimed"
+    assert all("first" not in c for c in bundle["claims"])
+
+
+def test_a_step_gets_a_log_line_only_when_one_line_matches_it_best():
+    def event(line, **payload):
+        return {"timestamp": 9.0, "payload": {"instance_id": "valkey-1", "logged_at": 5.0, "line": line,
+                                              "rule": 1, "detected_at": 5.1, **payload}}
+    won = {"t": 5.0, "fields": {"instance_id": "valkey-1", "epoch": 8}}
+    report = {"outcome": {"diagnostics": {"events": [
+        event("ACK for epoch 8", voter="ab12", epoch=8, acks=1),  # a group the step did not capture
+        event("configEpoch set to 8", epoch=8),
+        event("configEpoch set to 7", epoch=7),
+        {"timestamp": 5.0, "payload": {"target": "valkey-2"}},  # a fault's event: no line
+    ]}}}
+    assert _log_line(report, won) == "configEpoch set to 8"
+    # A fault's step has no line, nor does one two lines match equally.
+    assert _log_line(report, {"t": 5.0, "fields": {"target": "valkey-2"}}) is None
+    report["outcome"]["diagnostics"]["events"].append(event("Starting a failover election for epoch 8", epoch=8))
+    assert _log_line(report, won) is None

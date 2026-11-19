@@ -1,14 +1,18 @@
 """Tests for fuzzer-specific issue rendering."""
 from __future__ import annotations
 
+from scripts.fuzzer.batch import read_batch_dir, spec_results
 from scripts.fuzzer.issue_renderer import (
     MARKER_NAMESPACE,
+    SPEC_COMMENT_MARKER,
     _build_title,
     _render_body,
     _render_comment,
     render_for,
+    render_spec_comment,
 )
 from scripts.fuzzer.models import FuzzerFinding, FuzzerSignal
+from tests.fuzzer_batch_fixture import SPEC_BATCH, SPEC_LOG_LINE, SPEC_VIOLATED, spec_batch_as_draft
 
 
 def _analysis(**kw) -> FuzzerFinding:
@@ -160,3 +164,31 @@ def test_a_proposed_experiment_says_where_its_yaml_is():
     body = _render_body(_signature_finding(experiment_id="proposed.lset"), "<!-- marker -->", occurrences=1)
     assert "| Experiment | `proposed.lset` (proposed for this change; its YAML is in the batch folder's `experiments/`) |" in body
     assert "proposed for this change" not in _render_body(_signature_finding(), "<!-- marker -->", occurrences=1)
+
+
+_WHERE = "fuzzer PR batch [run 7](https://x/runs/7)"
+
+
+def test_a_violated_approved_claim_is_a_failure_naming_the_bundle_claim_step_and_log_line():
+    comment = render_spec_comment(spec_results(read_batch_dir(SPEC_BATCH)), _WHERE)
+
+    assert comment.startswith(SPEC_COMMENT_MARKER)
+    assert "**Failure**: a claim of an approved spec bundle was violated. Tested by " + _WHERE in comment
+    assert "| `cluster-election` | approved | fail | failure |" in comment
+    assert "| `NoVoteLostInCrash` | **violated** | 1 of 2 |" in comment
+    assert "| `OneWinnerPerEpoch` | holds | 1 of 2 |" in comment
+    assert (f"The first bad step, in run `{SPEC_VIOLATED}`, is state 17: model action `ReceiveVote` (evidence "
+            "`acked`; instance_id=valkey-8, voter=valkey-0, epoch=15, acks=1, quorum=3). It mapped from this Valkey "
+            f"log line:\n\n```\n{SPEC_LOG_LINE}\n```") in comment
+    assert "informational" not in comment.lower()
+
+
+def test_a_violated_draft_claim_is_informational(tmp_path):
+    comment = render_spec_comment(spec_results(read_batch_dir(spec_batch_as_draft(tmp_path))), _WHERE)
+
+    assert "**Informational**: only claims of draft spec bundles were violated." in comment
+    assert "| `cluster-election` | draft | fail | informational |" in comment
+    assert "### `cluster-election` (draft): informational" in comment
+    # The step is still named, so the draft's author can see what broke.
+    assert SPEC_LOG_LINE in comment
+    assert "failure" not in comment.lower()

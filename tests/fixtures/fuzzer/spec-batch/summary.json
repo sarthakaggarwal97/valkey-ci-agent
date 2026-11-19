@@ -1,0 +1,150 @@
+{
+  "batch_id": "conform-a",
+  "profile": null,
+  "created_at": "2026-11-13T01:16:00Z",
+  "updated_at": "2026-11-13T01:48:19Z",
+  "complete": true,
+  "status": "FAIL",
+  "exit_code": 1,
+  "folder": "batch",
+  "jobs": 2,
+  "finished": 2,
+  "counts": {
+    "PASS": 1,
+    "FAIL": 1
+  },
+  "runs": [
+    {
+      "id": "random-valkey.cluster-election-durability-s19102",
+      "source": "random",
+      "status": "PASS",
+      "summary": "experiment passed",
+      "experiment": "valkey.cluster-election-durability",
+      "seed": 19102,
+      "report": "runs/random-valkey.cluster-election-durability-s19102/report.json",
+      "signature_key": null,
+      "duration_s": 35.8,
+      "worker": 2,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "random-valkey.cluster-vote-save-crash-s19103",
+      "source": "random",
+      "status": "FAIL",
+      "summary": "required components did not pass: election-safety",
+      "experiment": "valkey.cluster-vote-save-crash",
+      "seed": 19103,
+      "report": "runs/random-valkey.cluster-vote-save-crash-s19103/report.json",
+      "signature_key": "f943e85eb8ab",
+      "duration_s": 27.0,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    }
+  ],
+  "signatures": [
+    {
+      "key": "f943e85eb8ab",
+      "label": "FAIL | valkey.cluster-vote-save-crash | election-safety:FAIL | election safety violated: vote_left_before_save | missing evidence: valkey.cluster.election-safety.verified",
+      "status": "FAIL",
+      "experiment": "valkey.cluster-vote-save-crash",
+      "signature": {
+        "status": "FAIL",
+        "crashes": [],
+        "failing_components": [
+          "election-safety"
+        ],
+        "failures": {
+          "election-safety": {
+            "status": "FAIL",
+            "verdict": [
+              "election safety violated: vote_left_before_save"
+            ]
+          }
+        },
+        "missing_events": [],
+        "missing_evidence": [
+          "valkey.cluster.election-safety.verified"
+        ],
+        "path_evidence": [
+          "valkey.cluster.election-won-logged",
+          "valkey.cluster.election.result",
+          "valkey.cluster.trace.recorded",
+          "valkey.cluster.vote-granted-logged",
+          "valkey.deployment.validated",
+          "valkey.fault.injected"
+        ],
+        "error_type": null,
+        "error_phase": null
+      },
+      "runs": [
+        "random-valkey.cluster-vote-save-crash-s19103"
+      ],
+      "count": 1
+    }
+  ],
+  "zoo": null,
+  "conformance": {
+    "cluster-election": {
+      "counts": {
+        "fail": 1,
+        "pass": 1
+      },
+      "skipped": [],
+      "status": "fail",
+      "approved": true,
+      "report": "conformance/cluster-election.json",
+      "violations": [
+        {
+          "run": "random-valkey.cluster-vote-save-crash-s19103",
+          "property": "NoVoteLostInCrash",
+          "claimed": true,
+          "first": {
+            "state": 17,
+            "why": "ReceiveVote",
+            "evidence": "acked",
+            "t": 1794532938.46,
+            "fields": {
+              "instance_id": "valkey-8",
+              "voter": "valkey-0",
+              "epoch": 15,
+              "acks": 1,
+              "quorum": 3
+            }
+          }
+        },
+        {
+          "run": "random-valkey.cluster-election-durability-s19102",
+          "property": "NoVoteLostInCrash",
+          "claimed": false,
+          "first": {
+            "state": 18,
+            "why": "Crash",
+            "evidence": "crash",
+            "t": 1794532574.6336343,
+            "fields": {
+              "target": "valkey-3",
+              "disk_epoch": 11,
+              "disk_vote": 0
+            }
+          }
+        }
+      ],
+      "errors": [],
+      "action_coverage": {
+        "Crash": 2,
+        "HandleRequest": 2,
+        "ReceiveVote": 2,
+        "StartElection": 2,
+        "Win": 2
+      },
+      "never_observed": [],
+      "targets_reached": {
+        "VoteLostInCrash": 2
+      }
+    }
+  },
+  "leaks": [],
+  "invalid": []
+}

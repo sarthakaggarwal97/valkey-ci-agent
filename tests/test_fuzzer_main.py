@@ -247,3 +247,82 @@ def test_outcome_counts_the_change_runs():
     assert level == logging.INFO
     assert message == ("Fuzzer run 5: batch ERROR, change runs reached 2, unreached 1, unexplained 0, unvetted 0, "
                        "0 finding(s), status warning; no issue needed")
+
+
+def test_the_pr_tested_gets_one_spec_comment_that_a_rerun_edits(monkeypatch, capsys):
+    from scripts.fuzzer.batch import read_batch_dir, spec_results
+    from tests.fuzzer_batch_fixture import SPEC_BATCH
+
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    monkeypatch.setenv("PR_TOKEN", "pr-fake")
+    run = MagicMock(id=11, conclusion="failure", html_url="https://x/runs/11")
+    fuzzer_gh, pr_gh = MagicMock(), MagicMock()
+    fuzzer_gh.get_repo.return_value.get_workflow_run.return_value = run
+    pull = pr_gh.get_repo.return_value.get_pull.return_value
+    pull.get_issue_comments.return_value = [MagicMock(body="lgtm")]
+    pull.create_issue_comment.return_value = MagicMock(html_url="https://x/pull/4823#c1")
+    tokens = []
+    analysis = _batch()
+    analysis.spec = spec_results(read_batch_dir(SPEC_BATCH))
+    argv = ["--fuzzer-repo", "owner/valkey-fuzzer", "--pr-batch-run", "11", "--pr", "valkey-io/valkey#4823"]
+    with patch.object(fuzzer_main_mod, "Auth", MagicMock(Token=lambda t: tokens.append(t) or t)), \
+         patch.object(fuzzer_main_mod, "Github", lambda auth: pr_gh if auth == "pr-fake" else fuzzer_gh), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
+         patch.object(fuzzer_main_mod, "IssueDedupPublisher"):
+        mock_analyzer_cls.return_value.analyze.return_value = analysis
+        assert fuzzer_main_mod.main(argv) == 0
+        first = json.loads(capsys.readouterr().out)["runs"][0]
+
+        # The re-run finds the comment it made and edits it in place.
+        mine = MagicMock(body=pull.create_issue_comment.call_args.args[0], html_url="https://x/pull/4823#c1")
+        pull.get_issue_comments.return_value = [MagicMock(body="lgtm"), mine]
+        assert fuzzer_main_mod.main(argv) == 0
+        second = json.loads(capsys.readouterr().out)["runs"][0]
+
+    assert tokens == ["fake", "pr-fake", "fake", "pr-fake"]
+    pr_gh.get_repo.assert_called_with("valkey-io/valkey")
+    pr_gh.get_repo.return_value.get_pull.assert_called_with(4823)
+    body = pull.create_issue_comment.call_args.args[0]
+    assert body.startswith("<!-- valkey-ci-agent:fuzzer-spec-conform -->")
+    assert "fuzzer PR batch [run 11](https://x/runs/11)" in body and "| `cluster-election` | approved |" in body
+    assert pull.create_issue_comment.call_count == 1
+    mine.edit.assert_called_once_with(body)
+    assert (first["spec_comment"], second["spec_comment"]) == ("created", "updated")
+    assert first["spec"][0]["bundle"] == "cluster-election"
+
+
+def test_no_spec_comment_without_a_pr_or_without_bundles(monkeypatch, tmp_path):
+    from scripts.fuzzer.batch import read_batch_dir, spec_results
+    from tests.fuzzer_batch_fixture import SPEC_BATCH
+
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    run = MagicMock(id=11, conclusion="failure", html_url="https://x/runs/11")
+    github_cls = MagicMock()
+    github_cls.return_value.get_repo.return_value.get_workflow_run.return_value = run
+    argv = ["--fuzzer-repo", "o/valkey-fuzzer", "--pr-batch-run", "11"]
+    with patch.object(fuzzer_main_mod, "Github", github_cls), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
+         patch.object(fuzzer_main_mod, "IssueDedupPublisher"):
+        with_bundles = _batch()
+        with_bundles.spec = spec_results(read_batch_dir(SPEC_BATCH))
+        mock_analyzer_cls.return_value.analyze.return_value = with_bundles
+        assert fuzzer_main_mod.main([*argv, "--output", str(tmp_path / "no-pr.json")]) == 0
+        without = _batch()
+        without.spec = []
+        mock_analyzer_cls.return_value.analyze.return_value = without
+        assert fuzzer_main_mod.main([*argv, "--pr", "valkey-io/valkey#1", "--output", str(tmp_path / "none.json")]) == 0
+
+    github_cls.return_value.get_repo.return_value.get_pull.assert_not_called()
+    for name in ("no-pr.json", "none.json"):
+        assert "spec_comment" not in json.loads((tmp_path / name).read_text())["runs"][0]
+
+
+@pytest.mark.parametrize("argv, message", [
+    (["--pr", "valkey-io/valkey#1"], "--pr needs --pr-batch-run"),
+    (["--pr-batch-run", "11", "--pr", "valkey-io/valkey/pull/1"], "--pr must be OWNER/NAME#NUMBER"),
+])
+def test_pr_needs_a_pr_batch_run_and_owner_name_number(monkeypatch, capsys, argv, message):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    with patch.object(fuzzer_main_mod, "Github", _mock_gh_returning([])), pytest.raises(SystemExit):
+        fuzzer_main_mod.main(argv)
+    assert message in capsys.readouterr().err

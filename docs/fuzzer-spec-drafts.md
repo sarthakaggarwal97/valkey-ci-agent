@@ -215,7 +215,10 @@ nothing else. A dry run never dispatches.
 The PR batch uploads its batch folder as `fuzzer-batch-<run id>`, read with
 `python -m scripts.fuzzer.pr_batch` exactly as for
 [proposals](fuzzer-proposals.md#running-them-as-a-pr-batch): the scenario
-`<name>` ran as the job `scenario-<name>`.
+`<name>` ran as the job `scenario-<name>`. The batch checks each run against
+the bundle with `spec conform`; the [fuzzer monitor](fuzzer-monitor.md#spec-conformance)
+reads what it found and, given `--pr`, posts it on the pull request, where a
+draft's violated claim is informational.
 
 ## Running it by hand
 

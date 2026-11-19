@@ -165,6 +165,9 @@ class FuzzerBatchAnalysis:
     # change, an intended or untriaged difference, an unvetted FAIL), with
     # why and their evidence, for the replay's results.
     recorded: list[dict[str, Any]] = field(default_factory=list)
+    # What spec conform found, per spec bundle the runs' plans name
+    # (scripts.fuzzer.batch.spec_results).
+    spec: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def overall_status(self) -> str:

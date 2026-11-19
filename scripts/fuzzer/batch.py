@@ -9,6 +9,14 @@ re-run verdicts (``signatures``), the bug zoo's verdicts (``zoo``) and what
 the sweeps removed after the runs (``leaks``). A PR batch that ran
 experiments the proposals brought keeps them at ``DIR/experiments/``.
 
+A run whose plan names a spec bundle was checked against it by ``spec
+conform`` as it ended: ``DIR/runs/<id>/conform.json`` holds that check per
+bundle (its ``status``, whether the bundle's claims are ``approved``, and
+each claimed property's ``holds`` or ``violated`` with the first violating
+step), ``DIR/conformance/<bundle>.json`` the report over every run checked
+against the bundle, and ``summary.json``'s ``conformance`` a digest per
+bundle. :func:`spec_results` rolls those up per bundle.
+
 The fuzzer monitor reads the scheduled workflow's artifact, which holds the
 folder under ``batch/``; the PR batch artifact is the folder itself. Both go
 through :func:`read_batch`, which fails closed: a summary that is missing or
@@ -34,6 +42,13 @@ REPORT_KEYS = (
 )
 
 SUMMARY_FILE = "summary.json"
+# A run's spec conform results, by bundle, and the folder of the per-bundle reports.
+CONFORM_FILE = "conform.json"
+CONFORMANCE_DIR = "conformance"
+# What a claim came to over the runs checked against its bundle.
+CLAIM_VIOLATED = "violated"
+CLAIM_HOLDS = "holds"
+CLAIM_NOT_CLAIMED = "not-claimed"
 
 
 def report_problem(data: Any) -> str | None:
@@ -88,6 +103,8 @@ class BatchRun:
     error_text: str | None = None
     # Instance logs under logs/, by file name.
     logs: dict[str, str] = field(default_factory=dict)
+    # conform.json: the run's spec conform result per bundle its plan names; {} without one.
+    conformance: dict[str, Any] = field(default_factory=dict)
 
     @property
     def folder(self) -> str:
@@ -145,6 +162,9 @@ class BatchFolder:
     leaks: list[dict[str, Any]] = field(default_factory=list)
     # experiments/<file>: the experiments the proposals brought, by file name.
     experiments: dict[str, str] = field(default_factory=dict)
+    # The summary's conformance digest per bundle, and conformance/<bundle>.json per bundle.
+    conformance: dict[str, Any] = field(default_factory=dict)
+    conformance_reports: dict[str, Any] = field(default_factory=dict)
 
     def run(self, run_id: str) -> BatchRun | None:
         return next((r for r in self.runs if r.id == run_id), None)
@@ -201,6 +221,15 @@ def _summary_problem(data: Any) -> str | None:
     return None
 
 
+def _json_object(payload: bytes) -> dict[str, Any] | None:
+    """``payload`` as a JSON object, or None when it is not one."""
+    try:
+        data = json.loads(_text(payload))
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _load_run(entry: dict[str, Any], files: dict[str, bytes], prefix: str) -> BatchRun:
     run = BatchRun(
         id=entry["id"], source=str(entry.get("source") or ""), status=entry["status"],
@@ -220,6 +249,8 @@ def _load_run(entry: dict[str, Any], files: dict[str, bytes], prefix: str) -> Ba
             run.scenario_yaml = _text(payload)
         elif rest == "error.json":
             run.error_text = _text(payload)
+        elif rest == CONFORM_FILE:
+            run.conformance = _json_object(payload) or {}
         elif rest.startswith("logs/") and rest.endswith(".log") and "/" not in rest[len("logs/"):]:
             run.logs[rest[len("logs/"):]] = _text(payload)
 
@@ -311,11 +342,20 @@ def read_batch(files: dict[str, bytes], prefix: str = "") -> BatchFolder:
     batch.groups = _groups(data, batch)
     batch.zoo = data.get("zoo")
     batch.leaks = [item for item in data.get("leaks") or [] if isinstance(item, dict)]
+    if isinstance(data.get("conformance"), dict):
+        batch.conformance = {str(k): v for k, v in data["conformance"].items() if isinstance(v, dict)}
     folder = f"{prefix}experiments/"
     for path, payload in files.items():
         name = path[len(folder):]
         if path.startswith(folder) and "/" not in name and name.endswith((".yaml", ".yml")):
             batch.experiments[name] = _text(payload)
+    folder = f"{prefix}{CONFORMANCE_DIR}/"
+    for path, payload in files.items():
+        name = path[len(folder):]
+        if path.startswith(folder) and "/" not in name and name.endswith(".json"):
+            report = _json_object(payload)
+            if report is not None:
+                batch.conformance_reports[name[:-len(".json")]] = report
     return batch
 
 
@@ -331,7 +371,101 @@ def read_batch_dir(root: Path) -> BatchFolder:
         path.relative_to(root).as_posix(): path.read_bytes()
         for path in root.rglob("*")
         if path.is_file() and not path.is_symlink()
-        and (path.name in (SUMMARY_FILE, "report.json", "scenario.yaml", "error.json")
-             or path.parent.name in ("logs", "experiments"))
+        and (path.name in (SUMMARY_FILE, "report.json", "scenario.yaml", "error.json", CONFORM_FILE)
+             or path.parent.name in ("logs", "experiments", CONFORMANCE_DIR))
     }
     return read_batch(files)
+
+
+# The keys the fuzzer's log observer adds to an event's payload beside the line's own named groups.
+_LOG_KEYS = frozenset({"instance_id", "line", "logged_at", "detected_at", "rule"})
+
+
+def _log_line(report: dict[str, Any] | None, step: dict[str, Any]) -> str | None:
+    """The Valkey log line a ``spec conform`` step mapped from, or None.
+
+    A step keeps its record's time (``t``) and captured ``fields``, not the
+    record. The line is the run report's event logged at that time (or, read
+    from the report alone, published then) whose named groups are all among the
+    step's fields and that agrees with the most of them; a step from a fault or
+    a state sample has none, and so does one where two different lines agree
+    equally (two records of one millisecond the fields cannot tell apart).
+    """
+    t, fields = step.get("t"), step.get("fields") or {}
+    events = (((report or {}).get("outcome") or {}).get("diagnostics") or {}).get("events") or []
+    scored: list[tuple[int, str]] = []
+    for event in events:
+        payload = event.get("payload") if isinstance(event, dict) else None
+        if not isinstance(payload, dict) or not isinstance(payload.get("line"), str):
+            continue
+        if t is None or t not in (payload.get("logged_at"), event.get("timestamp")):
+            continue
+        if not set(payload) - _LOG_KEYS <= set(fields):
+            continue
+        scored.append((sum(key in payload and str(payload[key]) == str(value) for key, value in fields.items()),
+                       payload["line"]))
+    if not scored:
+        return None
+    top = max(score for score, _ in scored)
+    lines = {line for score, line in scored if score == top}
+    return lines.pop() if len(lines) == 1 else None
+
+
+def spec_results(batch: BatchFolder) -> list[dict[str, Any]]:
+    """What ``spec conform`` found in the batch, per spec bundle its runs' plans name.
+
+    Each bundle has its ``status`` (the summary's digest, else its
+    ``conformance/<bundle>.json``), whether its claims are ``approved`` (else
+    a draft), why it was not checked (``problem``), and each claim the runs'
+    ``conform.json`` evaluated: ``violated`` when a run that met its
+    ``holds_when`` violated it, ``holds`` when such a run checked it, and
+    ``not-claimed`` when no run met it. A violated claim names its first
+    violating run and that run's first bad step: the model action, the
+    mapping's evidence, the captured fields, and the Valkey log line the step
+    mapped from (:func:`_log_line`). Zoo runs and serial re-runs are left out,
+    as from the summary's digest.
+    """
+    names = list(dict.fromkeys([
+        *batch.conformance, *batch.conformance_reports,
+        *(name for run in batch.main_runs for name in run.conformance),
+    ]))
+    results = []
+    for name in sorted(names):
+        digest = batch.conformance.get(name) or {}
+        report = batch.conformance_reports.get(name) or {}
+        checked = [(run, run.conformance[name]) for run in batch.main_runs
+                   if isinstance(run.conformance.get(name), dict)]
+        approved = digest.get("approved")
+        if not isinstance(approved, bool):
+            approved = any(entry.get("approved") is True for _, entry in checked)
+        order = [p for p in report.get("properties_checked") or [] if isinstance(p, str)]
+        seen = [p for _, entry in checked for p in entry.get("properties") or {} if isinstance(p, str)]
+        claims = []
+        for prop in dict.fromkeys([*(p for p in order if p in seen), *seen]):
+            items = [(run, entry["properties"][prop]) for run, entry in checked
+                     if isinstance((entry.get("properties") or {}).get(prop), dict)]
+            claimed = [(run, item) for run, item in items if item.get("claimed") is True]
+            violated = [(run, item) for run, item in claimed if item.get("status") == CLAIM_VIOLATED]
+            claim: dict[str, Any] = {
+                "claim": prop,
+                "verdict": CLAIM_VIOLATED if violated else CLAIM_HOLDS if claimed else CLAIM_NOT_CLAIMED,
+                "runs": len(items), "claimed_runs": len(claimed), "violated_runs": len(violated),
+            }
+            if violated:
+                run, item = violated[0]
+                step = item.get("first") if isinstance(item.get("first"), dict) else {}
+                claim["first"] = {
+                    "run": run.id, "state": step.get("state"), "action": step.get("why"),
+                    "evidence": step.get("evidence"), "fields": step.get("fields") or {},
+                    "log_line": _log_line(run.report, step),
+                }
+            claims.append(claim)
+        problem = digest.get("error") or "; ".join(str(s) for s in digest.get("skipped") or []) or None
+        results.append({
+            "bundle": name, "approved": approved,
+            "status": str(digest.get("status") or report.get("status") or "unknown"),
+            "problem": problem,
+            "report": f"{CONFORMANCE_DIR}/{name}.json" if name in batch.conformance_reports else None,
+            "claims": claims,
+        })
+    return results

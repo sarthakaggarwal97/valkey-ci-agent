@@ -48,7 +48,7 @@ from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
 from scripts.common.workflow_artifacts import ArtifactClient
-from scripts.fuzzer.batch import BatchFolder, BatchRun, SignatureGroup, read_batch
+from scripts.fuzzer.batch import BatchFolder, BatchRun, SignatureGroup, read_batch, spec_results
 from scripts.fuzzer.models import (
     PROPOSED_PREFIX,
     ChangeOutcome,
@@ -946,6 +946,7 @@ class FuzzerRunAnalyzer:
             return analysis
         analysis.batch_status = batch.status
         analysis.counts = dict(batch.counts)
+        analysis.spec = spec_results(batch)
         analysis.findings = self._findings(base, batch, analysis)
         return analysis
 
