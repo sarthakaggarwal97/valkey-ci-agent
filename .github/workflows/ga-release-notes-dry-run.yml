@@ -23,8 +23,8 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
       CI_AGENT_CLAUDE_MODEL: ${{ matrix.model }}
-      RELEASE_NOTES_VERDICTS_PATH: ${{ runner.temp }}/ga-dry-run/triage-verdicts.json
-      REPLAY_ARTIFACT_DIR: ${{ runner.temp }}/ga-dry-run
+      RELEASE_NOTES_VERDICTS_PATH: ${{ github.workspace }}/ga-dry-run-artifacts/triage-verdicts.json
+      REPLAY_ARTIFACT_DIR: ${{ github.workspace }}/ga-dry-run-artifacts
     steps:
       - name: Check out agent change
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
