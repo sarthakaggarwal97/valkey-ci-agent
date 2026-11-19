@@ -1,0 +1,75 @@
+# valkey-fuzzer generated scenario: valkey.cluster-vote-save-crash, seed 19103 (attempt 0).
+# Reproduce with: valkey-fuzzer run scenario.yaml
+scenario_id: valkey.cluster-vote-save-crash-seed19103
+seed: 19103
+experiment:
+  id: valkey.cluster-vote-save-crash
+  inputs:
+    clients: 8
+    config_changes: 19
+    restart_delay_s: 1.315
+    second_election_delay_s: 2.5
+    shard: 2
+deployment:
+  mode: cluster
+  primaries: 5
+  replicas_per_primary: 2
+  syscall_faults: true
+  instance_configs:
+    primary:
+      hz: '100'
+      hash-max-listpack-entries: '512'
+      hash-max-listpack-value: '8'
+      list-compress-depth: '1'
+      list-max-listpack-size: '1'
+      set-max-intset-entries: '2'
+      set-max-listpack-entries: '128'
+      set-max-listpack-value: '8'
+      stream-node-max-bytes: '4096'
+      stream-node-max-entries: '1'
+      zset-max-listpack-entries: '2'
+      zset-max-listpack-value: '0'
+    replica:
+      hz: '500'
+      hash-max-listpack-entries: '0'
+      hash-max-listpack-value: '0'
+      list-compress-depth: '0'
+      list-max-listpack-size: '-5'
+      set-max-intset-entries: '512'
+      set-max-listpack-entries: '128'
+      set-max-listpack-value: '8'
+      stream-node-max-bytes: '4096'
+      stream-node-max-entries: '2'
+      zset-max-listpack-entries: '0'
+      zset-max-listpack-value: '64'
+  server_config:
+    events-per-io-thread: '2'
+    io-threads: '2'
+    io-threads-always-active: 'no'
+    io-threads-do-reads: 'yes'
+    min-io-threads-avoid-copy-reply: '7'
+    min-string-size-avoid-copy-reply: '64'
+    min-string-size-avoid-copy-reply-threaded: '64'
+    prefetch-batch-max-size: '0'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '10'
+    activedefrag: 'no'
+    lazyfree-lazy-eviction: 'no'
+    lazyfree-lazy-expire: 'no'
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-user-del: 'no'
+    lazyfree-lazy-user-flush: 'yes'
+    maxmemory-policy: volatile-ttl
+    replica-lazy-flush: 'no'
+    active-defrag-threshold-upper: 0
+    cluster-slot-stats-enabled: 'no'
+    jemalloc-bg-thread: 'yes'
+    lfu-decay-time: 87
+    max-new-connections-per-cycle: 999
+    max-new-tls-connections-per-cycle: 1000
+    maxclients-reserved: 27060
+    tls-auto-reload-interval: 76027
+  base_port: 11000
+  base_data_dir: /tmp/valkey-fuzzer/artifacts/batch/work/w0/data
+  loopback_block: 1
+  valkey_binary: /opt/valkey/src/valkey-server

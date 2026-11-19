@@ -810,6 +810,35 @@ def test_a_pr_batch_is_read_at_the_artifact_root_and_names_the_change(monkeypatc
     assert analysis.counts == {"PASS": 2, "FAIL": 2, "ERROR": 2}
     assert {f.change for f in analysis.findings} == {"valkey-io/valkey#4716, merged as e082696cf000"}
     assert _signature(analysis).reproduction_hint.startswith("valkey-fuzzer replay runs/scenario-crash-777/")
+    # Its runs named no spec bundle.
+    assert analysis.spec == []
+
+
+def test_a_pr_batch_carries_what_spec_conform_found_beside_its_findings(monkeypatch):
+    from scripts.common.workflow_artifacts import WorkflowArtifact
+    from scripts.fuzzer import analyzer as analyzer_mod
+    from tests.fuzzer_batch_fixture import SPEC_BATCH
+
+    client = MagicMock()
+    client.list_run_artifacts.return_value = [WorkflowArtifact(9, "fuzzer-batch-5", 1, False)]
+    client.download_artifact.return_value = {
+        p.relative_to(SPEC_BATCH).as_posix(): p.read_bytes() for p in SPEC_BATCH.rglob("*") if p.is_file()
+    }
+    github = MagicMock()
+    github.get_repo.return_value.get_workflow_run.return_value = MagicMock(
+        html_url="https://x/runs/5", conclusion="failure", head_sha="abc",
+    )
+    monkeypatch.setattr(analyzer_mod, "_invoke_claude", _claude_down)
+    analysis = analyzer_mod.FuzzerRunAnalyzer(github, github_token="t", artifact_client=client).analyze(
+        "owner/valkey-fuzzer", 5, workflow_file="fuzzer-pr-batch.yml", artifact_name="fuzzer-batch-5",
+    )
+
+    [bundle] = analysis.spec
+    assert (bundle["bundle"], bundle["approved"], bundle["status"]) == ("cluster-election", True, "fail")
+    # The run that failed is still a finding, filed as before.
+    assert [f.batch_runs for f in analysis.findings if f.kind == "signature"] == [
+        ["random-valkey.cluster-vote-save-crash-s19103"],
+    ]
 
 
 def _cause_issue(number: int, marked: bool = True):

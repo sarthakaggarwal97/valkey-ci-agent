@@ -1,0 +1,1013 @@
+{
+  "generated_at": "2026-11-13T01:16:34Z",
+  "status": "PASS",
+  "summary": "experiment passed",
+  "scenario": {
+    "scenario_id": "valkey.cluster-election-durability-seed19102",
+    "seed": 19102,
+    "experiment": {
+      "id": "valkey.cluster-election-durability",
+      "inputs": {
+        "config_changes": 3,
+        "election": "kill_primary",
+        "restart_delay_s": 0.02428,
+        "save_behavior": "best-effort",
+        "second_election": "kill_primary",
+        "second_election_delay_s": 1.736,
+        "shard": 2,
+        "vote_occurrence": 2
+      }
+    },
+    "deployment": {
+      "mode": "cluster",
+      "primaries": 4,
+      "replicas_per_primary": 2,
+      "instance_configs": {
+        "primary": {
+          "hz": "10",
+          "events-per-io-thread": "0",
+          "io-threads": "2",
+          "io-threads-always-active": "yes",
+          "io-threads-do-reads": "no",
+          "min-io-threads-avoid-copy-reply": "7",
+          "min-string-size-avoid-copy-reply": "16384",
+          "min-string-size-avoid-copy-reply-threaded": "64",
+          "prefetch-batch-max-size": "128",
+          "active-defrag-ignore-bytes": "100mb",
+          "active-defrag-threshold-lower": "10",
+          "activedefrag": "no",
+          "lazyfree-lazy-eviction": "no",
+          "lazyfree-lazy-expire": "yes",
+          "lazyfree-lazy-server-del": "yes",
+          "lazyfree-lazy-user-del": "no",
+          "lazyfree-lazy-user-flush": "yes",
+          "maxmemory-policy": "allkeys-lfu",
+          "replica-lazy-flush": "no"
+        },
+        "replica": {
+          "hz": "10",
+          "events-per-io-thread": "0",
+          "io-threads": "4",
+          "io-threads-always-active": "no",
+          "io-threads-do-reads": "yes",
+          "min-io-threads-avoid-copy-reply": "2",
+          "min-string-size-avoid-copy-reply": "64",
+          "min-string-size-avoid-copy-reply-threaded": "64",
+          "prefetch-batch-max-size": "128",
+          "active-defrag-ignore-bytes": "100mb",
+          "active-defrag-threshold-lower": "0",
+          "activedefrag": "no",
+          "lazyfree-lazy-eviction": "no",
+          "lazyfree-lazy-expire": "no",
+          "lazyfree-lazy-server-del": "no",
+          "lazyfree-lazy-user-del": "no",
+          "lazyfree-lazy-user-flush": "no",
+          "maxmemory-policy": "allkeys-lru",
+          "replica-lazy-flush": "no"
+        }
+      },
+      "server_config": {
+        "hash-max-listpack-entries": "2",
+        "hash-max-listpack-value": "8",
+        "list-compress-depth": "1",
+        "list-max-listpack-size": "-5",
+        "set-max-intset-entries": "2",
+        "set-max-listpack-entries": "2",
+        "set-max-listpack-value": "8",
+        "stream-node-max-bytes": "4096",
+        "stream-node-max-entries": "100",
+        "zset-max-listpack-entries": "2",
+        "zset-max-listpack-value": "64",
+        "aof-rewrite-incremental-fsync": "yes",
+        "commandlog-reply-larger-than": 9223372036854775807,
+        "hotkeys-top-k": 729,
+        "hotkeys-window-seconds": 165,
+        "no-appendfsync-on-rewrite": "yes",
+        "replica-ignore-disk-write-errors": "no"
+      },
+      "base_port": 11240,
+      "base_data_dir": "/tmp/valkey-fuzzer/artifacts/batch/work/w2/data",
+      "loopback_block": 3,
+      "valkey_binary": "/opt/valkey/src/valkey-server"
+    }
+  },
+  "outcome": {
+    "plan": {
+      "scenario_id": "valkey.cluster-election-durability-seed19102",
+      "experiment_id": "valkey.cluster-election-durability",
+      "seed": 19102,
+      "mode": "experiment",
+      "inputs": {
+        "config_changes": 3,
+        "save_behavior": "best-effort",
+        "shard": 2,
+        "election": "kill_primary",
+        "second_election": "kill_primary",
+        "vote_occurrence": 2,
+        "restart_delay_s": 0.02428,
+        "second_election_delay_s": 1.736
+      },
+      "components": [
+        {
+          "id": "election-log",
+          "config": {
+            "spec": "cluster-election"
+          }
+        },
+        {
+          "id": "trace",
+          "config": {
+            "spec": "cluster-election"
+          }
+        },
+        {
+          "id": "election-safety",
+          "config": {
+            "spec": "cluster-election"
+          }
+        }
+      ]
+    },
+    "status": "PASS",
+    "summary": "experiment passed",
+    "component_results": [
+      {
+        "component_id": "election-log",
+        "kind": null,
+        "status": "PASS",
+        "summary": "tailing 12 log file(s)"
+      },
+      {
+        "component_id": "trace",
+        "kind": null,
+        "status": "PASS",
+        "summary": "tracing 12 node(s)"
+      },
+      {
+        "component_id": "kill-voter",
+        "kind": null,
+        "status": "PASS",
+        "summary": "trigger installed on cluster.vote.granted"
+      },
+      {
+        "component_id": "config-churn",
+        "kind": null,
+        "status": "PASS",
+        "summary": "changing 3 configs, one every 1s"
+      },
+      {
+        "component_id": "save-behavior-support",
+        "kind": null,
+        "status": "PASS",
+        "summary": "every binary supports the requested capabilities"
+      },
+      {
+        "component_id": "first-election",
+        "kind": null,
+        "status": "PASS",
+        "summary": "valkey-7 replaced valkey-6 (configEpoch 7 -> 12)"
+      },
+      {
+        "component_id": "voter-recovered",
+        "kind": null,
+        "status": "PASS",
+        "summary": "observed kill-voter.recovered x1"
+      },
+      {
+        "component_id": "before-second-election",
+        "kind": null,
+        "status": "PASS",
+        "summary": "waited 1.736s"
+      },
+      {
+        "component_id": "second-election",
+        "kind": null,
+        "status": "PASS",
+        "summary": "valkey-8 replaced valkey-7 (configEpoch 12 -> 13)"
+      },
+      {
+        "component_id": "election-safety",
+        "kind": null,
+        "status": "PASS",
+        "summary": "6 vote(s), 2 epoch(s) won, 1 unsaved at crash (1 delivered); one winner per epoch, each with a quorum of votes"
+      },
+      {
+        "component_id": "deployment-state",
+        "kind": null,
+        "status": "PASS",
+        "summary": "cluster state validated (5 check(s))"
+      },
+      {
+        "component_id": "liveness",
+        "kind": null,
+        "status": "PASS",
+        "summary": "12 instance(s) alive and responsive; no crash reports"
+      },
+      {
+        "component_id": "error-counters",
+        "kind": null,
+        "status": "PASS",
+        "summary": "no unexplained error counter on 12 instance(s); 15 rise(s) the scenario explains"
+      },
+      {
+        "component_id": "quiet-end",
+        "kind": null,
+        "status": "PASS",
+        "summary": "12 instance(s) at rest: no blocked client, child process, or load, links up, at most 0.00 of a core in use"
+      }
+    ],
+    "evidence": [],
+    "diagnostics": {
+      "events": [
+        {
+          "name": "run.started",
+          "sequence": 1,
+          "timestamp": 1794532560.6683652,
+          "source": "runner",
+          "payload": {
+            "scenario_id": "valkey.cluster-election-durability-seed19102"
+          },
+          "committed": true
+        },
+        {
+          "name": "save-behavior-support.started",
+          "sequence": 2,
+          "timestamp": 1794532560.674816,
+          "source": "save-behavior-support",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "save-behavior-support.completed",
+          "sequence": 3,
+          "timestamp": 1794532560.8410726,
+          "source": "save-behavior-support",
+          "payload": {
+            "status": "PASS",
+            "summary": "every binary supports the requested capabilities"
+          },
+          "committed": true
+        },
+        {
+          "name": "deployment.provisioning",
+          "sequence": 4,
+          "timestamp": 1794532560.8416867,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "cluster"
+          },
+          "committed": true
+        },
+        {
+          "name": "deployment.ready",
+          "sequence": 5,
+          "timestamp": 1794532572.629272,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "cluster"
+          },
+          "committed": true
+        },
+        {
+          "name": "election-log.started",
+          "sequence": 6,
+          "timestamp": 1794532572.6294363,
+          "source": "election-log",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "election-log.completed",
+          "sequence": 7,
+          "timestamp": 1794532572.6304593,
+          "source": "election-log",
+          "payload": {
+            "status": "PASS",
+            "summary": "tailing 12 log file(s)"
+          },
+          "committed": true
+        },
+        {
+          "name": "trace.started",
+          "sequence": 8,
+          "timestamp": 1794532572.63059,
+          "source": "trace",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "trace.completed",
+          "sequence": 9,
+          "timestamp": 1794532572.6544356,
+          "source": "trace",
+          "payload": {
+            "status": "PASS",
+            "summary": "tracing 12 node(s)"
+          },
+          "committed": true
+        },
+        {
+          "name": "kill-voter.started",
+          "sequence": 10,
+          "timestamp": 1794532572.6546154,
+          "source": "kill-voter",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "kill-voter.completed",
+          "sequence": 11,
+          "timestamp": 1794532572.6549113,
+          "source": "kill-voter",
+          "payload": {
+            "status": "PASS",
+            "summary": "trigger installed on cluster.vote.granted"
+          },
+          "committed": true
+        },
+        {
+          "name": "config-churn.started",
+          "sequence": 12,
+          "timestamp": 1794532572.6550517,
+          "source": "config-churn",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "config-churn.completed",
+          "sequence": 13,
+          "timestamp": 1794532572.6561441,
+          "source": "config-churn",
+          "payload": {
+            "status": "PASS",
+            "summary": "changing 3 configs, one every 1s"
+          },
+          "committed": true
+        },
+        {
+          "name": "first-election.started",
+          "sequence": 14,
+          "timestamp": 1794532572.6563153,
+          "source": "first-election",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "first-election.election-started",
+          "sequence": 15,
+          "timestamp": 1794532572.6584637,
+          "source": "first-election",
+          "payload": {
+            "shard": 2,
+            "trigger": "kill_primary",
+            "old_primary": "valkey-6"
+          },
+          "committed": true
+        },
+        {
+          "name": "first-election.injected",
+          "sequence": 16,
+          "timestamp": 1794532572.7099073,
+          "source": "first-election",
+          "payload": {
+            "applied": true,
+            "target": "valkey-6",
+            "signal": "SIGKILL",
+            "applied_at": 1794532572.6595962,
+            "disk_vars_at_kill": {
+              "currentEpoch": 11,
+              "lastVoteEpoch": 0
+            },
+            "trigger": "kill_primary"
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 17,
+          "timestamp": 1794532574.5824885,
+          "source": "election-log",
+          "payload": {
+            "candidate": "4a29cb2c262874a14c27b64a903871665687a106",
+            "epoch": 12,
+            "instance_id": "valkey-0",
+            "line": "109:M 13 Nov 2026 01:16:14.580 * Failover auth granted to 4a29cb2c262874a14c27b64a903871665687a106 (127.0.0.1:11247) for epoch 12",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.5809855,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 18,
+          "timestamp": 1794532574.5827255,
+          "source": "election-log",
+          "payload": {
+            "candidate": "4a29cb2c262874a14c27b64a903871665687a106",
+            "epoch": 12,
+            "instance_id": "valkey-3",
+            "line": "139:M 13 Nov 2026 01:16:14.580 * Failover auth granted to 4a29cb2c262874a14c27b64a903871665687a106 (127.0.0.1:11247) for epoch 12",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.5826387,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "kill-voter.injected",
+          "sequence": 19,
+          "timestamp": 1794532574.633394,
+          "source": "kill-voter",
+          "payload": {
+            "applied": true,
+            "trigger": "cluster.vote.granted",
+            "applied_at": 1794532574.5827658,
+            "target": "valkey-3",
+            "signal": "SIGKILL",
+            "disk_vars_at_kill": {
+              "currentEpoch": 11,
+              "lastVoteEpoch": 0
+            }
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.election.started",
+          "sequence": 20,
+          "timestamp": 1794532574.6342225,
+          "source": "election-log",
+          "payload": {
+            "epoch": 12,
+            "instance_id": "valkey-7",
+            "line": "146:S 13 Nov 2026 01:16:14.580 * Starting a failover election for epoch 12, node config epoch is 7",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.6341205,
+            "rule": 3
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 21,
+          "timestamp": 1794532574.6343331,
+          "source": "election-log",
+          "payload": {
+            "voter": "e3de0eaf07fd34b3e32b0cbc311bb06f2822240d",
+            "epoch": 12,
+            "acks": 1,
+            "quorum": 3,
+            "instance_id": "valkey-7",
+            "line": "146:S 13 Nov 2026 01:16:14.580 * Failover auth ACK from e3de0eaf07fd34b3e32b0cbc311bb06f2822240d (127.0.0.1:11249) for epoch 12 (ACKs 1, quorum 3)",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.6341205,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 22,
+          "timestamp": 1794532574.6345327,
+          "source": "election-log",
+          "payload": {
+            "voter": "b9b031df79712a69cf7725e808d190a869579edc",
+            "epoch": 12,
+            "acks": 2,
+            "quorum": 3,
+            "instance_id": "valkey-7",
+            "line": "146:S 13 Nov 2026 01:16:14.580 * Failover auth ACK from b9b031df79712a69cf7725e808d190a869579edc (127.0.0.1:11240) for epoch 12 (ACKs 2, quorum 3)",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.6341205,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 23,
+          "timestamp": 1794532574.634632,
+          "source": "election-log",
+          "payload": {
+            "voter": "7689125b7ee46a5223ce399c210c404b36151345",
+            "epoch": 12,
+            "acks": 3,
+            "quorum": 3,
+            "instance_id": "valkey-7",
+            "line": "146:S 13 Nov 2026 01:16:14.586 * Failover auth ACK from 7689125b7ee46a5223ce399c210c404b36151345 (127.0.0.1:11243) for epoch 12 (ACKs 3, quorum 3)",
+            "logged_at": 1794532574.586,
+            "detected_at": 1794532574.6341205,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.election.won",
+          "sequence": 24,
+          "timestamp": 1794532574.6347175,
+          "source": "election-log",
+          "payload": {
+            "epoch": 12,
+            "instance_id": "valkey-7",
+            "line": "146:S 13 Nov 2026 01:16:14.587 * configEpoch set to 12 after successful failover",
+            "logged_at": 1794532574.587,
+            "detected_at": 1794532574.6341205,
+            "rule": 4
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 25,
+          "timestamp": 1794532574.6350327,
+          "source": "election-log",
+          "payload": {
+            "candidate": "4a29cb2c262874a14c27b64a903871665687a106",
+            "epoch": 12,
+            "instance_id": "valkey-9",
+            "line": "148:M 13 Nov 2026 01:16:14.580 * Failover auth granted to 4a29cb2c262874a14c27b64a903871665687a106 (127.0.0.1:11247) for epoch 12",
+            "logged_at": 1794532574.58,
+            "detected_at": 1794532574.6349645,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "kill-voter.recovered",
+          "sequence": 26,
+          "timestamp": 1794532577.1697521,
+          "source": "kill-voter",
+          "payload": {
+            "instance_id": "valkey-3"
+          },
+          "committed": true
+        },
+        {
+          "name": "first-election.election-completed",
+          "sequence": 27,
+          "timestamp": 1794532580.7314053,
+          "source": "first-election",
+          "payload": {
+            "shard": 2,
+            "old_primary": "valkey-6",
+            "winner": "valkey-7",
+            "config_epoch": 12
+          },
+          "committed": true
+        },
+        {
+          "name": "first-election.completed",
+          "sequence": 28,
+          "timestamp": 1794532580.732319,
+          "source": "first-election",
+          "payload": {
+            "status": "PASS",
+            "summary": "valkey-7 replaced valkey-6 (configEpoch 7 -> 12)"
+          },
+          "committed": true
+        },
+        {
+          "name": "voter-recovered.started",
+          "sequence": 29,
+          "timestamp": 1794532580.7324996,
+          "source": "voter-recovered",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "voter-recovered.completed",
+          "sequence": 30,
+          "timestamp": 1794532580.7329504,
+          "source": "voter-recovered",
+          "payload": {
+            "status": "PASS",
+            "summary": "observed kill-voter.recovered x1"
+          },
+          "committed": true
+        },
+        {
+          "name": "before-second-election.started",
+          "sequence": 31,
+          "timestamp": 1794532580.733102,
+          "source": "before-second-election",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "before-second-election.completed",
+          "sequence": 32,
+          "timestamp": 1794532582.4696505,
+          "source": "before-second-election",
+          "payload": {
+            "status": "PASS",
+            "summary": "waited 1.736s"
+          },
+          "committed": true
+        },
+        {
+          "name": "second-election.started",
+          "sequence": 33,
+          "timestamp": 1794532582.4698737,
+          "source": "second-election",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "second-election.election-started",
+          "sequence": 34,
+          "timestamp": 1794532582.4724681,
+          "source": "second-election",
+          "payload": {
+            "shard": 2,
+            "trigger": "kill_primary",
+            "old_primary": "valkey-7"
+          },
+          "committed": true
+        },
+        {
+          "name": "second-election.injected",
+          "sequence": 35,
+          "timestamp": 1794532582.5242145,
+          "source": "second-election",
+          "payload": {
+            "applied": true,
+            "target": "valkey-7",
+            "signal": "SIGKILL",
+            "applied_at": 1794532582.4736478,
+            "disk_vars_at_kill": {
+              "currentEpoch": 12,
+              "lastVoteEpoch": 0
+            },
+            "trigger": "kill_primary"
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 36,
+          "timestamp": 1794532583.7589233,
+          "source": "election-log",
+          "payload": {
+            "candidate": "a00ed90de3be8aed86b4538a86fcb628436cc8a6",
+            "epoch": 13,
+            "instance_id": "valkey-0",
+            "line": "109:M 13 Nov 2026 01:16:23.758 * Failover auth granted to a00ed90de3be8aed86b4538a86fcb628436cc8a6 (127.0.0.1:11248) for epoch 13",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.758774,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 37,
+          "timestamp": 1794532583.7591574,
+          "source": "election-log",
+          "payload": {
+            "candidate": "a00ed90de3be8aed86b4538a86fcb628436cc8a6",
+            "epoch": 13,
+            "instance_id": "valkey-3",
+            "line": "902:M 13 Nov 2026 01:16:23.758 * Failover auth granted to a00ed90de3be8aed86b4538a86fcb628436cc8a6 (127.0.0.1:11248) for epoch 13",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.7590797,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.election.started",
+          "sequence": 38,
+          "timestamp": 1794532583.7593133,
+          "source": "election-log",
+          "payload": {
+            "epoch": 13,
+            "instance_id": "valkey-8",
+            "line": "147:S 13 Nov 2026 01:16:23.758 * Starting a failover election for epoch 13, node config epoch is 12",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.7592492,
+            "rule": 3
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 39,
+          "timestamp": 1794532583.7594078,
+          "source": "election-log",
+          "payload": {
+            "voter": "7689125b7ee46a5223ce399c210c404b36151345",
+            "epoch": 13,
+            "acks": 1,
+            "quorum": 3,
+            "instance_id": "valkey-8",
+            "line": "147:S 13 Nov 2026 01:16:23.758 * Failover auth ACK from 7689125b7ee46a5223ce399c210c404b36151345 (127.0.0.1:11243) for epoch 13 (ACKs 1, quorum 3)",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.7592492,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 40,
+          "timestamp": 1794532583.759504,
+          "source": "election-log",
+          "payload": {
+            "voter": "e3de0eaf07fd34b3e32b0cbc311bb06f2822240d",
+            "epoch": 13,
+            "acks": 2,
+            "quorum": 3,
+            "instance_id": "valkey-8",
+            "line": "147:S 13 Nov 2026 01:16:23.758 * Failover auth ACK from e3de0eaf07fd34b3e32b0cbc311bb06f2822240d (127.0.0.1:11249) for epoch 13 (ACKs 2, quorum 3)",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.7592492,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.granted",
+          "sequence": 41,
+          "timestamp": 1794532583.7596462,
+          "source": "election-log",
+          "payload": {
+            "candidate": "a00ed90de3be8aed86b4538a86fcb628436cc8a6",
+            "epoch": 13,
+            "instance_id": "valkey-9",
+            "line": "148:M 13 Nov 2026 01:16:23.758 * Failover auth granted to a00ed90de3be8aed86b4538a86fcb628436cc8a6 (127.0.0.1:11248) for epoch 13",
+            "logged_at": 1794532583.758,
+            "detected_at": 1794532583.7595868,
+            "rule": 0
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.vote.acked",
+          "sequence": 42,
+          "timestamp": 1794532583.7643497,
+          "source": "election-log",
+          "payload": {
+            "voter": "b9b031df79712a69cf7725e808d190a869579edc",
+            "epoch": 13,
+            "acks": 3,
+            "quorum": 3,
+            "instance_id": "valkey-8",
+            "line": "147:S 13 Nov 2026 01:16:23.763 * Failover auth ACK from b9b031df79712a69cf7725e808d190a869579edc (127.0.0.1:11240) for epoch 13 (ACKs 3, quorum 3)",
+            "logged_at": 1794532583.763,
+            "detected_at": 1794532583.764242,
+            "rule": 1
+          },
+          "committed": true
+        },
+        {
+          "name": "cluster.election.won",
+          "sequence": 43,
+          "timestamp": 1794532583.764453,
+          "source": "election-log",
+          "payload": {
+            "epoch": 13,
+            "instance_id": "valkey-8",
+            "line": "147:S 13 Nov 2026 01:16:23.763 * configEpoch set to 13 after successful failover",
+            "logged_at": 1794532583.763,
+            "detected_at": 1794532583.764242,
+            "rule": 4
+          },
+          "committed": true
+        },
+        {
+          "name": "second-election.election-completed",
+          "sequence": 44,
+          "timestamp": 1794532590.0223012,
+          "source": "second-election",
+          "payload": {
+            "shard": 2,
+            "old_primary": "valkey-7",
+            "winner": "valkey-8",
+            "config_epoch": 13
+          },
+          "committed": true
+        },
+        {
+          "name": "second-election.completed",
+          "sequence": 45,
+          "timestamp": 1794532590.0232615,
+          "source": "second-election",
+          "payload": {
+            "status": "PASS",
+            "summary": "valkey-8 replaced valkey-7 (configEpoch 12 -> 13)"
+          },
+          "committed": true
+        },
+        {
+          "name": "config-churn.stopping",
+          "sequence": 46,
+          "timestamp": 1794532590.0234368,
+          "source": "config-churn",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "config-churn.stopped",
+          "sequence": 47,
+          "timestamp": 1794532590.023831,
+          "source": "config-churn",
+          "payload": {
+            "status": "PASS",
+            "summary": "3 config changes: 0 refused, 0 unanswered"
+          },
+          "committed": true
+        },
+        {
+          "name": "kill-voter.stopping",
+          "sequence": 48,
+          "timestamp": 1794532590.0239723,
+          "source": "kill-voter",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "kill-voter.stopped",
+          "sequence": 49,
+          "timestamp": 1794532590.0244546,
+          "source": "kill-voter",
+          "payload": {
+            "status": "PASS",
+            "summary": "fault applied on cluster.vote.granted"
+          },
+          "committed": true
+        },
+        {
+          "name": "trace.stopping",
+          "sequence": 50,
+          "timestamp": 1794532590.0246289,
+          "source": "trace",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "trace.stopped",
+          "sequence": 51,
+          "timestamp": 1794532590.0790994,
+          "source": "trace",
+          "payload": {
+            "status": "PASS",
+            "summary": "trace: 42 events, 888 observations"
+          },
+          "committed": true
+        },
+        {
+          "name": "election-log.stopping",
+          "sequence": 52,
+          "timestamp": 1794532590.079252,
+          "source": "election-log",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "election-log.stopped",
+          "sequence": 53,
+          "timestamp": 1794532590.0802433,
+          "source": "election-log",
+          "payload": {
+            "status": "PASS",
+            "summary": "16 matching line(s): {'cluster.vote.granted': 6, 'cluster.vote.acked': 6, 'cluster.vote.denied': 0, 'cluster.election.started': 2, 'cluster.election.won': 2}"
+          },
+          "committed": true
+        },
+        {
+          "name": "election-safety.started",
+          "sequence": 54,
+          "timestamp": 1794532590.0804074,
+          "source": "election-safety",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "election-safety.completed",
+          "sequence": 55,
+          "timestamp": 1794532590.2936811,
+          "source": "election-safety",
+          "payload": {
+            "status": "PASS",
+            "summary": "6 vote(s), 2 epoch(s) won, 1 unsaved at crash (1 delivered); one winner per epoch, each with a quorum of votes"
+          },
+          "committed": true
+        },
+        {
+          "name": "deployment-state.started",
+          "sequence": 56,
+          "timestamp": 1794532590.2938397,
+          "source": "deployment-state",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "deployment-state.completed",
+          "sequence": 57,
+          "timestamp": 1794532592.6152883,
+          "source": "deployment-state",
+          "payload": {
+            "status": "PASS",
+            "summary": "cluster state validated (5 check(s))"
+          },
+          "committed": true
+        },
+        {
+          "name": "liveness.started",
+          "sequence": 58,
+          "timestamp": 1794532592.6154969,
+          "source": "liveness",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "liveness.completed",
+          "sequence": 59,
+          "timestamp": 1794532592.627422,
+          "source": "liveness",
+          "payload": {
+            "status": "PASS",
+            "summary": "12 instance(s) alive and responsive; no crash reports"
+          },
+          "committed": true
+        },
+        {
+          "name": "error-counters.started",
+          "sequence": 60,
+          "timestamp": 1794532592.6275706,
+          "source": "error-counters",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "error-counters.completed",
+          "sequence": 61,
+          "timestamp": 1794532592.6456015,
+          "source": "error-counters",
+          "payload": {
+            "status": "PASS",
+            "summary": "no unexplained error counter on 12 instance(s); 15 rise(s) the scenario explains"
+          },
+          "committed": true
+        },
+        {
+          "name": "quiet-end.started",
+          "sequence": 62,
+          "timestamp": 1794532592.6457436,
+          "source": "quiet-end",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "quiet-end.completed",
+          "sequence": 63,
+          "timestamp": 1794532593.6761372,
+          "source": "quiet-end",
+          "payload": {
+            "status": "PASS",
+            "summary": "12 instance(s) at rest: no blocked client, child process, or load, links up, at most 0.00 of a core in use"
+          },
+          "committed": true
+        },
+        {
+          "name": "validation.completed",
+          "sequence": 64,
+          "timestamp": 1794532593.6763072,
+          "source": "runner",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "deployment.cleanup.started",
+          "sequence": 65,
+          "timestamp": 1794532593.676444,
+          "source": "runner",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "deployment.cleanup.completed",
+          "sequence": 66,
+          "timestamp": 1794532594.4502003,
+          "source": "runner",
+          "payload": {},
+          "committed": true
+        },
+        {
+          "name": "run.completed",
+          "sequence": 67,
+          "timestamp": 1794532594.450371,
+          "source": "runner",
+          "payload": {},
+          "committed": true
+        }
+      ]
+    },
+    "started_at": 1794532560.668313,
+    "ended_at": 1794532594.4512696,
+    "valkey_sha": null
+  },
+  "coverage": {},
+  "reproducer": {},
+  "provenance": null
+}

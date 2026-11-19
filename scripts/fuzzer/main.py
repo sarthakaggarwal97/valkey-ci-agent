@@ -3,7 +3,9 @@
 With ``--pr-batch-run``, it analyzes that run of the fuzzer's PR batch
 instead, ``--change`` names what the batch tested in the issues it files, and
 ``--change-diff`` gives Claude the change's diff, which its triage of a run
-that replied differently on the merge commit and its parent needs.
+that replied differently on the merge commit and its parent needs. With
+``--pr``, the pull request the batch tested also gets what ``spec conform``
+found, per spec bundle, as one comment that later runs edit in place.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,6 +24,7 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.common.github_client import retry_github_call
 from scripts.common.issue_dedup import IssueDedupPublisher
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -30,8 +34,26 @@ from scripts.fuzzer.pr_batch import BATCH_ARTIFACT_PREFIX, PR_BATCH_WORKFLOW
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
 WORKFLOW_FILE = "fuzzer-run.yml"
+# --pr: OWNER/NAME#NUMBER.
+_PR_RE = re.compile(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)")
 
 logger = logging.getLogger(__name__)
+
+
+def _post_spec_comment(gh: Any, repo_name: str, number: int, body: str) -> tuple[str, str]:
+    """Create the spec conform comment on pull request ``number`` of ``repo_name``, or edit the one an earlier
+    run made."""
+    pr = f"{repo_name}#{number}"
+    pull = retry_github_call(lambda: gh.get_repo(repo_name).get_pull(number), retries=3, description=f"read {pr}")
+    comments = retry_github_call(lambda: list(pull.get_issue_comments()), retries=3,
+                                 description=f"list the comments on {pr}")
+    existing = [c for c in comments if (c.body or "").startswith(issue_renderer.SPEC_COMMENT_MARKER)]
+    if existing:
+        retry_github_call(lambda: existing[0].edit(body), retries=3, description=f"edit the spec comment on {pr}")
+        return "updated", existing[0].html_url
+    comment = retry_github_call(lambda: pull.create_issue_comment(body), retries=3,
+                                description=f"post the spec comment on {pr}")
+    return "created", comment.html_url
 
 
 def _should_publish(analysis: Any) -> bool:
@@ -97,6 +119,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--change-diff", type=Path,
                         help="A file holding the diff of what the PR batch tested, for Claude's triage of a run "
                              "that replied differently on the merge commit and its parent")
+    parser.add_argument("--pr", help="The pull request the PR batch tested, OWNER/NAME#NUMBER: post what spec "
+                                     "conform found there, as one comment later runs edit")
+    parser.add_argument("--pr-token", default=None,
+                        help="GitHub token that can comment on --pr (falls back to PR_TOKEN, then the target token)")
     args = parser.parse_args(argv)
 
     configure_logging()
@@ -109,8 +135,17 @@ def main(argv: list[str] | None = None) -> int:
         if not args.pr_batch_run:
             parser.error("--change-diff needs --pr-batch-run")
         change_diff = args.change_diff.read_text(encoding="utf-8", errors="replace")
+    pr_target = None
+    if args.pr is not None:
+        if not args.pr_batch_run:
+            parser.error("--pr needs --pr-batch-run")
+        pr_target = _PR_RE.fullmatch(args.pr)
+        if pr_target is None:
+            parser.error(f"--pr must be OWNER/NAME#NUMBER, got {args.pr!r}")
 
     gh = Github(auth=Auth.Token(token))
+    pr_token = args.pr_token or os.environ.get("PR_TOKEN", "")
+    pr_gh = Github(auth=Auth.Token(pr_token)) if pr_target and pr_token else gh
     client = ArtifactClient(gh, token=token)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
     repo = args.fuzzer_repo
@@ -161,7 +196,17 @@ def main(argv: list[str] | None = None) -> int:
             # and the runs judged but not filed; the replay reports both.
             entry["change_runs"] = dict(analysis.change_runs)
             entry["recorded"] = list(analysis.recorded)
+            entry["spec"] = list(analysis.spec)
             entry["findings"] = [_publish(publisher, repo, run.id, finding) for finding in analysis.findings]
+            if pr_target is not None and analysis.spec:
+                body = issue_renderer.render_spec_comment(
+                    analysis.spec, f"fuzzer PR batch [run {run.id}]({run.html_url})",
+                )
+                entry["spec_comment"], entry["spec_comment_url"] = _post_spec_comment(
+                    pr_gh, pr_target.group(1), int(pr_target.group(2)), body,
+                )
+                logger.info("Spec conform results %s on %s: %s", entry["spec_comment"], args.pr,
+                            entry["spec_comment_url"])
         except Exception as exc:
             entry["action"] = "error"
             entry["error"] = str(exc)
