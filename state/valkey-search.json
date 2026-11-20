@@ -710,5 +710,5 @@
 },
 "failed": {
 },
-"last_run": {"at": "2026-11-20T21:52:16+00:00", "cost_usd": 20.0434, "merges": ["67e82c198c38655472a23de12ec0274e3fc5ba83", "73dbb80710b62a3847b7a5a0d0ad12951bd3a4c1", "f30b4c8b21bcfa26091546ac30693b75d6e85cfa", "a25ed796a7a739ca1c9037be6bfa5a24cd56faee", "2d99b27aea578a3a733ab8ab3b30c5792771cddf", "8433b8fff1b3329b6abfd994cb29f0b1e13669fa"], "skipped": 2, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44791600818"}
+"last_run": {"at": "2026-11-20T21:53:13+00:00", "cost_usd": 0.0, "merges": [], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44824113469"}
 }
