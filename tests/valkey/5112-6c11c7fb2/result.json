@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "parent": "c4ca1dcc01a862909c5daf0df9e8d45bc2231e06",
+  "pr": 5112,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Pause rehashing of path hash payloads during background iteration (#5112)",
+  "date": "2026-11-19",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 25,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.757,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: hashtable.c:2321 'iter->fingerprint == hashtableFingerprint(iter->hashtable)' is not true",
+      "scenario": "ai-0aa3787ef2cd",
+      "seed": 51121,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5112",
+      "fingerprint": "d89d08a4fc08d223b764",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: hashtable.c:2321 'iter->fingerprint == hashtableFingerprint(iter->hashtable)' is not true",
+      "scenario": "ai-309242404771",
+      "seed": 51122,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5112",
+      "fingerprint": "d89d08a4fc08d223b764",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: hashtable.c:2321 'iter->fingerprint == hashtableFingerprint(iter->hashtable)' is not true",
+      "scenario": "ai-cc18c777dcc9",
+      "seed": 51123,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5112",
+      "fingerprint": "d89d08a4fc08d223b764",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

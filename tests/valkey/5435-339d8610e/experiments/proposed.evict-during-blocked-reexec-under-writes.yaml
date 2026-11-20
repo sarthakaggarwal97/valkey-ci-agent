@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.evict-during-blocked-reexec-under-writes
+deployment:
+  modes: [standalone]
+metadata:
+  description: A large client's RENAME readies a BLMPOP key; serving the blocked client
+    evicts under maxmemory-clients while the executing client is up the stack, and
+    it must not be freed.
+inputs:
+  properties:
+    maxmemory_clients: {type: string, default: "6mb"}
+components:
+- use: valkey.action.commands
+  id: cmds
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, min-io-threads-avoid-copy-reply, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply-threaded, "0"], expect: {
+        equals: OK}}
+    - {command: [SETRANGE, fat, 1000000, x], expect: {min: 1000000}}
+    - {command: [RPUSH, src, &id001 "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001,
+        *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001,
+        *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001,
+        *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001,
+        *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001, *id001], expect: {
+        equals: 50}}
+    - {connection: exec, raw: "GET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\
+        \nGET fat\r\nGET fat\r\nGET fat\r\n"}
+    - {connection: wa, raw: "BLMPOP 0 1 mylist LEFT COUNT 50\r\n", expect: {exists: false}}
+    - {command: [CONFIG, SET, maxmemory-clients, {$ref: inputs.maxmemory_clients}],
+      expect: {equals: OK}}
+    - {connection: exec, raw: "RENAME src mylist\r\n"}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [EXISTS, src], expect: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmds}

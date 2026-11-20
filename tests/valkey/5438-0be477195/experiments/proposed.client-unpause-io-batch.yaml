@@ -1,0 +1,76 @@
+extends: [valkey.base]
+id: proposed.client-unpause-io-batch
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLIENT PAUSE WRITE / CLIENT UNPAUSE churn under a multi-client write
+    workload on IO threads; postponed writers released by UNPAUSE in the same IO read
+    batch must not be re-entered while queued as unblocked
+inputs:
+  properties:
+    writer_clients: {type: integer, minimum: 1, maximum: 64, default: 8}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    clients: {$ref: inputs.writer_clients}
+    op_timeout_s: 2.0
+- use: valkey.action.commands
+  id: pause-churn
+  depends_on: [writes]
+  config:
+    instances: primaries
+    timeout_s: 120
+    commands:
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "300", WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "150", WRITE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "150", WRITE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "150", WRITE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "150", WRITE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [pause-churn]
+  config: {seconds: 3}
+required_events: [pause-churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pause-churn}

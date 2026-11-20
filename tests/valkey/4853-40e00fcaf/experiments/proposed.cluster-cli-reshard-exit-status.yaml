@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.cluster-cli-reshard-exit-status
+deployment:
+  modes: [cluster]
+metadata:
+  description: valkey-cli --cluster reshard exits non-zero when a slot migration fails,
+    driving the reshard call site clusterApplyReshardTable
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: reshard
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [--cluster-yes, --cluster, reshard, '127.0.0.1:$port',
+        --cluster-to, "<node.0.id>", --cluster-from, "<node.0.id>", --cluster-slots,
+        1], expect_difference: true, expect: {exit: {equals: 1}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: reshard}

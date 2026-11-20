@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.forkless-save-flush-swap
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLUSHALL, SWAPDB and FLUSHDB issued during a forkless BGSAVE must terminate
+    the background iterator cleanly, with no crash, sanitizer report or hang
+components:
+- use: valkey.action.commands
+  id: flush-during-save
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, POPULATE, "1500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "saving started"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "1500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "saving started"}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "1500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "saving started"}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "1500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "saving started"}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 0}}
+required_events: [flush-during-save.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush-during-save}

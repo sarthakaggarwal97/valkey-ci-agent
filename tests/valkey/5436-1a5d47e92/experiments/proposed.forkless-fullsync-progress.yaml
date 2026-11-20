@@ -1,0 +1,84 @@
+extends: [valkey.base]
+id: proposed.forkless-fullsync-progress
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: A forced forkless diskless full sync under writes, with INFO persistence
+    and debug sampled every 20 ms while a replica is killed or stopped mid-sync, probing
+    the new currentForklessSave->iterator reads across save abort, stall and teardown
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+    pause_s: {type: number, minimum: 1, maximum: 30, default: 3}
+    kill_delay_s: {type: number, minimum: 0, maximum: 30, default: 1.5}
+    run_before_sync_s: {type: number, minimum: 0, maximum: 600, default: 1}
+startup_overlays:
+- overlay_id: forkless-full-sync
+  server_config:
+    enable-debug-command: "yes"
+    repl-diskless-sync: "yes"
+    repl-diskless-sync-delay: 0
+    forkless-infrastructure-enabled: "yes"
+    forkless-policy: prefer-forkless
+components:
+- use: valkey.observer.log-trigger
+  id: forkless-sync-log
+  config:
+    instances: primaries
+    rules:
+    - pattern: "target: replicas sockets.*method: forkless"
+      publish: forkless.socket-sync-started
+      evidence_id: proposed.forkless.socket-sync-logged
+      required: true
+- use: valkey.observer.info
+  id: forkless-progress
+  config:
+    instances: primaries
+    sections: [persistence, debug]
+    interval_s: 0.02
+    expectations:
+    - {evidence_id: proposed.forkless.keys-total-reported, field: current_save_keys_total,
+      min: 1, when: during}
+    - {evidence_id: proposed.forkless.eta-reported, field: forkless_estimated_seconds_remaining,
+      min: 0, when: during}
+    - {evidence_id: proposed.forkless.debug-progress-reported, field: forkless_dbentries_processed,
+      min: 1, when: during}
+- use: valkey.fault.process-signal
+  id: signal-replica
+  config:
+    when_event: forkless.socket-sync-started
+    occurrence: 1
+    delay_s: {$ref: inputs.kill_delay_s}
+    instance: replica
+    signal: {$ref: inputs.signal}
+    pause_s: {$ref: inputs.pause_s}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: run-before-sync
+  depends_on: [writes, forkless-sync-log, forkless-progress, signal-replica]
+  config: {seconds: {$ref: inputs.run_before_sync_s}}
+- use: valkey.action.commands
+  id: force-full-sync
+  depends_on: [run-before-sync]
+  config:
+    instances: primaries
+    commands:
+    - {command: [DEBUG, CHANGE-REPL-ID], expect: {equals: OK}}
+    - {command: [CLIENT, KILL, TYPE, replica]}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [force-full-sync]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [forkless.socket-sync-started]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: signal-replica}
+- {evidence_id: proposed.forkless.socket-sync-logged, source: forkless-sync-log}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e575e686dde4b64ef0b89c0c48b7c33259b3943b",
+  "parent": "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2",
+  "pr": 5377,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add p99.9 latency in valkey-benchmark result (#5377)",
+  "date": "2026-11-16",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8082,
+  "findings": [],
+  "recorded": []
+}

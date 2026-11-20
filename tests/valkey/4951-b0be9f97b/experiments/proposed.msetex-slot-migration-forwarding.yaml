@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.msetex-slot-migration-forwarding
+deployment:
+  modes: [standalone]
+metadata:
+  description: "MSETEX written during an atomic slot migration must reach the target:\
+    \ the parent treats it as keyless, skips it in the export stream, and the write\
+    \ is lost after the handoff"
+components:
+- use: valkey.action.commands
+  id: migration
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 300
+    commands:
+    - {command: [SET, "{s}old", old], node: 0, expect: {equals: OK}}
+    - command: [MSET, "{s}f0", x, "{s}f1", x, "{s}f2", x, "{s}f3", x, "{s}f4", x,
+        "{s}f5", x, "{s}f6", x, "{s}f7", x, "{s}f8", x, "{s}f9", x, "{s}f10", x, "{s}f11",
+        x, "{s}f12", x, "{s}f13", x, "{s}f14", x, "{s}f15", x, "{s}f16", x, "{s}f17",
+        x, "{s}f18", x, "{s}f19", x, "{s}f20", x, "{s}f21", x, "{s}f22", x, "{s}f23",
+        x, "{s}f24", x, "{s}f25", x, "{s}f26", x, "{s}f27", x, "{s}f28", x, "{s}f29",
+        x]
+      node: 0
+      expect: {equals: OK}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 100000], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 3828, 3828, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 1, wait_s: 30, expect: {min: 2}}
+    - {command: [MSETEX, 2, "{s}old", new, "{s}new", created, EX, 1000], node: 0,
+      expect: {equals: 1}}
+    - {command: [SET, "{s}control", cv], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], node: 0, expect: {equals: OK}}
+    - {command: [GET, "{s}control"], node: 1, wait_s: 120, expect: {equals: cv}}
+    - {command: [GET, "{s}old"], node: 1, expect_difference: true, expect: {equals: new}}
+    - {command: [GET, "{s}new"], node: 1, expect_difference: true, expect: {equals: created}}
+    - {command: [PTTL, "{s}new"], node: 1, expect_difference: true, expect: {min: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 1, expect_difference: true,
+      expect: {equals: 33}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 3828, 3828, NODE, "<node.0.id>"],
+      node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 0, wait_s: 60, expect: {min: 32}}
+    - {command: [MSETEX, 1, "{s}incr", forwarded, EX, 1000], node: 1, expect: {equals: 1}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 0], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 0], node: 1, expect: {equals: OK}}
+    - {command: [GET, "{s}incr"], node: 0, wait_s: 60, expect_difference: true, expect: {
+        equals: forwarded}}
+    - {command: [PTTL, "{s}incr"], node: 0, expect_difference: true, expect: {min: 1}}
+    - {command: [GET, "{s}old"], node: 0, expect_difference: true, expect: {equals: new}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 1, expect: {equals: 0}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], node: 0, expect_difference: true,
+      expect: {equals: 34}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migration.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migration}

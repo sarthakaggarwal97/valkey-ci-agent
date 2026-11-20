@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5c8a56e61323..6357e3dc4397.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-14b841653bcc
+seed: 1
+experiment:
+  id: proposed.io-threads-shrink-double-unlock
+  inputs:
+    resp: 2
+    always_active: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

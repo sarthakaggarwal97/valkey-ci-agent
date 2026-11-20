@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1a5d47e92d97..8008cad20f7d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1f1653ae7c7d
+seed: 544501
+experiment:
+  id: proposed.forkless-lfu-save-under-writes
+  inputs:
+    stable_keys: 5000
+    mutable_keys: 500
+    mutation_rate: 3000
+    value_size: 4096
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    forkless-policy: prefer-forkless
+    maxmemory-policy: allkeys-lfu
+    rdbcompression: 'no'

@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-p999-output
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark latency summary, RPS summary and CSV output carry
+    a new p99.9 column between p99 and max
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, 5, -n, 100, -t, "set,get"]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "p99.9"}
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, 5, -n, 100, -t, "set,get", --csv]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "\"p99_latency_ms\",\"p999_latency_ms\",\"max_latency_ms\""}
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, 1, -n, 10, --rps, 10, INCR, counter]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "RPS Summary"}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

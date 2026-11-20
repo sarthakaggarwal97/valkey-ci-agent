@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 97ff16e9ed90..339d8610e119.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b4c4318beba3
+seed: 2
+experiment:
+  id: proposed.evict-during-blocked-reexec-under-writes
+  inputs:
+    maxmemory_clients: 7mb
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

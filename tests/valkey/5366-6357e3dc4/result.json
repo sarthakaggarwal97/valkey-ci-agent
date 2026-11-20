@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6357e3dc4397b966341cc01a5cfbdff95a0932e9",
+  "parent": "5c8a56e6132345fcb64811d57d0d95c820c27f10",
+  "pr": 5366,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix double mutex unlock when shrinking IO threads (#5366)",
+  "date": "2026-11-19",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 13.1991,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-45533bca5a94",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shrink' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG GET io-threads)"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code",
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

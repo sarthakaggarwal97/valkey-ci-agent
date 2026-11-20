@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8008cad20f7d..40e00fcaf1b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-756d9530f051
+seed: 7100
+experiment:
+  id: proposed.cluster-cli-reshard-exit-status
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7100

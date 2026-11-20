@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.msetex-cluster-key-routing
+deployment:
+  modes: [standalone]
+metadata:
+  description: "MSETEX key discovery in cluster mode: the fixed build answers MOVED\
+    \ and CROSSSLOT and aborts transactions; the parent sees no keys and executes\
+    \ the write on any node"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: routing
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [MSETEX, 1, k1, v1], node: 0, expect: {equals: 1}}
+    - {command: [GET, k1], node: 0, expect: {equals: v1}}
+    - {command: [MSETEX, 1, k1, hello], node: 1, expect_difference: true, expect: {
+        error: "MOVED"}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [GET, k1], node: 0, expect: {equals: v1}}
+    - {command: [MSETEX, 2, "{a}x", xv, "{b}y", yv], node: 0, expect_difference: true,
+      expect: {error: "CROSSSLOT"}}
+    - {command: [DBSIZE], node: 0, expect_difference: true, expect: {equals: 1}}
+    - {command: [MSETEX, 1, EX, 100, EX, 50], node: 1, expect_difference: true, expect: {
+        error: "MOVED"}}
+    - command: [MSETEX, 260, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v,
+        k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k,
+        v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v, k, v]
+      node: 1
+      expect_difference: true
+      expect: {error: "MOVED"}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [MULTI], node: 1, expect: {equals: OK}}
+    - {command: [MSETEX, 1, k1, gone], node: 1, expect_difference: true, expect: {
+        error: "MOVED"}}
+    - {command: [EXEC], node: 1, expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [MSETEX, 2, "{t}a", q1, "{t}b", q2, EX, 1000], node: 0, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], node: 0, expect: {equals: [1]}}
+    - {command: [GET, "{t}a"], node: 0, expect: {equals: q1}}
+    - {command: [PTTL, "{t}a"], node: 0, compare: skip, expect: {min: 1}}
+    - {command: [COMMAND, GETKEYS, MSETEX, 2, "{t}a", v1, "{t}b", v2, EX, 10], node: 0,
+      expect: {equals: ["{t}a", "{t}b"]}}
+    - {command: [MSETEX, 3, bk, bv], node: 0, expect: {error: true}}
+    - {command: [MSETEX, -1, bk, bv], node: 0, expect: {error: true}}
+    - {command: [MSETEX, 2147483648, bk, bv], node: 0, expect: {error: true}}
+    - {command: [MSETEX, 9223372036854775807, bk, bv], node: 0, expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [routing.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: routing}

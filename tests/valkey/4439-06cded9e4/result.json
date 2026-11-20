@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06cded9e4f118bd5ae4dc781f3c6aaeaf132af9d",
+  "parent": "b0be9f97b08d6a6c761395dbb6a2f65eafe47374",
+  "pr": 4439,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support system jemalloc with MALLOC=system-jemalloc (#4439)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3389,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build-system/CI/docs/test-harness change: it adds a MALLOC=system-jemalloc build option to the Makefile and CMake files, renames and extends a CI job, documents the option in README.md, and makes two TCL tests skip gracefully on jemalloc builds without defrag support or with a 16-byte quantum. No server source file (.c/.h) is touched, so runtime behavior is unchanged for any given build. The fuzzer runs the binaries the runner supplies (built with the default bundled jemalloc), where the change and its parent produce identical behavior; whether system jemalloc is linked "
+}

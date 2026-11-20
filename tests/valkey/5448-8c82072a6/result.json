@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8c82072a62679690717b130c6674a782157e1465",
+  "parent": "339d8610e1192ab1c02be1b1af7d6c57916d9747",
+  "pr": 5448,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Internal API for objectGetLFUFrequencyReadOnly (#5448)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2468,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only extracts already-existing inline code in rdbSaveKeyValuePair (lfu_getFrequency(objectGetLRU(val), &freq)) into a new internal helper objectGetLFUFrequencyReadOnly with an identical body, plus a server.h declaration and comment updates. The helper is called from the same single call site with the same semantics, so the RDB LFU byte written and the no-write-back behaviour during forked/forkless saves are unchanged on both builds. A pure refactor with no behaviour change needs no scenario."
+}

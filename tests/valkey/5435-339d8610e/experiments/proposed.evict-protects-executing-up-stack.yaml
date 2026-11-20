@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.evict-protects-executing-up-stack
+deployment:
+  modes: [standalone]
+metadata:
+  description: A blocked client's re-executed command (BLMPOP readied by another client's
+    RENAME) must not evict the client still executing the outer command up the call
+    stack.
+inputs:
+  properties:
+    maxmemory_clients: {type: string, default: "9mb"}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 20
+    server_config:
+      maxmemory-clients: {$ref: inputs.maxmemory_clients}
+      client-output-buffer-limit: "normal 0 0 0"
+      min-io-threads-avoid-copy-reply: 0
+      min-string-size-avoid-copy-reply: 0
+      min-string-size-avoid-copy-reply-threaded: 0
+    commands:
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [SETRANGE, fat, 1048575, x], expect: {equals: 1048576}}
+    - {command: [EVAL, "for i=1,32 do redis.call('RPUSH','src',string.rep('e',262144))\
+          \ end return redis.call('LLEN','src')", 0], expect: {equals: 32}}
+    - {raw: "GET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\nGET\
+        \ fat\r\nGET fat\r\nGET fat\r\n", connection: executing, compare: skip}
+    - {raw: "BLMPOP 0 1 mylist LEFT COUNT 16\r\n", connection: waiter_a, compare: skip}
+    - {raw: "BLMPOP 0 1 mylist LEFT COUNT 16\r\n", connection: waiter_b, compare: skip}
+    - {raw: "RENAME src mylist\r\n", connection: executing, compare: skip}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

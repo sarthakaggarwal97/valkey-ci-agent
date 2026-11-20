@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 180283c3f217..1a5d47e92d97.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b74bd3bec92b
+seed: 5438
+experiment:
+  id: proposed.forkless-fullsync-progress
+  inputs:
+    signal: SIGSTOP
+    pause_s: 4
+    kill_delay_s: 1
+    stable_keys: 4000
+    mutation_rate: 300
+    value_size: 8192
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    forkless-policy: prefer-forkless
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: 0
+    rdb-key-save-delay: 1000

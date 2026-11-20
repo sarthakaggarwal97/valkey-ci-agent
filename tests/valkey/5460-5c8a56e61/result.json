@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5c8a56e6132345fcb64811d57d0d95c820c27f10",
+  "parent": "bc803a45e0c73e1c651312427a75623d8e40dacf",
+  "pr": 5460,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: handle replication of HDEL during field expiration (#5460)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 19,
+    "executed": 19,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6292,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b0be9f97b08d6a6c761395dbb6a2f65eafe47374",
+  "parent": "448950e83f8fad14b2551c186fa0a968efd5dcd7",
+  "pr": 4951,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix MSETEX key discovery in cluster mode (#4951)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.7906,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: kvstore.c:955 '!ht || hashtableSize(ht) == 0' is not true",
+      "scenario": "ai-137d57947801",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4951",
+      "fingerprint": "b8898436a27483938a6d",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-d2333fc88628",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'routing' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (MSETEX 260 k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v"
+    },
+    {
+      "scenario": "ai-d5c6f7c87a3c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'routing' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (MSETEX 260 k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v k v"
+    }
+  ]
+}

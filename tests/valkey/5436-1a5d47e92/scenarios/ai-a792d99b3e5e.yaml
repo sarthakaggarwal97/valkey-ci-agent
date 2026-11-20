@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 180283c3f217..1a5d47e92d97.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a792d99b3e5e
+seed: 5436
+experiment:
+  id: proposed.forkless-sync-progress-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

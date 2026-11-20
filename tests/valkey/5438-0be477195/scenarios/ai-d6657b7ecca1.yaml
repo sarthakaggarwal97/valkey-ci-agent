@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0bc71f0ea535..0be4771957c2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d6657b7ecca1
+seed: 70002
+experiment:
+  id: proposed.client-unpause-io-batch
+  inputs:
+    writer_clients: 16
+    mutation_rate: 2000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    io-threads: 4
+    io-threads-always-active: 'yes'
+    prefetch-batch-max-size: 0
+    enable-debug-command: 'yes'

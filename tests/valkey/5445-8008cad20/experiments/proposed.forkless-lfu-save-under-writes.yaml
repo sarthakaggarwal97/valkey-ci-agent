@@ -1,0 +1,50 @@
+extends: [valkey.base]
+id: proposed.forkless-lfu-save-under-writes
+deployment:
+  modes: [standalone]
+metadata:
+  description: Forkless BGSAVEs under an LFU policy while the workload touches the
+    same keys' LFU counters
+inputs:
+  properties:
+    stable_keys: {default: 5000}
+    mutable_keys: {default: 500}
+    mutation_rate: {minimum: 1, default: 3000}
+    value_size: {default: 4096}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    mix: {set: 0.5, get: 0.5}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.forkless.save-started-logged, pattern: "Beginning forklessSaveToDisk",
+      required: true}
+    forbidden:
+    - {pattern: "forkless-save: save failed"}
+- use: valkey.action.sleep
+  id: warmup
+  depends_on: [writes, logs]
+  config: {seconds: 1}
+- use: valkey.action.bgsave
+  id: save1
+  depends_on: [warmup]
+  config: {instances: primaries, expect: ok, timeout_s: 120}
+- use: valkey.action.bgsave
+  id: save2
+  depends_on: [save1]
+  config: {instances: primaries, expect: ok, timeout_s: 120}
+- use: valkey.action.bgsave
+  id: save3
+  depends_on: [save2]
+  config: {instances: primaries, expect: ok, timeout_s: 120}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [save3]
+  config: {seconds: 1}
+required_events: [save3.save-completed]
+required_evidence:
+- {evidence_id: valkey.bgsave.result, source: save1}

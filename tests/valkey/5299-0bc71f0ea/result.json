@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0bc71f0ea535ab2d96bc1bb76b50612e3bb789e7",
+  "parent": "8c82072a62679690717b130c6674a782157e1465",
+  "pr": 5299,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix build of select and evport ae backends: undeclared UNUSED() (#5299)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2241,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build fix only: it swaps the undeclared UNUSED(state) macro for AE_NOTUSED(state) in the aeApiGetPollFd stubs of ae_select.c and ae_evport.c so those event-loop backends compile again. Both macros are identical no-op void casts, so compiled behaviour is unchanged; moreover the select and evport backends are not even built on the Linux hosts the fuzzer runs on (epoll is used), so no runtime path can reach the change. A build/compile fix with no behaviour change needs no scenario."
+}

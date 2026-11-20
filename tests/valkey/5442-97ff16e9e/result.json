@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "97ff16e9ed90cfd87dbf223f147e8fa394da383e",
+  "parent": "40e00fcaf1b9a99a03b6f476239751b32c87866d",
+  "pr": 5442,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Move forkless fallback counters to INFO debug (#5442)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5123,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

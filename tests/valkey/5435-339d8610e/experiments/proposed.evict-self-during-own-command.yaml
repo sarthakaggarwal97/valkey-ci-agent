@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.evict-self-during-own-command
+deployment:
+  modes: [standalone]
+metadata:
+  description: A client whose own command grows its output buffer past maxmemory-clients
+    evicts itself, leaving server.current_client NULL and the command aborted.
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 20
+    server_config:
+      maxmemory-clients: "2mb"
+      client-output-buffer-limit: "normal 0 0 0"
+      min-io-threads-avoid-copy-reply: 0
+      min-string-size-avoid-copy-reply: 0
+      min-string-size-avoid-copy-reply-threaded: 0
+    commands:
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [SETRANGE, fat, 1048575, x], expect: {equals: 1048576}}
+    - {raw: "GET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\nGET fat\r\n", connection: big,
+      compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

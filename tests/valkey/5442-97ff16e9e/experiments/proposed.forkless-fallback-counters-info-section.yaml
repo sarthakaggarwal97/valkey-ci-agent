@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.forkless-fallback-counters-info-section
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Forkless fallback counters moved from INFO stats to INFO debug: the fields leave
+    the stats section (and INFO everything, which never includes debug), appear in
+    the debug section, still count fork fallbacks during SYNC, and still reset with
+    CONFIG RESETSTAT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fallbacks
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      save: ''
+      forkless-infrastructure-enabled: 'yes'
+      forkless-policy: prefer-forkless
+      repl-diskless-sync: 'yes'
+      repl-diskless-sync-delay: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [EVAL, "local i=redis.call('INFO','stats') return string.find(i,'forkless_fallbacks_module:')\
+          \ and 1 or 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [EVAL, "local i=redis.call('INFO','debug') return string.find(i,'forkless_fallbacks_slot_import:')\
+          \ and 1 or 0", 0], expect_difference: true, expect: {equals: 1}}
+    - {command: [EVAL, "local i=redis.call('INFO','everything') return string.find(i,'forkless_fallbacks_exclude_data:')\
+          \ and 1 or 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {raw: "REPLCONF capa eof capa psync2\r\n", connection: fake1, expect: {contains: "OK"}}
+    - {raw: "PSYNC ? -1\r\n", connection: fake1, compare: skip}
+    - {command: [EVAL, "local i=redis.call('INFO','stats','debug') return string.match(i,'forkless_fallbacks_missing_inband_repl:(%d+)')\
+          \ or 'ABSENT'", 0], wait_s: 30, expect: {equals: "1"}}
+    - {command: [EVAL, "local i=redis.call('INFO','debug') return string.match(i,'forkless_fallbacks_missing_inband_repl:(%d+)')\
+          \ or 'ABSENT'", 0], expect_difference: true, expect: {equals: "1"}}
+    - {command: [EVAL, "local i=redis.call('INFO','stats') return string.match(i,'forkless_fallbacks_missing_inband_repl:(%d+)')\
+          \ or 'ABSENT'", 0], expect_difference: true, expect: {equals: "ABSENT"}}
+    - {raw: "REPLCONF capa eof capa psync2 capa inband-repl\r\n", connection: fake2,
+      expect: {contains: "OK"}}
+    - {raw: "REPLCONF rdb-filter-only functions\r\n", connection: fake2, expect: {
+        contains: "OK"}}
+    - {raw: "PSYNC ? -1\r\n", connection: fake2, compare: skip}
+    - {command: [EVAL, "local i=redis.call('INFO','stats','debug') return string.match(i,'forkless_fallbacks_exclude_data:(%d+)')\
+          \ or 'ABSENT'", 0], wait_s: 30, expect: {equals: "1"}}
+    - {command: [EVAL, "local i=redis.call('INFO','debug') return string.match(i,'forkless_fallbacks_exclude_data:(%d+)')\
+          \ or 'ABSENT'", 0], expect_difference: true, expect: {equals: "1"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "local i=redis.call('INFO','debug') return string.match(i,'forkless_fallbacks_missing_inband_repl:(%d+)')\
+          \ or 'ABSENT'", 0], expect_difference: true, expect: {equals: "0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fallbacks.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fallbacks}

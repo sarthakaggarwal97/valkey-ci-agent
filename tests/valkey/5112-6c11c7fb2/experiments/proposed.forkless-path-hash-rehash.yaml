@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.forkless-path-hash-rehash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A forkless BGSAVE of a large path-hash payload survives concurrent
+    PHGET reads that would otherwise rehash the payload while the background iterator
+    walks it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: phsave
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('phset', KEYS[1],\
+          \ 'p', 'FIELDS', 1, 'f'..i, 'v') end return 1", "1", ph, "230000"], expect: {
+        equals: 1}}
+    - {command: [PHSET, ph, small, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 180, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [INFO, persistence], expect: {contains: "rdb_last_bgsave_status:ok"}}
+    - {command: [PHGET, ph, p, f1], expect: {error: false}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phsave}

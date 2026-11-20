@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1fae4b43dc2d..355aeb471075.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9aef305991de
+seed: 71001
+experiment:
+  id: proposed.forkless-save-flush-swap
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    forkless-policy: prefer-forkless
+    enable-debug-command: 'yes'

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1fae4b43dc2d..355aeb471075.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-40dc53321c9d
+seed: 51
+experiment:
+  id: proposed.forkless-save-terminate-uaf
+  inputs:
+    resp: 2
+    disruptor: flushall
+deployment:
+  mode: standalone
+  base_port: 7000

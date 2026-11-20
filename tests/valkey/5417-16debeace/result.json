@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "16debeacecfda1c8e468f560209cb76db0d89224",
+  "parent": "6357e3dc4397b966341cc01a5cfbdff95a0932e9",
+  "pr": 5417,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Abort dual-channel sync if the primary link breaks while streaming (#5417)",
+  "date": "2026-11-19",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.988,
+  "findings": [],
+  "recorded": []
+}

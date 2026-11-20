@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.forkless-save-terminate-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: A FLUSHALL or SWAPDB that terminates an in-flight forkless save's keyset
+    iterator must not leave a dangling kvstore reference (use-after-free on the parent)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    disruptor: {type: string, enum: [flushall, swapdb], default: flushall}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      forkless-infrastructure-enabled: yes
+      forkless-policy: prefer-forkless
+      repl-diskless-sync: yes
+      lazyfree-lazy-user-flush: no
+      save: ""
+    commands:
+    - {command: [DEBUG, POPULATE, "800000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 800000}}
+    - {command: [BGSAVE], expect: {contains: Background}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect_difference: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, probe, alive], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, probe], expect_difference: true, expect: {equals: alive}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

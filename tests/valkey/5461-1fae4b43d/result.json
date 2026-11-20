@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1fae4b43dc2da7a9369b5f69189c61fff9c6876b",
+  "parent": "0be4771957c2ead967bc05657893d2beae5d92a8",
+  "pr": 5461,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove the old RDB version forkless fallback (#5461)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 14.2712,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

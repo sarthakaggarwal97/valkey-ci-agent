@@ -1,0 +1,32 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize
+deployment:
+  modes: [standalone]
+metadata:
+  description: Repeatedly grow and shrink io-threads via CONFIG SET under client writes;
+    shrinking must not double-unlock a worker mutex (crash, hang of CONFIG SET, corrupted
+    mutex on destroy)
+inputs:
+  properties:
+    churn_keys:
+      type: object
+      default: {io-threads: ["1", "8", "2", "6", "4"]}
+    changes: {type: integer, minimum: 1, maximum: 500, default: 40}
+    interval_s: {type: number, minimum: 0.05, maximum: 10, default: 0.25}
+    run_s: {type: number, minimum: 1, maximum: 600, default: 20}
+components:
+- use: valkey.workload.config-churn
+  id: resize
+  config:
+    changes: {$ref: inputs.changes}
+    interval_s: {$ref: inputs.interval_s}
+    keys: {$ref: inputs.churn_keys}
+    op_timeout_s: 5.0
+- use: valkey.action.sleep
+  id: run
+  depends_on: [writes, resize]
+  config:
+    seconds: {$ref: inputs.run_s}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.workload.config-churn, source: resize}

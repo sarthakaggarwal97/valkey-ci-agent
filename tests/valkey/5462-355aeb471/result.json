@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "355aeb471075d1cec9a48527d319ce63c0ea54e9",
+  "parent": "1fae4b43dc2da7a9369b5f69189c61fff9c6876b",
+  "pr": 5462,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: fix for flush/swap/termination interaction (#5462)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.4374,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

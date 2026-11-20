@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.cluster-cli-rebalance-exit-status
+deployment:
+  modes: [cluster]
+metadata:
+  description: >-
+    valkey-cli --cluster rebalance must exit 1 when a slot migration fails (#4853):
+    the fix assigns clusterApplyReshardTable's return value to result in clusterManagerCommandRebalance/Reshard,
+    where the parent discarded it and exited 0. The runs drive the rebalance path
+    against the deployment's 3-primary cluster: DEBUG POPULATE fills every slot of
+    the node at port p0 with keys, maxmemory 1 on the other two primaries makes the
+    target's RESTORE fail with OOM, so the first MIGRATE of the first moved slot fails
+    inside clusterApplyReshardTable. --cluster-weight '=0' gives the starting node
+    weight 0 (the empty node-ID prefix abbreviates to the first known node, the one
+    on the command line), forcing it to shed all slots. The candidate must exit 1;
+    the parent exits 0, which is the bug. The later runs close the opened slot (CLUSTER
+    SETSLOT STABLE on the possible first slots of each contiguous range, on every
+    primary) and lift maxmemory, so the parent's rebalance sees the same clean cluster
+    and the deployment comes to rest.
+inputs:
+  properties:
+    p0: {type: integer, default: 7000}
+    p1: {type: integer, default: 7001}
+    p2: {type: integer, default: 7002}
+components:
+- use: valkey.action.tools
+  id: rebalance
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p0}, debug, populate,
+        "300000"], expect: {stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p1}, config, set,
+        maxmemory, "1"], expect: {stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p2}, config, set,
+        maxmemory, "1"], expect: {stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [--cluster, rebalance, 127.0.0.1, {$ref: inputs.p0},
+        --cluster-weight, "=0"], expect_difference: true, expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p0}], stdin: "cluster\
+        \ setslot 0 stable\ncluster setslot 1 stable\ncluster setslot 5461 stable\n\
+        cluster setslot 5462 stable\ncluster setslot 10922 stable\ncluster setslot\
+        \ 10923 stable\n"}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p1}], stdin: "cluster\
+        \ setslot 0 stable\ncluster setslot 1 stable\ncluster setslot 5461 stable\n\
+        cluster setslot 5462 stable\ncluster setslot 10922 stable\ncluster setslot\
+        \ 10923 stable\n"}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p2}], stdin: "cluster\
+        \ setslot 0 stable\ncluster setslot 1 stable\ncluster setslot 5461 stable\n\
+        cluster setslot 5462 stable\ncluster setslot 10922 stable\ncluster setslot\
+        \ 10923 stable\n"}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p1}, config, set,
+        maxmemory, "0"]}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, {$ref: inputs.p2}, config, set,
+        maxmemory, "0"]}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: rebalance}

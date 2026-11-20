@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-shrink-double-unlock
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lowering io-threads at runtime drops worker threads without a double
+    mutex unlock
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    always_active: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: shrink
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      io-threads: 4
+      io-threads-always-active: {$ref: inputs.always_active}
+    commands:
+    - {command: [CONFIG, GET, io-threads], expect: {equals: [io-threads, "4"]}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [CONFIG, SET, io-threads, 1], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shrink.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink}

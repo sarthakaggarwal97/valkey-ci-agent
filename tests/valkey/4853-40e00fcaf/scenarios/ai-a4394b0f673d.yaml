@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8008cad20f7d..40e00fcaf1b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a4394b0f673d
+seed: 4853
+experiment:
+  id: proposed.cluster-cli-rebalance-exit-status
+  inputs:
+    p0: 7000
+    p1: 7001
+    p2: 7002
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    enable-debug-command: 'yes'
