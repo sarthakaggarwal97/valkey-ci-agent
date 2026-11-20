@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-hdel-retain
+deployment:
+  modes: [standalone]
+metadata:
+  description: A removed hash vector field keeps its shared registry record while
+    the key is still a hash, and is reclaimed only when the key is deleted
+components:
+- use: valkey.action.commands
+  id: hdel
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEA=",
+        LIMIT, 0, 0, DIALECT, 2], wait_s: 20, expect: {equals: [1]}}
+    - {command: [HDEL, "doc:0", vec], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEA=",
+        LIMIT, 0, 0, DIALECT, 2], wait_s: 20, expect: {equals: [0]}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        equals: [entry_cnt, 1, hash_sharing_errors, 0, hash_sharing_hits, 1, pending_unshare_cnt,
+          0]}}
+    - {command: [DEL, "doc:0"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], wait_s: 5, expect: {equals: [entry_cnt,
+          0, hash_sharing_errors, 0, hash_sharing_hits, 1, pending_unshare_cnt, 0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hdel}

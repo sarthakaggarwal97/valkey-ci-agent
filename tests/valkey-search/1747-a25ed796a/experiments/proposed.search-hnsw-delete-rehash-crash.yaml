@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.search-hnsw-delete-rehash-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: HNSW deletes of existing labels racing inserts of new labels that rehash
+    label_lookup_; the parent reads the map without its lock and crashes or loses
+    deletes
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {writer-threads: 8, reader-threads: 8}
+    checks: {concurrency: 8}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {raw: "MULTI\r\n", connection: w, expect: {equals: OK}}
+    - {command: [HSET, 'd:0', v, !!binary "AAAAAAAAAAA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:1', v, !!binary "AACAPwAAgD8="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:2', v, !!binary "AAAAQAAAAEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:3', v, !!binary "AABAQAAAQEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:4', v, !!binary "AACAQAAAgEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:5', v, !!binary "AACgQAAAoEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:6', v, !!binary "AADAQAAAwEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:7', v, !!binary "AADgQAAA4EA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:8', v, !!binary "AAAAQQAAAEE="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:9', v, !!binary "AAAQQQAAEEE="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:10', v, !!binary "AAAgQQAAIEE="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:11', v, !!binary "AAAwQQAAMEE="], connection: w, expect: {
+        equals: 1}}
+    - {command: [DEL, 'd:0'], connection: w, expect: {equals: 1}}
+    - {command: [DEL, 'd:1'], connection: w, expect: {equals: 1}}
+    - {command: [DEL, 'd:2'], connection: w, expect: {equals: 1}}
+    - {command: [DEL, 'd:3'], connection: w, expect: {equals: 1}}
+    - {command: [DEL, 'd:4'], connection: w, expect: {equals: 1}}
+    - {command: [DEL, 'd:5'], connection: w, expect: {equals: 1}}
+    - {command: [EXEC], connection: w, compare: skip}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: num_docs}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 20 @v $q]', PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {contains: 6}, compare: unordered}
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

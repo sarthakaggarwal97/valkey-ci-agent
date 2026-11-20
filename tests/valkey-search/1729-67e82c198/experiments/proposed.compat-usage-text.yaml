@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.compat-usage-text
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Text-path compatibility labels (min_stem_size_code_points on a worker thread during
+    indexing, fuzzy_code_point_distance and ft_search_apostrophe_phrase at query time)
+    land in compatibility_usage, and the legacy query behavior is unchanged.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.2.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, s, TEXT, n1, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, w1, s, !!binary 'bm/DqQ==', n1, "1"], expect: {equals: 2}}
+    - {command: [HSET, w2, s, "great wall", n1, "2"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 1]"], wait_s: 30, expect: {contains: "w1"}}
+    - {command: [FT.SEARCH, idx, "@n1:[2 2]"], wait_s: 30, expect: {contains: "w2"}}
+    - {command: [FT.SEARCH, idx, "@s:(%hola%)"], expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, "@s:(great'wall)"], expect: {contains: "w2"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_compatibility_usage:"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "min_stem_size_code_points="}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "fuzzy_code_point_distance="}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "ft_search_apostrophe_phrase="}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

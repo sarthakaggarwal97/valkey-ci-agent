@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-rename-retain
+deployment:
+  modes: [standalone]
+metadata:
+  description: Renaming a hash with a removed vector field out of the index prefix
+    keeps the shared record under the new key instead of freeing bytes the hash still
+    references
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEA=",
+        LIMIT, 0, 0, DIALECT, 2], wait_s: 20, expect: {equals: [1]}}
+    - {command: [HDEL, "doc:0", vec], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEA=",
+        LIMIT, 0, 0, DIALECT, 2], wait_s: 20, expect: {equals: [0]}}
+    - {command: [RENAME, "doc:0", "outside:0"], expect: {equals: OK}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], wait_s: 5, expect_difference: true,
+      expect: {equals: [entry_cnt, 1, hash_sharing_errors, 0, hash_sharing_hits, 1,
+          pending_unshare_cnt, 0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

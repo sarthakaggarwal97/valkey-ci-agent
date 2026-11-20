@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.compat-usage-counts
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    compatibility_usage accumulates a label's count across uses, the fixed path neither
+    increments nor registers a label, and the field's exact value is the label=count
+    list (a label never used is absent).
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: counts
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.0.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, n1, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, d1, n1, "10"], expect: {equals: 1}}
+    - {command: [HSET, d2, n1, "20"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n1:[20 20]"], wait_s: 30, expect: {contains: "d2"}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 100]", LOAD, "*", LOAD, "1", "@__key"],
+      compare: skip, expect: {exists: true}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "ft_aggregate_loadall_fetch=1"}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 100]", LOAD, "*", LOAD, "1", "@__key"],
+      compare: skip, expect: {exists: true}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "ft_aggregate_loadall_fetch=2"}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 100]", LOAD, "*", LOAD, "1", "@__key"],
+      compare: skip, expect: {exists: true}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 100]", APPLY, "@n1/0", AS, q], compare: skip,
+      expect: {exists: true}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_compatibility_usage:ft_aggregate_loadall_fetch=2\r\
+          \n"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [counts.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: counts}

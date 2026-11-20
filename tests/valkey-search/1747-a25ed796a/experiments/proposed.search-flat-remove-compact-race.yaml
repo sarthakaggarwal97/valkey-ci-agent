@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.search-flat-remove-compact-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLAT modifies of fresh keys racing removes of fillers that compact
+    the slot array; the parent's GetVector/ModifyRecord read a moved slot
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flat
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {writer-threads: 8, reader-threads: 8}
+    checks: {concurrency: 8}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'f:0', v, !!binary "AAAAAAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, 'f:1', v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, 'f:2', v, !!binary "AAAAQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, 'f:3', v, !!binary "AABAQAAAQEA="], expect: {equals: 1}}
+    - {command: [HSET, 'f:4', v, !!binary "AACAQAAAgEA="], expect: {equals: 1}}
+    - {command: [HSET, 'f:5', v, !!binary "AACgQAAAoEA="], expect: {equals: 1}}
+    - {raw: "MULTI\r\n", connection: w, expect: {equals: OK}}
+    - {command: [HSET, 'd:0', v, !!binary "AAAAAAAAAAA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:0', v, !!binary "AAAQQQAAEEE="], connection: w, expect: {
+        equals: 0}}
+    - {command: [DEL, 'f:5'], connection: w, expect: {equals: 1}}
+    - {command: [HSET, 'd:1', v, !!binary "AACAPwAAgD8="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:1', v, !!binary "AAAgQQAAIEE="], connection: w, expect: {
+        equals: 0}}
+    - {command: [DEL, 'f:4'], connection: w, expect: {equals: 1}}
+    - {command: [HSET, 'd:2', v, !!binary "AAAAQAAAAEA="], connection: w, expect: {
+        equals: 1}}
+    - {command: [HSET, 'd:2', v, !!binary "AAAwQQAAMEE="], connection: w, expect: {
+        equals: 0}}
+    - {command: [DEL, 'f:3'], connection: w, expect: {equals: 1}}
+    - {command: [EXEC], connection: w, compare: skip}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: num_docs}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 10 @v $q]', PARAMS, 2, q, !!binary "AAAwQQAAMEE=",
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {contains: 'd:2'},
+      compare: unordered}
+required_events: [flat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flat}

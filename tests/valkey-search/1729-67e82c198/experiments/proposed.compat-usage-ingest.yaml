@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.compat-usage-ingest
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Worker-thread compatibility-fix labels (tag_rejects_non_utf8, invalid_data_drops_key,
+    filter_parser_invalid_utf8_expression) are registered and counted in the new single
+    INFO field compatibility_usage, the legacy indexing behavior itself is unchanged,
+    and the fixed path does not increment a label.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ingest
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.0.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, category, TAG, n1, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:ok", category, good, n1, "5"], expect: {equals: 2}}
+    - {command: [HSET, "doc:bad", category, !!binary 'aW52YWxpZMM=', n1, "6"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:badnum", category, keep, n1, bogus], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n1:[5 5]"], wait_s: 30, expect: {contains: "doc:ok"}}
+    - {command: [FT.SEARCH, idx, "@n1:[6 6]"], wait_s: 30, expect: {contains: "doc:bad"}}
+    - {command: [FT.SEARCH, idx, "@category:{keep}"], wait_s: 30, expect: {contains: "doc:badnum"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_compatibility_usage:"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "tag_rejects_non_utf8=1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "invalid_data_drops_key=1"}}
+    - {command: [FT.SEARCH, idx, !!binary 'QGNhdGVnb3J5OntpbnZhbGlkw30='], expect: {
+        contains: "doc:bad"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "filter_parser_invalid_utf8_expression="}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [HSET, "doc:bad2", category, !!binary 'aW52YWxpZMM='], expect: {equals: 1}}
+    - {command: [HSET, "doc:ok2", n1, "7"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n1:[7 7]"], wait_s: 30, expect: {contains: "doc:ok2"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "tag_rejects_non_utf8=1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ingest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ingest}

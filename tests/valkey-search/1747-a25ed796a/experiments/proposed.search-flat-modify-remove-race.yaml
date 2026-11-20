@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.search-flat-modify-remove-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: Concurrent HSET overwrite (ModifyRecord reading a slot) and DEL (removePoint
+    compacting FLAT slots) on a FLAT vector index must not crash or leave a stale
+    vector on the fixed module build
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flat
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    server_config: {search.writer-threads: 8, search.reader-threads: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    judge_replies: false
+    checks: {concurrency: 16}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, embedding, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2]}
+    - {command: [HSET, "doc:f0", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [HSET, "doc:f1", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [HSET, "doc:f2", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [HSET, "doc:f3", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [HSET, "doc:k0", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [HSET, "doc:k0", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [DEL, "doc:f0"]}
+    - {command: [HSET, "doc:k1", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [HSET, "doc:k1", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [DEL, "doc:f1"]}
+    - {command: [HSET, "doc:k2", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [HSET, "doc:k2", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [DEL, "doc:f2"]}
+    - {command: [HSET, "doc:k3", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [HSET, "doc:k3", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [DEL, "doc:f3"]}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: num_docs}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flat}

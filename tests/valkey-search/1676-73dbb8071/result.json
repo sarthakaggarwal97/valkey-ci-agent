@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "73dbb80710b62a3847b7a5a0d0ad12951bd3a4c1",
+  "parent": "67e82c198c38655472a23de12ec0274e3fc5ba83",
+  "pr": 1676,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix(vector-registry): handle RENAME/MOVE while keys await pending unshare (#1676)",
+  "date": "2026-11-16",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "42d6c8adb54193b3dc6834b4efd167d4138557a9",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.1212,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-a5c41f1db6d5",
+      "seed": 1676,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1676",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27866f) (BuildId: 95636c59b993be066f583b48c14722cd36a55d4f) in __asan_memcpy",
+      "scenario": "ai-939cd15089e3",
+      "seed": 1679,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1676",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11",
+      "scenario": "ai-939cd15089e3",
+      "seed": 1679,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1676",
+      "fingerprint": "a967cad403e4689c0118",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

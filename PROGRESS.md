@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-20T21:37+00:00.
+Updated 2026-11-20T21:52+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2570 | 0 | #12477 (2023-08-14) | 23 | 57.3 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 3 | 0.4 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
-| valkey-io/valkey-search | 697 | 0 | f8106e72e984 (2024-11-27) | 0 | 2.1 |
+| valkey-io/valkey-search | 705 | 0 | f8106e72e984 (2024-11-27) | 8 | 3.3 |
 
 ## Last runs
 
@@ -28,15 +28,21 @@ Updated 2026-11-20T21:37+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-16T18:28:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43928938170): 0 merge(s) tested, 0 without a code change.
+[2026-11-20T21:52:16+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44791600818): 6 merge(s) tested, 2 without a code change.
 
+- [valkey-io/valkey-search#1729](https://github.com/valkey-io/valkey-search/pull/1729) ([tests](tests/valkey-search/1729-67e82c198/)): Report compatibility-fix usage in a single INFO field (#1729): 5 of 5 test(s) reached the change
+- [valkey-io/valkey-search#1676](https://github.com/valkey-io/valkey-search/pull/1676) ([tests](tests/valkey-search/1676-73dbb8071/)): fix(vector-registry): handle RENAME/MOVE while keys await pending unshare (#1676): 0 of 4 test(s) reached the change; crash, fixed by #1676 (recorded); crash, fixed by #1676 (recorded); crash, fixed by #1676 (recorded)
+- [valkey-io/valkey-search#1730](https://github.com/valkey-io/valkey-search/pull/1730) ([tests](tests/valkey-search/1730-f30b4c8b2/)): Change 1.3.0-RC1 to 1.3.0 in command JSON files (#1730): declined: The change edits only version strings ("1.3.0-RC1" -> "1.3.0") in the history and module_since fields of src/commands/ft.*.json. These JSON files are documentation metadata: no build rule, cmake script, or source file in valkey-search references or embeds them, and the module registers its
+- [valkey-io/valkey-search#1747](https://github.com/valkey-io/valkey-search/pull/1747) ([tests](tests/valkey-search/1747-a25ed796a/)): Fix HNSW delete race on label_lookup_ with concurrent inserts (#1747): 0 of 6 test(s) reached the change
+- [valkey-io/valkey-search#1734](https://github.com/valkey-io/valkey-search/pull/1734) ([tests](tests/valkey-search/1734-2d99b27ae/)): fix(vector-registry): keep shared vectors until a logically expired key or field is deleted (#1734): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1735](https://github.com/valkey-io/valkey-search/pull/1735) ([tests](tests/valkey-search/1735-8433b8fff/)): docs: align 1.3.0 documentation and command JSON with the implementation (#1735): declined: The change touches only documentation (Markdown files under docs/ and the top-level COMMANDS.md, COMPATIBILITY.md, README.md, QUICK_START.md) and the src/commands/*.json command-description files. Those JSON files are not referenced by the build or by any source file: they are doc metadata
 
 ## Totals
 
-- Merges whose tests reached the change: 1003 of 1610 tested (62%)
+- Merges whose tests reached the change: 1005 of 1614 tested (62%)
 - Changed-line coverage: median 100% of 1079 merge(s) measured, 79 under 50%
-- Recall: 266 parents flagged of 417 fix merges
-- Claude: $106.09 in the last 24 hours, $1347.17 in the last 7 days, $11808.59 in all
+- Recall: 269 parents flagged of 421 fix merges
+- Claude: $126.13 in the last 24 hours, $1367.21 in the last 7 days, $11828.64 in all
 - Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

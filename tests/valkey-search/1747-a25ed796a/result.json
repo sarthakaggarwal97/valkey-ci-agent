@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a25ed796a7a739ca1c9037be6bfa5a24cd56faee",
+  "parent": "3149bf1612d8f016315e30a3d223f29f2c7b91ba",
+  "pr": 1747,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix HNSW delete race on label_lookup_ with concurrent inserts (#1747)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "42d6c8adb54193b3dc6834b4efd167d4138557a9",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.7238,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-67f868403466",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hnsw' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (HSET d:0 v <binary> on connection w), 3 (HSET d:1 v <binary> on connection w), 4 (HSET d:2 v <binary> on connection w), 5 (HSET d:3 v <bi"
+    },
+    {
+      "scenario": "ai-306240332c02",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hnsw' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (HSET d:0 v <binary> on connection w), 3 (HSET d:1 v <binary> on connection w), 4 (HSET d:2 v <binary> on connection w), 5 (HSET d:3 v <bi"
+    },
+    {
+      "scenario": "ai-2696383e52d6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'flat' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (HSET d:0 v <binary> on connection w), 9 (HSET d:0 v <binary> on connection w), 10 (DEL f:5 on connection w), 11 (HSET d:1 v <binary> on c"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet",
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

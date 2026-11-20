@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-rename-pending-unshare
+metadata:
+  description: RENAME of a hash whose dropped index still has it pending unshare keeps
+    the vector; the parent frees it and the renamed hash reads reused memory
+deployment:
+  modes: [standalone]
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {hash-max-listpack-entries: 0}
+    commands:
+    - {command: [CONFIG, SET, search.vector-unshare-batch-size, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:1", vec, !!binary "AABAQAAAgEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AACgQAAAwEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", vec, !!binary "AADgQAAAAEE=", other, x], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: "4"}, compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [RENAME, "doc:0", "moved:0"], expect: {equals: OK}}
+    - {command: [RENAME, "doc:1", "moved:1"], expect: {equals: OK}}
+    - {command: [RENAME, "doc:2", "moved:2"], expect: {equals: OK}}
+    - {command: [RENAME, "doc:3", "moved:3"], expect: {equals: OK}}
+    - {command: [FT.CREATE, fill, ON, HASH, PREFIX, 1, "fill:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "fill:0", vec, !!binary "AAAAQAAAQEA="], expect: {equals: 1}}
+    - {command: [HSET, "fill:1", vec, !!binary "AABAQAAAgEA="], expect: {equals: 1}}
+    - {command: [HSET, "fill:2", vec, !!binary "AACAQAAAoEA="], expect: {equals: 1}}
+    - {command: [HSET, "fill:3", vec, !!binary "AADAQAAA4EA="], expect: {equals: 1}}
+    - {command: [FT.INFO, fill], wait_s: 20, expect: {contains: "4"}, compare: skip}
+    - {command: [HGET, "moved:0", vec], expect_difference: true, expect: {equals: !!binary "AACAPwAAAEA="}}
+    - {command: [HGET, "moved:1", vec], expect_difference: true, expect: {equals: !!binary "AABAQAAAgEA="}}
+    - {command: [HGET, "moved:2", vec], expect_difference: true, expect: {equals: !!binary "AACgQAAAwEA="}}
+    - {command: [HGET, "moved:3", vec], expect_difference: true, expect: {equals: !!binary "AADgQAAAAEE="}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

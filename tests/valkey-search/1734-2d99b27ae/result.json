@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2d99b27aea578a3a733ab8ab3b30c5792771cddf",
+  "parent": "a25ed796a7a739ca1c9037be6bfa5a24cd56faee",
+  "pr": 1734,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix(vector-registry): keep shared vectors until a logically expired key or field is deleted (#1734)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "42d6c8adb54193b3dc6834b4efd167d4138557a9",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.4876,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

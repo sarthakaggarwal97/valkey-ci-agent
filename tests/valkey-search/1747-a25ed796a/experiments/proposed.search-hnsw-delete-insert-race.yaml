@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.search-hnsw-delete-insert-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: Concurrent HSET (insert, which rehashes label_lookup_) and DEL (delete
+    path lookup) on an HNSW vector index must not crash or corrupt the index on the
+    fixed module build
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    server_config: {search.writer-threads: 8, search.reader-threads: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    judge_replies: false
+    checks: {concurrency: 16}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, embedding, VECTOR,
+        HNSW, 12, M, 4, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, EF_CONSTRUCTION,
+        16, EF_RUNTIME, 16]}
+    - {command: [HSET, "doc:a", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [HSET, "doc:b", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [HSET, "doc:c", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [HSET, "doc:d", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [HSET, "doc:e", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [DEL, "doc:a"]}
+    - {command: [HSET, "doc:f", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [DEL, "doc:b"]}
+    - {command: [HSET, "doc:g", embedding, !!binary "AACAPwAAAEAAAEBAAACAQA=="]}
+    - {command: [DEL, "doc:c"]}
+    - {command: [HSET, "doc:h", embedding, !!binary "AACAQAAAQEAAAABAAACAPw=="]}
+    - {command: [DEL, "doc:d"]}
+    - {command: [HSET, "doc:i", embedding, !!binary "AAAAQAAAAEAAAABAAAAAQA=="]}
+    - {command: [DEL, "doc:e"]}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: num_docs}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

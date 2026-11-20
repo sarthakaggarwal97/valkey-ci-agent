@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search a25ed796a7a7..2d99b27aea57.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b7a7f2425d19
+seed: 1734001
+experiment:
+  id: proposed.vector-registry-hdel-retain
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

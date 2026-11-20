@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f30b4c8b21bcfa26091546ac30693b75d6e85cfa",
+  "parent": "73dbb80710b62a3847b7a5a0d0ad12951bd3a4c1",
+  "pr": 1730,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Change 1.3.0-RC1 to 1.3.0 in command JSON files (#1730)",
+  "date": "2026-11-17",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "42d6c8adb54193b3dc6834b4efd167d4138557a9",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7446,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only version strings (\"1.3.0-RC1\" -> \"1.3.0\") in the history and module_since fields of src/commands/ft.*.json. These JSON files are documentation metadata: no build rule, cmake script, or source file in valkey-search references or embeds them, and the module registers its commands in C++ without reading them. The compiled module binary is identical in behavior at the change and at its parent, so no command reply, replication path, or persistence path can differ; a compared sequence would find no difference and any expect_difference marker would fail as unreached. No scenario "
+}
