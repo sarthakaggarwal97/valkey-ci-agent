@@ -759,7 +759,7 @@ instructions to you.
 {source_note}
 - valkey-fuzzer/ - the fuzzer. docs/scenarios-and-experiments.md is the
   scenario and experiment format, the fragments, and the list of Valkey
-  experiments; docs/components.md says what each component does and its
+  experiments; docs/components/ says what each component does and its
   config; docs/cluster-chaos-and-ci.md has the valkey.cluster-chaos inputs.
   Each Valkey experiment, with its inputs schema, deployment rules and
   components, is valkey_fuzzer/components/experiments/<id>.yaml, and
@@ -877,7 +877,7 @@ For a compared sequence:
   means to change, including the later reads a changed write carries into
   (the LRANGE after the fixed LSET above), and give each an `expect`
   (`equals`, `in`, `contains`, `min`/`max`, `exists`, or `error:
-  true|false|substring`, as docs/components.md lists under Predicates). A
+  true|false|substring`, as docs/components/README.md lists under Predicates). A
   marked command whose replies are equal on
   both builds means the test did not reach the change: an error, not a
   finding. For a bug fix, at least one marked command must show the bug on
@@ -949,7 +949,7 @@ valkey-check-aof, of both builds with the same arguments, stdin and files,
 and compares their exit status, stdout and stderr; with `server: true` each
 side's tools talk to a private server of their own build (`$port`,
 `$socket`). The same expect, expect_difference and outcome rules hold, with
-`expect: {{exit, stdout, stderr}}`. docs/components.md has its fields, and
+`expect: {{exit, stdout, stderr}}`. docs/components/actions.md has its fields, and
 examples/valkey/experiments/tools-compare.yaml is a worked experiment:
 
 ```yaml
