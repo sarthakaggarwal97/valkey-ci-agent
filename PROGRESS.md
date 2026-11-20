@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-20T18:19+00:00.
+Updated 2026-11-20T18:24+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2570 | 0 | #12477 (2023-08-14) | 23 | 60.7 |
-| valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
+| valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 3 | 0.4 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.3 |
 | valkey-io/valkey-search | 697 | 0 | f8106e72e984 (2024-11-27) | 0 | 2.3 |
 
@@ -18,8 +18,10 @@ Updated 2026-11-20T18:19+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-16T18:28:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43928943942): 0 merge(s) tested, 0 without a code change.
+[2026-11-20T18:24:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44791605948): 2 merge(s) tested, 1 without a code change.
 
+- [valkey-io/valkey-bloom#101](https://github.com/valkey-io/valkey-bloom/pull/101) ([tests](tests/valkey-bloom/101-085aeb951/)): Making PR's run unstable and latest only, adding a daily job for all versions (#101): declined: The change modifies only CI configuration (.github/workflows/ci.yml: a daily scheduled job, dynamic server-version matrix discovery, setup-python bump) and build.sh (dynamic SERVER_VERSION validation via git ls-remote, reordered lint/test steps). No module source code is touched: no comman
+- [valkey-io/valkey-bloom#128](https://github.com/valkey-io/valkey-bloom/pull/128) ([tests](tests/valkey-bloom/128-e8e4f1d1b/)): Fix clippy::needless_bool in BloomObject::validate_size (#128): declined: The change rewrites BloomObject::validate_size from `if bytes > limit { return false; } true` to `bytes <= limit` to satisfy clippy::needless_bool. The two expressions are logically identical for every input, including the exact boundary bytes == BLOOM_MEMORY_LIMIT_PER_OBJECT (true in both
 
 ### valkey-io/valkey-json
 
@@ -36,7 +38,7 @@ Updated 2026-11-20T18:19+00:00.
 - Merges whose tests reached the change: 1003 of 1610 tested (62%)
 - Changed-line coverage: median 100% of 1079 merge(s) measured, 79 under 50%
 - Recall: 266 parents flagged of 417 fix merges
-- Claude: $105.56 in the last 24 hours, $1405.30 in the last 7 days, $11808.07 in all
+- Claude: $106.09 in the last 24 hours, $1405.83 in the last 7 days, $11808.59 in all
 - Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

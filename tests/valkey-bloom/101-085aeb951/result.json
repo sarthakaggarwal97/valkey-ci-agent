@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "085aeb95128d4f70a32ce98bd098104e4ef3a260",
+  "parent": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "pr": 101,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Making PR's run unstable and latest only, adding a daily job for all versions (#101)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "4d34db27991f5b53b3e63b70a414001647040601",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2633,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI configuration (.github/workflows/ci.yml: a daily scheduled job, dynamic server-version matrix discovery, setup-python bump) and build.sh (dynamic SERVER_VERSION validation via git ls-remote, reordered lint/test steps). No module source code is touched: no command, reply, encoding, persistence or replication behavior of valkey-bloom changes, so there is nothing a fuzzer scenario against running servers could reach or detect."
+}

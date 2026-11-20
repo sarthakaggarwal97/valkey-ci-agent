@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "e8e4f1d1b562e645d05c653884e92fb36bb13635",
+  "parent": "085aeb95128d4f70a32ce98bd098104e4ef3a260",
+  "pr": 128,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fix clippy::needless_bool in BloomObject::validate_size (#128)",
+  "date": "2026-11-18",
+  "unstable": "6c11c7fb22d207f685ed992d9959cb648e125046",
+  "module_head": "4d34db27991f5b53b3e63b70a414001647040601",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2623,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites BloomObject::validate_size from `if bytes > limit { return false; } true` to `bytes <= limit` to satisfy clippy::needless_bool. The two expressions are logically identical for every input, including the exact boundary bytes == BLOOM_MEMORY_LIMIT_PER_OBJECT (true in both versions). It is a pure refactor with no behaviour change, so no scenario is needed."
+}
