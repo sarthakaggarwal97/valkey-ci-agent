@@ -99,7 +99,7 @@ _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
 _BUNDLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _FILE_NAME = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
 _BUNDLE_PATH_RE = re.compile(
-    rf"(?:claims|mapping)\.yaml|model\.tla|{_FILE_NAME}\.cfg"
+    rf"(?:claims|mapping)\.yaml|model\.tla|sample\.log|{_FILE_NAME}\.cfg"
     rf"|negative-controls/{_FILE_NAME}\.(?:cfg|tla)|experiments/{_FILE_NAME}\.ya?ml"
 )
 BUNDLE_REQUIRED_FILES = ("claims.yaml", "model.tla", "mapping.yaml")
@@ -485,8 +485,8 @@ def _check_spec_bundles(raw: str) -> None:
         for path, text in files.items():
             if not _BUNDLE_PATH_RE.fullmatch(path) or ".." in path:
                 raise ValueError(
-                    f"spec bundle {bundle}: {path!r} must be claims.yaml, model.tla, mapping.yaml, <name>.cfg, "
-                    "negative-controls/<name>.cfg or .tla, or experiments/<name>.yaml"
+                    f"spec bundle {bundle}: {path!r} must be claims.yaml, model.tla, mapping.yaml, sample.log, "
+                    "<name>.cfg, negative-controls/<name>.cfg or .tla, or experiments/<name>.yaml"
                 )
             if not isinstance(text, str):
                 raise ValueError(f"spec bundle {bundle}: {path} must be file text")

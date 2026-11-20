@@ -337,7 +337,7 @@ def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
 
 
 @pytest.mark.parametrize("path,allowed", [
-    ("claims.yaml", True), ("model.tla", True), ("mapping.yaml", True), ("model.cfg", True),
+    ("claims.yaml", True), ("model.tla", True), ("mapping.yaml", True), ("model.cfg", True), ("sample.log", True),
     ("negative-controls/ack.tla", True), ("negative-controls/ack.cfg", True), ("experiments/toy.register.yaml", True),
     ("experiments/toy.yml", True), ("notes.md", False), ("negative-controls/x.yaml", False),
     ("experiments/../x.yaml", False), ("sub/claims.yaml", False), ("experiments/a..b.yaml", False),

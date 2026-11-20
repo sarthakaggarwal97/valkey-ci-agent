@@ -125,7 +125,7 @@ _MAX_GATE_OUTPUT_CHARS = 6_000
 _TAIL_LINES = 30
 
 _BUNDLE_PATH_RE = re.compile(
-    r"^(?:claims\.yaml|mapping\.yaml|model\.tla|[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.cfg"
+    r"^(?:claims\.yaml|mapping\.yaml|model\.tla|sample\.log|[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.cfg"
     r"|negative-controls/[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(?:cfg|tla)"
     r"|experiments/[a-z0-9][a-z0-9._-]{0,63}\.yaml)$"
 )
@@ -250,7 +250,7 @@ def parse_answer(stdout: str) -> Answer:
 def _add_file(answer: Answer, path: str, content: str) -> None:
     if not _BUNDLE_PATH_RE.fullmatch(path):
         raise AnswerError(
-            f"{path!r} is not a bundle path; use claims.yaml, mapping.yaml, model.tla, <name>.cfg, "
+            f"{path!r} is not a bundle path; use claims.yaml, mapping.yaml, model.tla, sample.log, <name>.cfg, "
             "negative-controls/<name>.cfg|.tla or experiments/<id>.yaml"
         )
     if path in answer.files:
@@ -837,7 +837,7 @@ counterexamples:
 
 and one FILE block for mapping.yaml and for every .cfg and negative-controls/
 file, and for every experiments/ file. Paths are claims.yaml, mapping.yaml,
-model.tla, <name>.cfg, negative-controls/<name>.cfg or .tla, and
+model.tla, sample.log, <name>.cfg, negative-controls/<name>.cfg or .tla, and
 experiments/<id>.yaml; names use letters, digits, - and _ (ids also .).
 Write each file's text exactly, with no code fences.
 """
@@ -972,7 +972,7 @@ counterexamples:
 <<<END>>>
 
 and one FILE block for every other file you change or add, each whole.
-Paths are claims.yaml, mapping.yaml, model.tla, <name>.cfg,
+Paths are claims.yaml, mapping.yaml, model.tla, sample.log, <name>.cfg,
 negative-controls/<name>.cfg or .tla, and experiments/<id>.yaml; names use
 letters, digits, - and _ (ids also .). Write each file's text exactly, with
 no code fences.
