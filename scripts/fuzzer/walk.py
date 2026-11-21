@@ -1209,7 +1209,13 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
     first_round, scenarios = ask_tests()
     if not scenarios:
         result["outcome"] = "declined"
-        result["reason"] = first_round.reason or "no proposed test validated"
+        # Without Claude's reason, the first dropped proposal's error says why nothing validated: 76 merges
+        # declined as "no proposed test validated" alone, with the errors only in proposals.json, so a
+        # validator misfiring on every proposal would never show in the state or PROGRESS.md.
+        errors = [error for error in (p.error for p in first_round.dropped) if error]
+        errors += [error for error in (e.error for e in first_round.dropped_experiments) if error]
+        detail = f": {' '.join(errors[0].split())[:300]}" if errors else ""
+        result["reason"] = first_round.reason or f"no proposed test validated{detail}"
         return
     against = {"merge": "parent", "parent": "merge", "unstable": "parent"}
     runs: dict[tuple[str, str, int], dict[str, Any]] = {}

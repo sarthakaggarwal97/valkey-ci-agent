@@ -817,6 +817,37 @@ def test_claude_cut_off_by_its_timeout_answers_in_the_same_session(monkeypatch, 
     assert result["cost_usd"] >= 0.5
 
 
+def test_a_decline_without_claudes_reason_says_why_nothing_validated(monkeypatch, tmp_path):
+    # 76 merges declined as "no proposed test validated" alone: the validator's errors stayed in
+    # proposals.json, so a check misfiring on every proposal would never show in PROGRESS.md.
+    merge = _merge()
+    change = Change(repo=merge["repo"], pr_number=None, title="", base_sha=merge["parent"], head_sha=merge["sha"],
+                    diff="diff")
+
+    def propose(change_, *, out_dir, runner, count, extra="", **kw):
+        run = ProposalRun(change=change_)
+        for directory in ("scenarios", "experiments"):
+            (out_dir / directory).mkdir(parents=True)
+        run.proposals.append(Proposal(index=1, rationale="", text="", scenario_id="ai-1",
+                                      error="scenario references artifacts.module.path but no module is built"))
+        return run
+
+    monkeypatch.setattr(walk, "fetch", lambda repo, sha, dest: dest)
+    monkeypatch.setattr(walk, "build_valkey", lambda src, asan=False, coverage=False: src / "src" / "valkey-server")
+    monkeypatch.setattr(walk, "fetch_change", lambda gh, token, request: change)
+    monkeypatch.setattr(walk, "load_catalog", lambda fuzzer_bin: {})
+    monkeypatch.setattr(walk, "propose", propose)
+    answer = AgentRunResult(profile="fuzzer_proposal_readonly", stdout="", stderr="", returncode=0,
+                            prompt_sha256="", cwd="", allowed_tools="", model="", started_at="", finished_at="")
+    result = walk.run(merge, gh=MagicMock(), token="t", publisher=MagicMock(), fuzzer_repo="o/valkey-fuzzer",
+                      fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", heads={walk.VALKEY_REPO: "c" * 40},
+                      unstable=tmp_path / "unstable", module_head=None, out=tmp_path / "out", work=tmp_path / "work",
+                      tests_url="https://t", runner=lambda prompt, workdir: answer)
+    assert result["outcome"] == "declined"
+    assert result["reason"] == ("no proposed test validated: scenario references artifacts.module.path "
+                                "but no module is built")
+
+
 def test_a_test_whose_expectation_both_builds_violate_hunts_and_keeps_what_it_expected(monkeypatch, tmp_path):
     # valkey-bloom #110 (fuzzer#69): both builds broke a correct expectation, BF.CARD at least 140, a bug older
     # than the merge; the test was dropped unseen, and never ran on unstable.
