@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-22T01:16+00:00.
+Updated 2026-11-22T01:17+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -28,9 +28,8 @@ Updated 2026-11-22T01:16+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-22T01:16:42+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44962908699): 1 merge(s) tested, 0 without a code change.
+[2026-11-22T01:17:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44970702329): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1733](https://github.com/valkey-io/valkey-search/pull/1733) ([tests](tests/valkey-search/1733-688431a2b/)): CI: fix clang-tidy crashing on every file in the thread-safety check (#1733): declined: The change is a CI fix (clang-tidy thread-safety check in the workflow and refresh_comp_db.sh) plus compile-time-only thread-safety annotations (ABSL_NO_THREAD_SAFETY_ANALYSIS / ABSL_SHARED_LOCKS_REQUIRED) and no-op refactors in src/ that read the same member through the existing GetIndexK
 
 ## Totals
 
