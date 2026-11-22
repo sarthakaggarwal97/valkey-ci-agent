@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.module-closekey-after-type-change
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module write key handle opened on a raw string survives CloseKey
+    after a ValkeyModule_Call turns the key into a zset in place
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: closekey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {zset-max-listpack-entries: {$ref: inputs.zset_max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: OK}}
+    - {command: [ZADD, src, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [zset.close_after_call, k, src], expect_difference: true, expect: {
+        equals: [1, 5]}}
+    - {command: [ZRANGE, k, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: closekey}

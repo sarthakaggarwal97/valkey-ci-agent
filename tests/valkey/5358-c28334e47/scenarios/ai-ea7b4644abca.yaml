@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d683f33e0afb..c28334e47b7d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea7b4644abca
+seed: 1001
+experiment:
+  id: proposed.module-closekey-after-type-change
+  inputs:
+    resp: 2
+    zset_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

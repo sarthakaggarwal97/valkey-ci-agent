@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-22T19:17+00:00.
+Updated 2026-11-22T19:46+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2572 | 0 | #12477 (2023-08-14) | 6 | 5.1 |
+| valkey-io/valkey | 2573 | 0 | #12477 (2023-08-14) | 7 | 5.3 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
 | valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 29 | 5.7 |
@@ -13,8 +13,9 @@ Updated 2026-11-22T19:17+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T18:59:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45058054553): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T19:46:38+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45061026197): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#5358](https://github.com/valkey-io/valkey/pull/5358) ([tests](tests/valkey/5358-c28334e47/)): Zero module key handle so CloseKey is safe after Call changes key type (#5358): 2 of 2 test(s) reached the change, coverage 100%; [crash, shown by ASan on unstable, the one build with it](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/259)
 
 ### valkey-io/valkey-bloom
 
@@ -33,11 +34,11 @@ Updated 2026-11-22T19:17+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1009 of 1618 tested (62%)
-- Changed-line coverage: median 100% of 1083 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1010 of 1619 tested (62%)
+- Changed-line coverage: median 100% of 1084 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $28.59 in the last 24 hours, $211.60 in the last 7 days, $11764.77 in all
-- Issues filed: 85
+- Claude: $31.22 in the last 24 hours, $214.23 in the last 7 days, $11767.40 in all
+- Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -73,6 +74,7 @@ Updated 2026-11-22T19:17+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/166
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/167
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/168
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/259
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
