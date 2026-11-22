@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-22T10:24+00:00.
+Updated 2026-11-22T10:31+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 6 | 5.0 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
-| valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 28 | 5.7 |
+| valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 29 | 5.9 |
 
 ## Last runs
 
@@ -28,15 +28,16 @@ Updated 2026-11-22T10:24+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-22T08:22:30+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45002462603): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T10:31:55+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45004840712): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80) ([tests](tests/valkey-search/80-fc55e1407/)): bazel cleanup (#80): declined: The change is pure build-system and test-scaffolding cleanup: it deletes Bazel configuration (.bazelrc, MODULE.bazel, all BUILD files), removes Bazel sections from docs, devcontainer and CI scripts, and renames the CMake output artifact from valkeysearch.so to libsearch.so, which only chan
 
 ## Totals
 
 - Merges whose tests reached the change: 1008 of 1617 tested (62%)
 - Changed-line coverage: median 100% of 1082 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $23.76 in the last 24 hours, $220.57 in the last 7 days, $11759.95 in all
+- Claude: $24.86 in the last 24 hours, $221.66 in the last 7 days, $11761.04 in all
 - Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -131,7 +132,6 @@ None.
 
 ## Given up
 
-- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): Claude Code failed (rc=1): timeout after 600s
 - [valkey-io/valkey#3362](https://github.com/valkey-io/valkey/pull/3362): Claude Code failed (rc=1): timeout after 600s
 - [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.
