@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-22T10:03+00:00.
+Updated 2026-11-22T10:23+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 1 | 4.3 |
+| valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 6 | 5.0 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
 | valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 28 | 5.7 |
@@ -13,8 +13,13 @@ Updated 2026-11-22T10:03+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T08:02:21+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45000877408): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T10:23:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45003287481): 5 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425) ([tests](tests/valkey/4425-05a9c29c6/)): Add cluster-replica-no-failover if-empty to block failover from empty replicas (#4425): 2 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4005](https://github.com/valkey-io/valkey/pull/4005) ([tests](tests/valkey/4005-f42c9ab3d/)): Reserve connection slots for priority sources (#4005): 5 of 7 test(s) reached the change, coverage 84%
+- [valkey-io/valkey#3438](https://github.com/valkey-io/valkey/pull/3438) ([tests](tests/valkey/3438-2f3bcead2/)): Cluster Bus IO offload (#3438): 1 of 12 test(s) reached the change, coverage 72%
+- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374) ([tests](tests/valkey/3374-719268e84/)): Fix module loading failure for redis module (#3374): declined: The change only removes the RedisModule_OnLoad macro from src/redismodule.h, a header consumed when compiling third-party modules, and adds a test module (hellovalkey.so) plus a TCL test. No source file in src/ includes redismodule.h, so the valkey-server binary's behavior is identical on 
+- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578) ([tests](tests/valkey/3578-96763ade5/)): Fix Deferred Reply Placeholders in Active Deferred Buffers (#3578): declined: The fix only changes behaviour when addReplyDeferredLen/setDeferredReply run while the client's deferred reply buffer is active. That buffer is active only (a) inside the few core commands that call initDeferredReplyBuffer (SET..GET, GETEX, GETDEL, GETSET, LPOP/RPOP count, LMPOP, BITFIELD,
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +38,10 @@ Updated 2026-11-22T10:03+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1005 of 1614 tested (62%)
-- Changed-line coverage: median 100% of 1079 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1008 of 1617 tested (62%)
+- Changed-line coverage: median 100% of 1082 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $0.44 in the last 24 hours, $197.25 in the last 7 days, $11829.07 in all
+- Claude: $23.76 in the last 24 hours, $220.57 in the last 7 days, $11759.95 in all
 - Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -133,10 +138,5 @@ None.
 
 - [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): Claude Code failed (rc=1): timeout after 600s
-- [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425): 2 of 25 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 60s (process output from /h
-- [valkey-io/valkey#4005](https://github.com/valkey-io/valkey/pull/4005): 1 of 40 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 60s (process output from /h
-- [valkey-io/valkey#3438](https://github.com/valkey-io/valkey/pull/3438): 4 of 62 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: the cluster deployment was not healthy within 30s: the nodes disagre
 - [valkey-io/valkey#3362](https://github.com/valkey-io/valkey/pull/3362): Claude Code failed (rc=1): timeout after 600s
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
 - [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.

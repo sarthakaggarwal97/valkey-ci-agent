@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "719268e847e7cdd0b0c7932049ceaf04251eccdb",
+  "parent": "f7690377fba28c7ae793792cd301f68e68970368",
+  "pr": 3374,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module loading failure for redis module (#3374)",
+  "date": "2026-06-10",
+  "unstable": "80bb13e2a82b331512af2175a7f1117c313e4db2",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6048,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes the RedisModule_OnLoad macro from src/redismodule.h, a header consumed when compiling third-party modules, and adds a test module (hellovalkey.so) plus a TCL test. No source file in src/ includes redismodule.h, so the valkey-server binary's behavior is identical on both builds; the server-side lookup of both ValkeyModule_OnLoad and RedisModule_OnLoad in module.c predates the change and is untouched. Reaching the fix requires compiling a module against the changed header with a version script exporting RedisModule_OnLoad \u2014 exactly hellovalkey.so, which is not in the buil"
+}

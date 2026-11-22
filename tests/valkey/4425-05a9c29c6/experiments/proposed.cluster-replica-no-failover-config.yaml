@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-no-failover-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-replica-no-failover bool-to-enum conversion keeps yes/no and
+    the cluster-slave-no-failover alias working, accepts if-empty case-insensitively,
+    and round-trips it through CONFIG REWRITE and a restart
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: nofailover-config
+  config:
+    compare_with: {$ref: inputs.parent}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect: {equals: [cluster-replica-no-failover,
+          "no"]}}
+    - {command: [CONFIG, SET, cluster-replica-no-failover, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect: {equals: [cluster-replica-no-failover,
+          "yes"]}}
+    - {command: [CONFIG, GET, cluster-slave-no-failover], expect: {equals: [cluster-slave-no-failover,
+          "yes"]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect: {equals: [cluster-replica-no-failover,
+          "yes"]}}
+    - {command: [CONFIG, SET, cluster-replica-no-failover, if-empty], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect_difference: true,
+      expect: {equals: [cluster-replica-no-failover, if-empty]}}
+    - {command: [CONFIG, SET, cluster-slave-no-failover, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-slave-no-failover, IF-EMPTY], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect_difference: true,
+      expect: {equals: [cluster-replica-no-failover, if-empty]}}
+    - {command: [CONFIG, SET, cluster-replica-no-failover, maybe], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], expect_difference: true,
+      expect: {equals: [cluster-replica-no-failover, if-empty]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [nofailover-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nofailover-config}

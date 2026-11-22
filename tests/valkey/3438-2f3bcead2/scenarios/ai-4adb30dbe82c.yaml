@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c27cc74bc6bd..2f3bcead223f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4adb30dbe82c
+seed: 107
+experiment:
+  id: proposed.cluster-bus-io-offload-info
+  inputs:
+    io_threads: 4
+deployment:
+  mode: standalone
+  base_port: 7600

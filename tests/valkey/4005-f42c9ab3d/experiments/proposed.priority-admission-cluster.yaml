@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.priority-admission-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: Admission control on a cluster-enabled server where the total includes
+    cluster connections and the rejection error names them, compared against the parent
+    build
+components:
+- use: valkey.action.commands
+  id: cluster-admission
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxclients, "4"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxclients-reserved, "2"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-subnets, "192.0.2.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], connection: c1, expect: {equals: PONG}}
+    - {command: [PING], connection: c2, expect_difference: true, expect: {error: "max\
+          \ number of clients + cluster connections reached"}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], connection: c3, expect: {equals: PONG}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:3\r\
+          \n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cluster-admission.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cluster-admission}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.priority-admission-control
+deployment:
+  modes: [standalone]
+metadata:
+  description: Normal clients are capped at maxclients minus maxclients-reserved while
+    priority-subnet clients fill reserved slots up to maxclients; rejection stats
+    compared against the parent build
+components:
+- use: valkey.action.commands
+  id: admission
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxclients, "4"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxclients-reserved, "2"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-subnets, "192.0.2.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], connection: c1, expect: {equals: PONG}}
+    - {command: [PING], connection: c2, expect_difference: true, expect: {error: "max\
+          \ number of clients"}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "rejected_connections:1\r\
+          \n"}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:2\r\
+          \n"}}
+    - {command: [PING], connection: c3, expect: {equals: PONG}}
+    - {command: [PING], connection: c4, expect_difference: true, expect: {equals: PONG}}
+    - {command: [PING], connection: c5, expect: {error: "max number of clients"}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "rejected_priority_connections:1\r\
+          \n"}}
+    - {command: [CONFIG, SET, maxclients, "100"], expect: {equals: OK}}
+    - {command: [PING], connection: c1, expect: {equals: PONG}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "rejected_priority_connections:0\r\
+          \n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [admission.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: admission}

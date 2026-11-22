@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96763ade54998de6002b76a6fc574f050cd0490c",
+  "parent": "c5959266f1f94dfd976e6af0f4c65d400ef3904d",
+  "pr": 3578,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix Deferred Reply Placeholders in Active Deferred Buffers (#3578)",
+  "date": "2026-05-06",
+  "unstable": "80bb13e2a82b331512af2175a7f1117c313e4db2",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.3204,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes behaviour when addReplyDeferredLen/setDeferredReply run while the client's deferred reply buffer is active. That buffer is active only (a) inside the few core commands that call initDeferredReplyBuffer (SET..GET, GETEX, GETDEL, GETSET, LPOP/RPOP count, LMPOP, BITFIELD, HGETEX), all of which reply exclusively with known-length headers and never call addReplyDeferredLen, or (b) after a module blocks the client from inside a keyspace-notification callback, where the bug fires only if the module's reply callback builds a VALKEYMODULE_POSTPONED_LEN reply. No installed experimen"
+}

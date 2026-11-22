@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.priority-subnets-rewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE persists priority-subnets and maxclients-reserved, and
+    a restart reparses them at startup (the initServer panic path) and classifies
+    new connections, compared against the parent build
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.0/8,::1/128"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxclients-reserved, "10"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, priority-subnets], expect_difference: true, expect: {
+        equals: [priority-subnets, "127.0.0.0/8,::1/128"]}}
+    - {command: [CONFIG, GET, maxclients-reserved], expect_difference: true, expect: {
+        equals: [maxclients-reserved, "10"]}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:1\r\
+          \n"}}
+    - {command: [CONFIG, SET, priority-subnets, ""], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, maxclients-reserved, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, priority-subnets], expect_difference: true, expect: {
+        equals: [priority-subnets, ""]}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:0\r\
+          \n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

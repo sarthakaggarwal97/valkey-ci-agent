@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6ae7eb4889b3..05a9c29c6253.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-51c5e22895dd
+seed: 7001
+experiment:
+  id: proposed.cluster-replica-no-failover-config
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

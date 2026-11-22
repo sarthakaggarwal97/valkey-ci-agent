@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.empty-replica-failover-block
+deployment:
+  modes: [standalone]
+metadata:
+  description: Under cluster-replica-no-failover if-empty a replica stuck at replication
+    offset 0 must not win an automatic failover; the parent (which rejects if-empty)
+    promotes it and the shard's data is lost
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: nofailover
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 6
+    timeout_s: 120
+    server_config: {cluster-node-timeout: 2000}
+    commands:
+    - {command: [CONFIG, SET, repl-diskless-sync, "yes"], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, repl-diskless-sync-delay, 1000], node: 0, expect: {
+        equals: OK}}
+    - {command: [MSET, "{123456789}:0", v, "{123456789}:1", v, "{123456789}:2", v,
+        "{123456789}:3", v, "{123456789}:4", v, "{123456789}:5", v, "{123456789}:6",
+        v, "{123456789}:7", v, "{123456789}:8", v, "{123456789}:9", v], node: 0, expect: {
+        equals: OK}}
+    - {command: [DBSIZE], node: 0, expect: {equals: 10}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 3, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 4, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 5, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 3, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 4, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 1, NODE, "<node.2.id>"], node: 5, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 3, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 4, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, NODE, "<node.4.id>"], node: 5, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 3, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-replica-validity-factor, 0], node: 3, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, cluster-replica-no-failover, if-empty], node: 3, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-no-failover], node: 3, expect_difference: true,
+      expect: {equals: [cluster-replica-no-failover, if-empty]}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 30, compare: skip, expect: {contains: slave}}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 30, compare: skip, expect: {contains: slave}}
+    - {command: [CLUSTER, NODES], node: 4, wait_s: 30, compare: skip, expect: {contains: slave}}
+    - {command: [DEBUG, SLEEP, 45], node: 0, connection: stall}
+    - {command: [DEBUG, SLEEP, 20], node: 5, expect: {equals: OK}}
+    - {command: [ROLE], node: 3, expect_difference: true, expect: {contains: slave}}
+    - {command: [DBSIZE], node: 3, expect: {equals: 0}}
+    - {command: [DEBUG, SLEEP, 40], node: 5, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 0, expect_difference: true, expect: {equals: 10}}
+    - {command: [ROLE], node: 0, expect_difference: true, expect: {contains: master}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [nofailover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nofailover}

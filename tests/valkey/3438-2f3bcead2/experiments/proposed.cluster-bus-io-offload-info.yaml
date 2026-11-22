@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bus-io-offload-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: Three-node cluster with io-threads active drives cluster bus traffic
+    through the offload path; CLUSTER INFO gains the cluster_io_threaded_* fields
+inputs:
+  properties:
+    io_threads: {type: integer, enum: [2, 4, 8], default: 4}
+components:
+- use: valkey.action.commands
+  id: bus
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      cluster-node-timeout: 2000
+    timeout_s: 90
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [INFO, replication], node: 2, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [WAIT, 2, 2000], wait_s: 30, expect: {equals: 2}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_io_threaded_reads_processed:"}}
+    - {command: [CLUSTER, INFO], node: 1, expect_difference: true, expect: {contains: "cluster_io_main_thread_fallbacks:"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bus.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bus}

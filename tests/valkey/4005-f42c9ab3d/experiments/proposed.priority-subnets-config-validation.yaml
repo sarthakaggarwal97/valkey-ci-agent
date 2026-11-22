@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.priority-subnets-config-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: priority-subnets and maxclients-reserved parsing, dynamic reclassification
+    and the connected_priority_clients counter, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: qos-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, maxclients-reserved], expect_difference: true, expect: {
+        equals: [maxclients-reserved, "0"]}}
+    - {command: [CONFIG, GET, priority-subnets], expect_difference: true, expect: {
+        equals: [priority-subnets, ""]}}
+    - {command: [CONFIG, SET, maxclients-reserved, "4294967295"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxclients-reserved, "-1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, maxclients-reserved, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1/32 10.0.0.0/8,::1/128,0.0.0.0/0"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, priority-subnets], expect_difference: true, expect: {
+        equals: [priority-subnets, "127.0.0.1/32 10.0.0.0/8,::1/128,0.0.0.0/0"]}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1/33"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "/24"], expect_difference: true, expect: {
+        error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "192.168.1.0/"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "1.2.3.4/24a"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "2001:db8::/129"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "1.2.3.4/9223372036854775808"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, SET, priority-subnets, "example.com"], expect_difference: true,
+      expect: {error: "Invalid IP address or CIDR subnet"}}
+    - {command: [CONFIG, GET, priority-subnets], expect_difference: true, expect: {
+        equals: [priority-subnets, "127.0.0.1/32 10.0.0.0/8,::1/128,0.0.0.0/0"]}}
+    - {command: [CONFIG, SET, priority-subnets, "1.2.3.4/+24"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-subnets, ",, ,\t,"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:0\r\
+          \n"}}
+    - {command: [PING], connection: c1, expect: {equals: PONG}}
+    - {command: [PING], connection: c2, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:3\r\
+          \n"}}
+    - {command: [PING], connection: c3, expect: {equals: PONG}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:4\r\
+          \n"}}
+    - {command: [CONFIG, SET, priority-subnets, "::ffff:127.0.0.1/104"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:4\r\
+          \n"}}
+    - {command: [CONFIG, SET, priority-subnets, "192.0.2.1/32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "connected_priority_clients:0\r\
+          \n"}}
+    - {command: [QUIT], connection: c3, expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-subnets, "127.0.0.1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, wait_s: 10, expect: {contains: "connected_priority_clients:3\r\
+          \n"}}
+    - {command: [CONFIG, SET, priority-subnets, "192.0.2.1/-0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, wait_s: 10, expect: {contains: "connected_priority_clients:3\r\
+          \n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [qos-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: qos-config}

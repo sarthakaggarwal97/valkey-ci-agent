@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f26b1609e577..f42c9ab3d8bd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-901806174978
+seed: 104
+experiment:
+  id: proposed.priority-admission-cluster
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7300
