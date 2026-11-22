@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-22T18:27+00:00.
+Updated 2026-11-22T18:28+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,9 +13,8 @@ Updated 2026-11-22T18:27+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T18:27:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45053160867): 1 merge(s) tested, 0 without a code change.
+[2026-11-22T18:28:14+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45055196841): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5097](https://github.com/valkey-io/valkey/pull/5097) ([tests](tests/valkey/5097-d683f33e0/)): Use shortest score format in ZSCAN replies (#5097): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
