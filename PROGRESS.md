@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-22T05:58+00:00.
+Updated 2026-11-22T06:19+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 1 | 4.7 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
-| valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 3 | 2.1 |
+| valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 28 | 5.7 |
 
 ## Last runs
 
@@ -28,7 +28,7 @@ Updated 2026-11-22T05:58+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-22T02:50:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44977819418): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T06:19:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44993127750): 0 merge(s) tested, 25 without a code change.
 
 
 ## Totals
@@ -131,31 +131,6 @@ None.
 
 ## Given up
 
-- [valkey-io/valkey-search#33](https://github.com/valkey-io/valkey-search/pull/33): building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#20](https://github.com/valkey-io/valkey-search/pull/20): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search#29](https://github.com/valkey-io/valkey-search/pull/29): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@2cf882201edf](https://github.com/valkey-io/valkey-search/commit/2cf882201edfba2c0e985f6d3a46ef5590ba7a83): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@1e6d1d26bccf](https://github.com/valkey-io/valkey-search/commit/1e6d1d26bccf4929a3c7080ba687c2bd3b8cb1ff): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@6bcb549550c2](https://github.com/valkey-io/valkey-search/commit/6bcb549550c23f0a0277ab572fd70992633c6582): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@8ca35b577ed3](https://github.com/valkey-io/valkey-search/commit/8ca35b577ed306dd8c12f0d7046c9d0cd2d742e9): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@9ea9ff93e500](https://github.com/valkey-io/valkey-search/commit/9ea9ff93e500ef8ce0c2daa1cf7838011095439d): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@e1bc348254da](https://github.com/valkey-io/valkey-search/commit/e1bc348254daeea55b47f650a5657343a77c3440): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@7164c6539888](https://github.com/valkey-io/valkey-search/commit/7164c6539888ace67e2690908eba33d97bbe8fcf): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@6b84fe12c9a8](https://github.com/valkey-io/valkey-search/commit/6b84fe12c9a89612895fcf3c1baa0e55834d50b5): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@7b8d240876b0](https://github.com/valkey-io/valkey-search/commit/7b8d240876b04a74480dac69f37f2a048929dc6d): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@df4dc899d3f4](https://github.com/valkey-io/valkey-search/commit/df4dc899d3f4757fa2bd2112889a9e3ca91d125e): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@271169df6159](https://github.com/valkey-io/valkey-search/commit/271169df6159cd1062cc57d79a1e9de2a2e1dd85): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@48cbd5623cd8](https://github.com/valkey-io/valkey-search/commit/48cbd5623cd8f2173613ed432891d567e4b43d85): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@cfd25f76e3b3](https://github.com/valkey-io/valkey-search/commit/cfd25f76e3b33ba179350b4b8bde023fc3da7bd4): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@508d9e90b4a2](https://github.com/valkey-io/valkey-search/commit/508d9e90b4a25adf300183ec8850cc4f81bf5a5a): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@135858139a87](https://github.com/valkey-io/valkey-search/commit/135858139a878fc90402c9158ce007c7895d0923): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@740b42ca1196](https://github.com/valkey-io/valkey-search/commit/740b42ca1196eeb3d134666c143fee35ce367484): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@07e5dd955989](https://github.com/valkey-io/valkey-search/commit/07e5dd955989f6b24b98b56c160e36a0a9af5263): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@b6f5460f2903](https://github.com/valkey-io/valkey-search/commit/b6f5460f2903d805de90fef40fcc568f23b423df): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@4015cc6b5efb](https://github.com/valkey-io/valkey-search/commit/4015cc6b5efb51e1c1e40256822f827da7a2ba45): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
 - [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): Claude Code failed (rc=1): timeout after 600s
 - [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425): 2 of 25 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 60s (process output from /h
