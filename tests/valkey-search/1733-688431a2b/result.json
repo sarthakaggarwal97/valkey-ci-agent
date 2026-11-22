@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "688431a2b6a036ddbaf86ed0db681604f9ee6aa2",
+  "parent": "fb06e2a116cdbb70bb1e923b0bc24f57a452877c",
+  "pr": 1733,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "CI: fix clang-tidy crashing on every file in the thread-safety check (#1733)",
+  "date": "2026-11-21",
+  "unstable": "80bb13e2a82b331512af2175a7f1117c313e4db2",
+  "module_head": "688431a2b6a036ddbaf86ed0db681604f9ee6aa2",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4367,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI fix (clang-tidy thread-safety check in the workflow and refresh_comp_db.sh) plus compile-time-only thread-safety annotations (ABSL_NO_THREAD_SAFETY_ANALYSIS / ABSL_SHARED_LOCKS_REQUIRED) and no-op refactors in src/ that read the same member through the existing GetIndexKeyInfo() accessor under the same locks; the remaining edits are to unit tests. None of it changes runtime behavior, commands, replies, locking, or persistence, so no fuzzer scenario can distinguish the two builds."
+}
