@@ -1674,6 +1674,12 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
     lines += ["", "## Retries", ""]
     lines += [f"- {name(sha, e)}: attempt {e['attempts']} of {MAX_ATTEMPTS}, {e['error'][:200]}"
               for sha, e in failed.items()] or ["None."]
+    # The merges given up with an error stay listed: once the backlog reads done and the retries empty, nothing
+    # else says they were never tested (36 merges, 26 of them a valkey-search build window whose recipe fix
+    # landed after they ran out of attempts), so a walk that silently skipped them would look complete.
+    lines += ["", "## Given up", ""]
+    lines += [f"- {name(sha, e)}: {str(e.get('reason', ''))[:200]}"
+              for sha, e in done.items() if e.get("outcome") == "error"] or ["None."]
     return "\n".join(lines) + "\n"
 
 

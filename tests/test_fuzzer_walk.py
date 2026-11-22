@@ -390,6 +390,22 @@ def test_progress_shows_each_repository_the_last_runs_totals_and_retries():
     assert "- Recall: 2 parents flagged of 2 fix merges" in text
     assert "- Issues filed: 1\n  - https://x/issues/1" in text
     assert "attempt 0 of 3, the job left no result" in text
+    assert "## Given up\n\nNone." in text
+
+
+def test_progress_lists_the_merges_given_up_with_an_error():
+    # 36 merges sat done with outcome error (26 of them a valkey-search build window fixed only after they ran
+    # out of attempts), and once the retries emptied, PROGRESS.md no longer showed they were never tested.
+    given_up = _merge(sha="c" * 40, pr=29)
+    planned = {"repo": walk.VALKEY_REPO, "merges": [given_up], "skipped": [], "pointer": {"head": "h"}}
+    results = [_result(given_up, error="the build failed", findings=[])]
+    state = update(initial_state(walk.VALKEY_REPO), planned, results, now=NOW)
+    for _ in range(MAX_ATTEMPTS - 1):
+        state = update(state, planned, results, now=NOW)
+    assert given_up["sha"] not in state["failed"]
+    text = progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+    assert ("## Given up\n\n- [valkey-io/valkey#29](https://github.com/valkey-io/valkey/pull/29): "
+            "the build failed") in text
 
 
 def _write(name: str, text: str):
