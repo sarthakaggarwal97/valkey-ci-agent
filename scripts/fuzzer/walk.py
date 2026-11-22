@@ -338,6 +338,23 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
         return bool(buildable) and not (_has_file(repo_dir, merge["sha"], buildable)
                                         and _has_file(repo_dir, merge["parent"], buildable))
 
+    def stub_parent(merge: dict[str, Any]) -> bool:
+        # The module's first code drop: its parent, a README-only stub, has nothing to build or compare with.
+        return module_repository(repo) and no_code_change(
+            _git(repo_dir, "ls-tree", "-r", "--name-only", merge["parent"]).split(), repo)
+
+    # A merge given up with an error before a skip rule learnt its cause (valkey-search's pre-CMake window ran
+    # out of attempts before ``buildable`` landed) stays an error in the state, behind the cursor, forever: it
+    # is re-done without a job here, so "Given up" keeps only the failures no rule explains.
+    for sha, entry in state["done"].items():
+        if entry.get("outcome") != "error" or sha not in index:
+            continue
+        merge = history[index[sha]]
+        if stub_parent(merge):
+            skipped.append({**merge, "skip_outcome": "no-parent-code"})
+        elif predates_recipe(merge):
+            skipped.append({**merge, "skip_outcome": "predates-build-recipe"})
+
     for item, kind in [*new, *retries, *backlog]:
         if len(jobs) >= max_jobs:
             break
@@ -357,9 +374,7 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
             continue
         if no_code_change(_git(repo_dir, "diff", "--name-only", merge["parent"], merge["sha"]).split(), repo):
             skipped.append(merge)
-        elif module_repository(repo) and no_code_change(
-                _git(repo_dir, "ls-tree", "-r", "--name-only", merge["parent"]).split(), repo):
-            # The module's first code drop: its parent, a README-only stub, has nothing to build or compare with.
+        elif stub_parent(merge):
             skipped.append({**merge, "skip_outcome": "no-parent-code"})
         elif predates_recipe(merge):
             skipped.append({**merge, "skip_outcome": "predates-build-recipe"})

@@ -188,6 +188,34 @@ def test_a_merge_predating_the_build_recipe_is_skipped(tmp_path, monkeypatch):
     assert state["done"][shas[2]]["outcome"] == "predates-build-recipe"
 
 
+def test_a_merge_given_up_before_the_skip_rule_landed_is_redone_as_skipped(tmp_path, monkeypatch):
+    # valkey-search's pre-CMake window ran out of attempts before ``buildable`` landed, so 26 merges sit in the
+    # state as errors forever, listed under "Given up" though a rule now explains them; the stub-parent drops of
+    # valkey-bloom and valkey-json likewise. The plan re-does them without a job.
+    search = "valkey-io/valkey-search"
+    repo = _repo(tmp_path, "valkey-search", [("Initial stub", "README.md"), ("Bazel only (#2)", "src/b.cc"),
+                                             ("CMake support (#3)", "build.sh"), ("Fix FT.SEARCH (#4)", "src/c.cc")])
+    monkeypatch.setitem(walk.MODULES, "valkey-search",
+                        dataclasses.replace(walk.MODULES["valkey-search"], buildable="build.sh"))
+    shas = _shas(repo)
+    state = initial_state(search)
+    state["pointer"] = {"head": shas[0], "cursor": shas[-1], "end": shas[-1]}
+    state["done"][shas[1]] = {"repo": search, "pr": 3, "outcome": "error",
+                              "reason": "building valkey-search left no .build-release/libsearch.so"}
+    state["done"][shas[2]] = {"repo": search, "pr": 2, "outcome": "error",
+                              "reason": "build.sh: No such file or directory"}
+    planned = plan(repo, search, state, 5, UNSTABLE, now=NOW)
+    assert _jobs(planned) == []
+    # #3's parent lacks build.sh; #2's parent is the README-only stub.
+    assert [(m["pr"], m["skip_outcome"]) for m in planned["skipped"]] == [
+        (3, "predates-build-recipe"), (2, "no-parent-code")]
+    state = update(state, planned, [], now=NOW)
+    assert state["done"][shas[1]]["outcome"] == "predates-build-recipe"
+    assert state["done"][shas[2]]["outcome"] == "no-parent-code"
+    # Once re-done, the next plan leaves them alone.
+    assert plan(repo, search, state, 5, UNSTABLE, now=NOW)["skipped"] == []
+
+
 def test_a_pointer_off_the_history_stops_the_plan(json_repo):
     state = initial_state(JSON)
     state["pointer"] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
