@@ -2576,7 +2576,7 @@
 },
 "failed": {
 },
-"last_run": {"at": "2026-11-22T04:57:11+00:00", "cost_usd": 0.0, "merges": [], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44987217834"},
+"last_run": {"at": "2026-11-22T05:28:03+00:00", "cost_usd": 0.0, "merges": [], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44989479040"},
 "models": {
   "ec905ca5128f77e4d2827482ab0a8fb00ed35419": {"slot-migration": {"at": "2026-11-16T12:02:14+00:00", "cost_usd": 1.3521, "pr": 5367, "pr_repo": "valkey-io/valkey", "reason": "The rule checked is RApply in model.tla (model.tla:256-271), the model of the replica applying SYNCSLOTS FINISH from the target's replication stream \u2014 the function the change touches, clusterCommandSyncSlotsFinish, is in claims.yaml's scope and is carried by RApply's \"finish\" case: track' takes the ", "repo": "valkey-io/valkey", "subject": "Ignore SYNCSLOTS FINISH for an already finished import job (#5367)", "verdict": "no_model_change"}},
   "9d8f3c003ca8f741c74a4688048a08b4ac9dfaa2": {"slot-migration": {"at": "2026-11-16T19:49:01+00:00", "cost_usd": 2.4875, "pr": 5359, "pr_repo": "valkey-io/valkey", "reason": "The rule checked is the model's SFork action (model.tla:154-163), which maps to slotMigrationJobReadEstablishResponse and slotExportJobBeginSnapshotToTargetSocket in claims.yaml's scope: S reads +OK, exp goes \"establish\" -> \"stream\", and the snapshot is enqueued to T. SFork models only the successfu", "repo": "valkey-io/valkey", "subject": "Reset slot migration snapshot pipes when the snapshot fork fails (#5359)", "verdict": "no_model_change"}}
