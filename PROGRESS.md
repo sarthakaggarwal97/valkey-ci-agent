@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-22T19:46+00:00.
+Updated 2026-11-22T19:47+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,9 +13,8 @@ Updated 2026-11-22T19:46+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T19:46:38+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45061026197): 1 merge(s) tested, 0 without a code change.
+[2026-11-22T19:47:20+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45062671235): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5358](https://github.com/valkey-io/valkey/pull/5358) ([tests](tests/valkey/5358-c28334e47/)): Zero module key handle so CloseKey is safe after Call changes key type (#5358): 2 of 2 test(s) reached the change, coverage 100%; [crash, shown by ASan on unstable, the one build with it](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/259)
 
 ### valkey-io/valkey-bloom
 
