@@ -216,6 +216,33 @@ def test_a_merge_given_up_before_the_skip_rule_landed_is_redone_as_skipped(tmp_p
     assert plan(repo, search, state, 5, UNSTABLE, now=NOW)["skipped"] == []
 
 
+def test_a_merge_given_up_on_an_error_since_fixed_gets_one_more_walk(json_repo):
+    # valkey #3374 and #3578 ran out of attempts while a run that could not start still counted one, and
+    # valkey-search #80 before the recipe learnt the libsearch rename: those merges sit as errors though the
+    # walk now survives their cause. They are walked once more, after the run's own merges; one that is given
+    # up again carries ``gave_up``, so it is never re-queued.
+    shas = _shas(json_repo)
+    state = initial_state(JSON)
+    state["pointer"] = {"head": shas[0], "cursor": shas[-1], "end": shas[-1]}
+    state["done"][shas[1]] = {"repo": JSON, "pr": 4, "outcome": "error",
+                              "reason": "2 of 2 run(s) could not start: environment acquisition failed"}
+    state["done"][shas[2]] = {"repo": JSON, "pr": 3, "outcome": "error",
+                              "reason": "building valkey-json left no build/src/libjson.so"}
+    state["done"][shas[4]] = {"repo": JSON, "pr": 1, "outcome": "error", "reason": "the build failed"}
+    planned = plan(json_repo, JSON, state, 5, UNSTABLE, now=NOW)
+    assert _jobs(planned) == [4, 3]
+    assert planned["merges"][0]["parent"] == shas[2]
+
+    # Given up again on the same error, the merge is marked and the next plan leaves it alone.
+    redone = planned["merges"][0]
+    failing = {**state, "failed": {redone["sha"]: {**redone, "attempts": 0, "misses": walk.MAX_MISSES - 1,
+                                                   "error": "x"}}}
+    error = "2 of 2 run(s) could not start: environment acquisition failed"
+    after = update(failing, {**planned, "merges": [redone], "skipped": []}, [_result(redone, error=error)], now=NOW)
+    assert after["done"][redone["sha"]]["gave_up"] is True
+    assert _jobs(plan(json_repo, JSON, after, 5, UNSTABLE, now=NOW)) == [3]
+
+
 def test_a_pointer_off_the_history_stops_the_plan(json_repo):
     state = initial_state(JSON)
     state["pointer"] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}

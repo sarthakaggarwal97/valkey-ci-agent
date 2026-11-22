@@ -343,9 +343,21 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
         return module_repository(repo) and no_code_change(
             _git(repo_dir, "ls-tree", "-r", "--name-only", merge["parent"]).split(), repo)
 
+    module_file = MODULES[_name(repo)].file if module_repository(repo) else ""
+
+    def given_up_before_its_fix(entry: dict[str, Any]) -> bool:
+        # Given up on an error the walk has since learnt to survive: a run that could not start now counts a
+        # miss, not an attempt, and the recipe now builds the module file it once left missing (the libsearch
+        # rename). One more walk each: a merge given up since carries ``gave_up``, so none is re-queued twice.
+        reason = str(entry.get("reason") or "")
+        explained = UNSTARTED in reason or bool(module_file and f"left no {module_file}" in reason)
+        return explained and "gave_up" not in entry
+
     # A merge given up with an error before a skip rule learnt its cause (valkey-search's pre-CMake window ran
     # out of attempts before ``buildable`` landed) stays an error in the state, behind the cursor, forever: it
-    # is re-done without a job here, so "Given up" keeps only the failures no rule explains.
+    # is re-done without a job here, so "Given up" keeps only the failures no rule explains. One whose error a
+    # later fix addressed instead gets one more walk, after the run's own merges.
+    redo: list[dict[str, Any]] = []
     for sha, entry in state["done"].items():
         if entry.get("outcome") != "error" or sha not in index:
             continue
@@ -354,10 +366,15 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
             skipped.append({**merge, "skip_outcome": "no-parent-code"})
         elif predates_recipe(merge):
             skipped.append({**merge, "skip_outcome": "predates-build-recipe"})
+        elif given_up_before_its_fix(entry) and sha not in state["failed"]:
+            redo.append(merge)
 
-    for item, kind in [*new, *retries, *backlog]:
+    for item, kind in [*new, *retries, *backlog, *((merge, "redo") for merge in redo)]:
         if len(jobs) >= max_jobs:
             break
+        if kind == "redo":
+            jobs.append({key: item.get(key) for key in MERGE_KEYS})
+            continue
         if kind == "retry":
             merge = {key: item.get(key) for key in MERGE_KEYS}
             if predates_recipe(merge):
@@ -1564,8 +1581,9 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
         entry["cost_usd"] = round(float(entry.get("cost_usd") or 0) + float((result or {}).get("cost_usd") or 0), 4)
         if (entry["attempts"] >= MAX_ATTEMPTS or entry.get("misses", 0) >= MAX_MISSES
                 or entry.get("refusals", 0) >= MAX_REFUSALS or OVERFLOW in entry["error"]):
+            # ``gave_up`` says the give-up postdates plan()'s redo rules: such a merge is never re-queued.
             state["done"][sha] = {**_summary(merge, result or {"error": entry["error"]}, now),
-                                  "cost_usd": entry["cost_usd"]}
+                                  "cost_usd": entry["cost_usd"], "gave_up": True}
             state["failed"].pop(sha, None)
         else:
             state["failed"][sha] = entry
