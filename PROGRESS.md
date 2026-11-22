@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-22T10:23+00:00.
+Updated 2026-11-22T10:24+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,13 +13,8 @@ Updated 2026-11-22T10:23+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T10:23:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45003287481): 5 merge(s) tested, 0 without a code change.
+[2026-11-22T10:24:11+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45012218826): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425) ([tests](tests/valkey/4425-05a9c29c6/)): Add cluster-replica-no-failover if-empty to block failover from empty replicas (#4425): 2 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4005](https://github.com/valkey-io/valkey/pull/4005) ([tests](tests/valkey/4005-f42c9ab3d/)): Reserve connection slots for priority sources (#4005): 5 of 7 test(s) reached the change, coverage 84%
-- [valkey-io/valkey#3438](https://github.com/valkey-io/valkey/pull/3438) ([tests](tests/valkey/3438-2f3bcead2/)): Cluster Bus IO offload (#3438): 1 of 12 test(s) reached the change, coverage 72%
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374) ([tests](tests/valkey/3374-719268e84/)): Fix module loading failure for redis module (#3374): declined: The change only removes the RedisModule_OnLoad macro from src/redismodule.h, a header consumed when compiling third-party modules, and adds a test module (hellovalkey.so) plus a TCL test. No source file in src/ includes redismodule.h, so the valkey-server binary's behavior is identical on 
-- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578) ([tests](tests/valkey/3578-96763ade5/)): Fix Deferred Reply Placeholders in Active Deferred Buffers (#3578): declined: The fix only changes behaviour when addReplyDeferredLen/setDeferredReply run while the client's deferred reply buffer is active. That buffer is active only (a) inside the few core commands that call initDeferredReplyBuffer (SET..GET, GETEX, GETDEL, GETSET, LPOP/RPOP count, LMPOP, BITFIELD,
 
 ### valkey-io/valkey-bloom
 
