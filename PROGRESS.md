@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-22T18:15+00:00.
+Updated 2026-11-22T18:27+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 5 | 5.0 |
+| valkey-io/valkey | 2572 | 0 | #12477 (2023-08-14) | 6 | 5.1 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
 | valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 29 | 5.7 |
@@ -13,8 +13,9 @@ Updated 2026-11-22T18:15+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-22T17:36:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45050306471): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T18:27:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45053160867): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#5097](https://github.com/valkey-io/valkey/pull/5097) ([tests](tests/valkey/5097-d683f33e0/)): Use shortest score format in ZSCAN replies (#5097): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +34,10 @@ Updated 2026-11-22T18:15+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1008 of 1617 tested (62%)
-- Changed-line coverage: median 100% of 1082 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1009 of 1618 tested (62%)
+- Changed-line coverage: median 100% of 1083 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $24.86 in the last 24 hours, $207.87 in the last 7 days, $11761.04 in all
+- Claude: $28.59 in the last 24 hours, $211.60 in the last 7 days, $11764.77 in all
 - Issues filed: 85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

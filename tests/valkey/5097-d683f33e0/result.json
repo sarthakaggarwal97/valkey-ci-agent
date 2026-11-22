@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d683f33e0afbcf828e6d799d8a1b6e27875a9c4f",
+  "parent": "80bb13e2a82b331512af2175a7f1117c313e4db2",
+  "pr": 5097,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use shortest score format in ZSCAN replies (#5097)",
+  "date": "2026-11-22",
+  "unstable": "d683f33e0afbcf828e6d799d8a1b6e27875a9c4f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7351,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3a549b2ada85",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zscan' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (ZSCAN z9 0)"
+    },
+    {
+      "scenario": "ai-7d3c48d44e40",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zscan' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (ZSCAN z9 0)"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.zscan-shortest-score-format
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZSCAN on a btree zset formats scores with d2string (shortest, matching
+    ZSCORE) instead of ld2string's %.17Lg
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ZADD, z1, "0.1", a], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, z1], compare: skip, expect: {equals: btree}}
+    - {command: [ZSCAN, z1, "0"], expect_difference: true, expect: {equals: ["0",
+          [a, "0.1"]]}}
+    - {command: [ZSCORE, z1, a]}
+    - {command: [ZADD, z2, "-0.1", b], expect: {equals: 1}}
+    - {command: [ZSCAN, z2, "0"], expect_difference: true, expect: {equals: ["0",
+          [b, "-0.1"]]}}
+    - {command: [ZADD, z3, "1e300", c], expect: {equals: 1}}
+    - {command: [ZSCAN, z3, "0"], expect_difference: true, expect: {equals: ["0",
+          [c, "1e+300"]]}}
+    - {command: [ZADD, z4, "5e-324", d], expect: {equals: 1}}
+    - {command: [ZSCAN, z4, "0"], expect_difference: true, expect: {equals: ["0",
+          [d, "5e-324"]]}}
+    - {command: [ZADD, z5, "123456789012345678", e], expect: {equals: 1}}
+    - {command: [ZSCAN, z5, "0"], expect_difference: true, expect: {equals: ["0",
+          [e, "123456789012345680"]]}}
+    - {command: [ZSCORE, z5, e]}
+    - {command: [ZADD, z6, "0.000025", f], expect: {equals: 1}}
+    - {command: [ZSCAN, z6, "0"], expect_difference: true, expect: {equals: ["0",
+          [f, "0.000025"]]}}
+    - {command: [ZADD, z7, "3", g], expect: {equals: 1}}
+    - {command: [ZSCAN, z7, "0"], expect: {equals: ["0", [g, "3"]]}}
+    - {command: [ZADD, z8, "inf", h], expect: {equals: 1}}
+    - {command: [ZSCAN, z8, "0"], expect: {equals: ["0", [h, inf]]}}
+    - {command: [ZADD, z9, "-0", i], expect: {equals: 1}}
+    - {command: [ZSCAN, z9, "0"], expect: {equals: ["0", [i, "-0"]]}}
+    - {command: [ZSCAN, z1, "0", NOSCORES], expect: {equals: ["0", [a]]}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "128"], expect: {equals: OK}}
+    - {command: [ZADD, zlp, "0.1", a], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, zlp], compare: skip, expect: {equals: listpack}}
+    - {command: [ZSCAN, zlp, "0"], expect: {equals: ["0", [a, "0.1"]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zscan}
