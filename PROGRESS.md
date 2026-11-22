@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-22T04:57+00:00.
+Updated 2026-11-22T05:26+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2571 | 0 | #12477 (2023-08-14) | 1 | 4.7 |
-| valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.4 |
+| valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.0 |
 | valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 3 | 2.1 |
 
@@ -18,7 +18,7 @@ Updated 2026-11-22T04:57+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-22T04:55:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44987101507): 0 merge(s) tested, 0 without a code change.
+[2026-11-22T05:26:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/44989355133): 0 merge(s) tested, 1 without a code change.
 
 
 ### valkey-io/valkey-json
@@ -131,7 +131,6 @@ None.
 
 ## Given up
 
-- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 - [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
 - [valkey-io/valkey-search#33](https://github.com/valkey-io/valkey-search/pull/33): building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#20](https://github.com/valkey-io/valkey-search/pull/20): `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
