@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-23T18:25+00:00.
+Updated 2026-11-23T18:40+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2574 | 0 | #12477 (2023-08-14) | 3 | 5.3 |
+| valkey-io/valkey | 2575 | 0 | #12477 (2023-08-14) | 3 | 5.4 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 711 | 0 | f8106e72e984 (2024-11-27) | 3 | 5.7 |
@@ -13,8 +13,9 @@ Updated 2026-11-23T18:25+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-23T17:57:33+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45233090732): 0 merge(s) tested, 0 without a code change.
+[2026-11-23T18:40:54+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45238627325): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#4675](https://github.com/valkey-io/valkey/pull/4675) ([tests](tests/valkey/4675-b5c423aa8/)): Fix cluster bus self-forget use-after-free (#4675): declined: The fix guards against a cluster-bus use-after-free triggered only by a forged/malformed PING with a FORGOTTEN_NODE extension naming the sender node itself (n == sender in clusterProcessPingExtensions). This cannot arise from normal operation: a node's FORGOTTEN_NODE gossip is built from i
 
 ### valkey-io/valkey-bloom
 
@@ -36,7 +37,7 @@ Updated 2026-11-23T18:25+00:00.
 - Merges whose tests reached the change: 1012 of 1622 tested (62%)
 - Changed-line coverage: median 100% of 1085 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $24.12 in the last 24 hours, $192.27 in the last 7 days, $11785.16 in all
+- Claude: $21.51 in the last 24 hours, $193.39 in the last 7 days, $11786.28 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

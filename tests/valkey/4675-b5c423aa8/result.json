@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b5c423aa88103554ca2a7b0cdd971d6e5290f600",
+  "parent": "28ef86b44342797ba1512b623b279287eaf979ba",
+  "pr": 4675,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster bus self-forget use-after-free (#4675)",
+  "date": "2026-11-23",
+  "unstable": "b5c423aa88103554ca2a7b0cdd971d6e5290f600",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1196,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix guards against a cluster-bus use-after-free triggered only by a forged/malformed PING with a FORGOTTEN_NODE extension naming the sender node itself (n == sender in clusterProcessPingExtensions). This cannot arise from normal operation: a node's FORGOTTEN_NODE gossip is built from its own blacklist, which is populated by CLUSTER FORGET, and CLUSTER FORGET refuses to forget myself, so a node never legitimately names itself as forgotten. The only trigger is hand-crafted binary clusterMsg bytes written to the cluster bus port (port+10000), which is exactly what the added TCL test does via "
+}
