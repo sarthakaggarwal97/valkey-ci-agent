@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ab2ac3b7a4e352116da6f33f36129365ae0e1b69",
+  "parent": "d46a7541c03b9514e377c5dab70911c69b2f57a1",
+  "pr": 864,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add REGEX filter to FT._LIST (#864)",
+  "date": "2026-11-22",
+  "unstable": "28ef86b44342797ba1512b623b279287eaf979ba",
+  "module_head": "ca892ce7c731e9127bcfaf36ce8985e9305a91f0",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.5536,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

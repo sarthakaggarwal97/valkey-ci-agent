@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.ft-list-regex-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._LIST REGEX filtering, its error paths and the search.max-regex-pattern-bytes
+    limit, compared between the change's and the parent's module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftlist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx_1, ON, HASH, PREFIX, 1, "a:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_2, ON, HASH, PREFIX, 1, "b:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, REGEX, ON, HASH, PREFIX, 1, "c:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [FT._LIST, REGEX, "^idx_1$"], expect_difference: true, expect: {equals: [
+          idx_1]}}
+    - {command: [FT._LIST, REGEX, idx], expect_difference: true, compare: unordered,
+      expect: {contains: idx_1}}
+    - {command: [FT._LIST, REGEX, "^REGEX$"], expect_difference: true, expect: {equals: [
+          REGEX]}}
+    - {command: [FT._LIST, regex, EGE], expect_difference: true, expect: {equals: [
+          REGEX]}}
+    - {command: [FT._LIST, REGEX, ""], expect_difference: true, compare: unordered,
+      expect: {contains: REGEX}}
+    - {command: [FT._LIST, REGEX, "^nomatch$"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [FT._LIST, REGEX, "("], expect_difference: true, expect: {error: "Invalid\
+          \ regular expression"}}
+    - {command: [FT._LIST, REGEX, !!binary '/w=='], expect_difference: true, expect: {
+        error: "Invalid regular expression"}}
+    - {command: [FT._LIST, REGEX, !!binary 'YQBi'], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [FT._LIST, REGEX], expect_difference: true, expect: {error: "Missing\
+          \ pattern for REGEX"}}
+    - {command: [FT._LIST, FOO, bar], expect_difference: true, expect: {error: true}}
+    - {command: [FT._LIST, REGEX, a, extra], expect_difference: true, expect: {error: "Unexpected\
+          \ argument"}}
+    - {command: [CONFIG, SET, search.max-regex-pattern-bytes, "4"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT._LIST, REGEX, abcd], expect_difference: true, expect: {equals: []}}
+    - {command: [FT._LIST, REGEX, abcde], expect_difference: true, expect: {error: "too\
+          \ long"}}
+    - {command: [CONFIG, SET, search.max-regex-pattern-bytes, "1024"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.CREATE, db1_idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [db1_idx]}}
+    - {command: [FT._LIST, REGEX, ".*"], expect_difference: true, expect: {equals: [
+          db1_idx]}}
+    - {command: [FT._LIST, REGEX, "^idx_"], expect_difference: true, expect: {equals: []}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [FT._LIST, REGEX, "^db1_"], expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftlist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftlist}

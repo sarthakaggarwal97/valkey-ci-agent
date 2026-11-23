@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search d46a7541c03b..ab2ac3b7a4e3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e6a4a15e6c36
+seed: 1
+experiment:
+  id: proposed.ft-list-regex-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

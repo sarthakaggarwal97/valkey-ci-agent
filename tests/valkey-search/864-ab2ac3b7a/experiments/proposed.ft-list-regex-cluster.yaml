@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.ft-list-regex-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._LIST REGEX filtering and its error paths on a cluster-mode node,
+    compared between the change's and the parent's module builds
+components:
+- use: valkey.action.commands
+  id: ftlist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, cidx_1, ON, HASH, PREFIX, 1, "p:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cidx_2, ON, HASH, PREFIX, 1, "q:", SCHEMA, f1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [FT._LIST, REGEX, "^cidx_1$"], expect_difference: true, expect: {
+        equals: [cidx_1]}}
+    - {command: [FT._LIST, REGEX, "cidx_[0-9]+$"], expect_difference: true, compare: unordered,
+      expect: {contains: cidx_2}}
+    - {command: [FT._LIST, REGEX, "["], expect_difference: true, expect: {error: "Invalid\
+          \ regular expression"}}
+    - {command: [FT._LIST, REGEX, "^cidx_1$", junk], expect_difference: true, expect: {
+        error: "Unexpected argument"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftlist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftlist}
