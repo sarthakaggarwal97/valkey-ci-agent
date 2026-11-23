@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-23T18:40+00:00.
+Updated 2026-11-23T18:41+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,9 +13,8 @@ Updated 2026-11-23T18:40+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-23T18:40:54+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45238627325): 1 merge(s) tested, 0 without a code change.
+[2026-11-23T18:41:42+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45240978541): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#4675](https://github.com/valkey-io/valkey/pull/4675) ([tests](tests/valkey/4675-b5c423aa8/)): Fix cluster bus self-forget use-after-free (#4675): declined: The fix guards against a cluster-bus use-after-free triggered only by a forged/malformed PING with a FORGOTTEN_NODE extension naming the sender node itself (n == sender in clusterProcessPingExtensions). This cannot arise from normal operation: a node's FORGOTTEN_NODE gossip is built from i
 
 ### valkey-io/valkey-bloom
 
