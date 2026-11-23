@@ -131,7 +131,10 @@ def _check(args):
     if experiment["status"] != "pass":
         return finish("fail")
     gates["mapping_complete"] = {"status": "pass", "unmapped_actions": [], "unknown_actions": []}
-    gates["approved_claim"] = {"status": "pass", "claims_status": claims.get("status")}
+    gates["approved_claim"] = {
+        "status": "pass" if claims.get("status") == "approved" else "skip",
+        "claims_status": claims.get("status"),
+    }
     return finish("fail" if failed else "pass")
 
 

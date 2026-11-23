@@ -438,6 +438,13 @@ def test_assurance_problems_none_when_every_gate_passed():
     assert assurance_problems(_report()) == []
 
 
+def test_assurance_problems_accept_a_skipped_approved_claim_gate():
+    # spec check reports approved_claim as skip on a draft; that is not a failure.
+    report = _report(approved_claim={
+        "status": "skip", "claims_status": "draft", "approved_by": None, "required": False})
+    assert assurance_problems(report) == []
+
+
 def test_assurance_problems_name_a_vacuous_control():
     report = _report(negative_controls={"status": "fail", "controls": {"ack-before-save": {
         "status": "fail", "violates": "AckedDurable",

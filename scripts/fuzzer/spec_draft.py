@@ -566,7 +566,8 @@ def assurance_problems(report: Any) -> list[str]:
     if _timed_out(gates):
         problems.append("TLC ran out of time; make the bounds smaller so it finishes in minutes")
     for name, entry in gates.items():
-        if not isinstance(entry, dict) or entry.get("status") != "pass":
+        # A skipped gate (approved_claim on a draft) does not fail spec check.
+        if not isinstance(entry, dict) or entry.get("status") not in ("pass", "skip"):
             problems += _describe_gate(str(name), entry)
     if not problems:
         missing = [name for name in REQUIRED_ASSURANCE_GATES if name not in gates]
