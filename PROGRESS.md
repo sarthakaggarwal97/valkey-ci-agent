@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-23T03:32+00:00.
+Updated 2026-11-23T03:43+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2573 | 0 | #12477 (2023-08-14) | 7 | 5.3 |
+| valkey-io/valkey | 2574 | 0 | #12477 (2023-08-14) | 8 | 5.4 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.1 |
 | valkey-io/valkey-search | 708 | 0 | f8106e72e984 (2024-11-27) | 26 | 5.4 |
@@ -13,8 +13,10 @@ Updated 2026-11-23T03:32+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-23T02:28:01+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45100301441): 0 merge(s) tested, 0 without a code change.
+[2026-11-23T03:43:33+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45103173629): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#5452](https://github.com/valkey-io/valkey/pull/5452) ([tests](tests/valkey/5452-28ef86b44/)): Ignore replica claims that would close a replicaof cycle (#5452): 0 of 3 test(s) reached the change, coverage 90%
+- model `cluster-election` for [valkey-io/valkey#5452](https://github.com/valkey-io/valkey/pull/5452): error: spec check fails on the fuzzer's own register bundle: approved_claim: {"approved_by": null, "claims_status": "draft", "required": false, "status": "skip"}
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +35,10 @@ Updated 2026-11-23T03:32+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1010 of 1619 tested (62%)
-- Changed-line coverage: median 100% of 1084 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1010 of 1620 tested (62%)
+- Changed-line coverage: median 100% of 1085 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $30.78 in the last 24 hours, $204.61 in the last 7 days, $11767.40 in all
+- Claude: $31.63 in the last 24 hours, $205.47 in the last 7 days, $11768.25 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -124,7 +126,7 @@ Updated 2026-11-23T03:32+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98
-- Model updates: 2 asked for, 2 with no model change, 0 rejected, 0 failed; 0 pull request(s)
+- Model updates: 3 asked for, 2 with no model change, 0 rejected, 1 failed; 0 pull request(s)
 
 ## Retries
 

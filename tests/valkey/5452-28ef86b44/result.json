@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28ef86b44342797ba1512b623b279287eaf979ba",
+  "parent": "c28334e47b7d83b845593750d05bd5f046fa68e1",
+  "pr": 5452,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ignore replica claims that would close a replicaof cycle (#5452)",
+  "date": "2026-11-23",
+  "unstable": "28ef86b44342797ba1512b623b279287eaf979ba",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 10,
+    "percent": 90,
+    "uncovered": [
+      "src/cluster_legacy.c:4676"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8525,
+  "findings": [],
+  "recorded": []
+}
