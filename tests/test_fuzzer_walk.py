@@ -1679,6 +1679,28 @@ def test_new_valkey_merges_get_a_model_job_per_bundle_they_touch(tmp_path):
     assert plan(repo, walk.VALKEY_REPO, state, 10, "", now=NOW)["models"] == []
 
 
+def test_a_model_job_lost_to_a_harness_fault_is_asked_once_more(tmp_path):
+    # valkey #5452's model job erred in preflight (the skip-gate bug, c13f8fef) before Claude ran: the merge is
+    # walked and never new again, so without a re-ask the cluster-election bundle misses its update forever.
+    repo = _repo(tmp_path, "valkey", [])
+    base = _commit_files(repo, "Base", {"src/register.c": REGISTER_C})
+    head = _commit_files(repo, "Fix the write (#2)", {"src/register.c": REGISTER_C.replace("return v;",
+                                                                                           "return v + 2;")})
+    state = initial_state(walk.VALKEY_REPO)
+    state["pointer"] = {"head": head, "cursor": base, "end": base}
+    reason = walk.PREFLIGHT_FAILED + ': approved_claim: {"status": "skip"}'
+    state["models"] = {head: {"register": {"repo": walk.VALKEY_REPO, "pr": 2, "verdict": "error",
+                                           "reason": reason}}}
+    planned = plan(repo, walk.VALKEY_REPO, state, 10, "", now=NOW, scopes=SCOPES)
+    assert [(m["pr"], m["protocol"]) for m in planned["models"]] == [(2, "register")]
+
+    # Erring again, the job is marked and the next plan leaves it alone; other errors are never re-asked.
+    after = update(state, {**planned, "merges": [], "skipped": []}, [], now=NOW,
+                   models=[{"sha": head, "protocol": "register", "verdict": "error", "reason": reason}])
+    assert after["models"][head]["register"]["gave_up"] is True
+    assert plan(repo, walk.VALKEY_REPO, after, 10, "", now=NOW, scopes=SCOPES)["models"] == []
+
+
 def test_a_modules_merges_get_no_model_job(json_repo):
     state = initial_state(JSON)
     shas = _shas(json_repo)

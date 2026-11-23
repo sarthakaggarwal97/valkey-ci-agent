@@ -146,6 +146,9 @@ REJECTED_CONFIG = "FATAL CONFIG FILE ERROR"
 # #3438: provisioning, environment acquisition, a flaky cluster). Nothing was tested, so this counts a miss,
 # not an attempt: a transient infra blip must not give a merge up unwalked after MAX_ATTEMPTS.
 UNSTARTED = "could not start"
+# What a model job's error says when preflight rejected the fuzzer's own register bundle: a harness fault
+# (the skip-gate bug, since fixed), not a verdict on the change, so the bundle missed its update.
+PREFLIGHT_FAILED = "spec check fails on the fuzzer's own register bundle"
 # What Claude is told when its timeout cuts it off, in the same session, and how long it has to answer.
 TIME_UP_PROMPT = ("Your time is up. Stop reading and answer now with what you have: the one JSON object the first "
                   "message asks for, or its \"reason\" alone if you found no test worth writing.")
@@ -399,6 +402,19 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
             jobs.append(merge)
             if kind == "new" and repo == VALKEY_REPO and scopes:
                 models += model_jobs(repo_dir, merge, scopes)
+    # A model job that failed in the harness before Claude ran (the preflight skip-gate bug, since fixed)
+    # judged nothing, and a model job is planned only when its merge is new: its bundle would silently miss
+    # the merge's update forever. One more ask each: an error update() records since carries ``gave_up``,
+    # so none is re-asked twice.
+    if repo == VALKEY_REPO and scopes:
+        planned_models = {(job["sha"], job["protocol"]) for job in models}
+        for sha, bundles in (state.get("models") or {}).items():
+            lost = {protocol for protocol, entry in bundles.items()
+                    if entry.get("verdict") == "error" and PREFLIGHT_FAILED in str(entry.get("reason") or "")
+                    and "gave_up" not in entry}
+            if lost and sha in index:
+                models += [job for job in model_jobs(repo_dir, history[index[sha]], scopes)
+                           if job["protocol"] in lost and (job["sha"], job["protocol"]) not in planned_models]
     cursor = history[index[pointer["cursor"]]]
     pointer.update(remaining=index[pointer["end"]] - index[pointer["cursor"]], cursor_pr=cursor["pr"],
                    cursor_date=cursor["date"])
@@ -1597,6 +1613,9 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
         for key, limit in (("reason", 300), ("pull_request", 200)):
             if record.get(key):
                 entry[key] = str(record[key])[:limit]
+        if record["verdict"] == "error":
+            # ``gave_up`` says the error postdates plan()'s re-ask rule: such a job is never re-asked.
+            entry["gave_up"] = True
         state.setdefault("models", {}).setdefault(job["sha"], {})[job["protocol"]] = entry
     state["last_run"] = {"at": now, "url": run_url, "merges": [m["sha"] for m in planned["merges"]],
                          "skipped": len(planned["skipped"]), "cost_usd": round(cost, 4)}
