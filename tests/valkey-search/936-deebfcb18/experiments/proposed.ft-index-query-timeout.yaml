@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.ft-index-query-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE QUERY_TIMEOUT parsing and validation, its use as the default
+    FT.SEARCH timeout, TIMEOUT precedence, and the global-default fallback, observed
+    via the search_entries_fetcher pausepoint
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: qt
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 50
+    commands:
+    - {command: [CONFIG, SET, search.default-timeout-ms, 60000], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', QUERY_TIMEOUT, 50, SCHEMA,
+        tag, TAG], expect_difference: true, expect: {error: false}}
+    - {command: [FT.CREATE, b0, ON, HASH, PREFIX, 1, 'b0:', QUERY_TIMEOUT, 0, SCHEMA,
+        f, TAG], expect_difference: true, expect: {error: "must be a positive integer"}}
+    - {command: [FT.CREATE, b1, ON, HASH, PREFIX, 1, 'b1:', QUERY_TIMEOUT, 60001,
+        SCHEMA, f, TAG], expect_difference: true, expect: {error: "cannot exceed"}}
+    - {command: [FT.CREATE, b2, ON, HASH, PREFIX, 1, 'b2:', QUERY_TIMEOUT, 4294967295,
+        SCHEMA, f, TAG], expect_difference: true, expect: {error: "cannot exceed"}}
+    - {command: [FT.CREATE, b3, ON, HASH, PREFIX, 1, 'b3:', QUERY_TIMEOUT, 4294967296,
+        SCHEMA, f, TAG], expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, b4, ON, HASH, PREFIX, 1, 'b4:', QUERY_TIMEOUT, -1, SCHEMA,
+        f, TAG], expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, b5, ON, HASH, PREFIX, 1, 'b5:', QUERY_TIMEOUT, SCHEMA,
+        f, TAG], expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, b6, ON, HASH, PREFIX, 1, 'b6:', QUERY_TIMEOUT, 1, SCHEMA,
+        f, TAG], expect_difference: true, expect: {error: false}}
+    - {command: [FT.CREATE, b7, ON, HASH, PREFIX, 1, 'b7:', QUERY_TIMEOUT, 100, QUERY_TIMEOUT,
+        200, SCHEMA, f, TAG], expect_difference: true, expect: {error: false}}
+    - {command: [FT.CREATE, kw, ON, HASH, PREFIX, 1, 'kw:', SCHEMA, QUERY_TIMEOUT,
+        TAG], expect: {error: false}}
+    - {command: [HSET, 'doc:1', tag, v], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@tag:{v}', RETURN, 0], wait_s: 8, expect_difference: true,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, search_entries_fetcher], expect: {error: false}}
+    - {command: [FT.SEARCH, idx, '@tag:{v}', RETURN, 0], expect_difference: true,
+      expect: {error: "timeout"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, search_entries_fetcher], expect: {
+        error: false}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'p2:', QUERY_TIMEOUT, 60000,
+        SCHEMA, tag, TAG], expect_difference: true, expect: {error: false}}
+    - {command: [HSET, 'p2:1', tag, v], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, '@tag:{v}', RETURN, 0], wait_s: 8, expect_difference: true,
+      expect: {contains: 'p2:1'}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, search_entries_fetcher], expect: {error: false}}
+    - {command: [FT.SEARCH, idx2, '@tag:{v}', TIMEOUT, 50, RETURN, 0], expect_difference: true,
+      expect: {error: "timeout"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, search_entries_fetcher], expect: {
+        error: false}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, 'p3:', SCHEMA, tag, TAG], expect: {
+        error: false}}
+    - {command: [HSET, 'p3:1', tag, v], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx3, '@tag:{v}', RETURN, 0], wait_s: 8, expect: {contains: 'p3:1'}}
+    - {command: [CONFIG, SET, search.default-timeout-ms, 100], expect: {equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, search_entries_fetcher], expect: {error: false}}
+    - {command: [FT.SEARCH, idx3, '@tag:{v}', RETURN, 0], expect: {error: "timeout"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, search_entries_fetcher], expect: {
+        error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [qt.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: qt}

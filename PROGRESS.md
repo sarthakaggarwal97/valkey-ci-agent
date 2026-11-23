@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-23T08:37+00:00.
+Updated 2026-11-23T08:38+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2574 | 0 | #12477 (2023-08-14) | 8 | 5.4 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
-| valkey-io/valkey-search | 710 | 0 | f8106e72e984 (2024-11-27) | 3 | 5.6 |
+| valkey-io/valkey-search | 711 | 0 | f8106e72e984 (2024-11-27) | 4 | 5.7 |
 
 ## Last runs
 
@@ -28,17 +28,16 @@ Updated 2026-11-23T08:37+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-23T06:45:21+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45112318619): 2 merge(s) tested, 0 without a code change.
+[2026-11-23T08:38:41+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45126271693): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#864](https://github.com/valkey-io/valkey-search/pull/864) ([tests](tests/valkey-search/864-ab2ac3b7a/)): Add REGEX filter to FT._LIST (#864): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1759](https://github.com/valkey-io/valkey-search/pull/1759) ([tests](tests/valkey-search/1759-ca892ce7c/)): ci: speed up CI with right-sized ccache, cache pruning, and macOS caching (#1759): declined: The change modifies only CI infrastructure: GitHub Actions workflow YAML files (.github/workflows/*) and a new ci/prune_ccache.sh script that manages Actions cache entries. It adjusts CCACHE_MAXSIZE, switches to cache restore/save actions, adds cache pruning on main-branch pushes, and adds
+- [valkey-io/valkey-search#936](https://github.com/valkey-io/valkey-search/pull/936) ([tests](tests/valkey-search/936-deebfcb18/)): Implement Index Default Timeout (#936): 3 of 3 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 1011 of 1621 tested (62%)
+- Merges whose tests reached the change: 1012 of 1622 tested (62%)
 - Changed-line coverage: median 100% of 1085 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $40.32 in the last 24 hours, $190.46 in the last 7 days, $11776.94 in all
+- Claude: $48.54 in the last 24 hours, $198.68 in the last 7 days, $11785.16 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
