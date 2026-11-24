@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-24T13:39+00:00.
+Updated 2026-11-24T13:46+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2577 | 0 | #12477 (2023-08-14) | 3 | 5.0 |
+| valkey-io/valkey | 2577 | 1 | #12477 (2023-08-14) | 3 | 5.0 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 1 | 5.9 |
@@ -13,9 +13,9 @@ Updated 2026-11-24T13:39+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-24T13:25:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45391041104): 1 merge(s) tested, 0 without a code change.
+[2026-11-24T13:46:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45403368123): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5334](https://github.com/valkey-io/valkey/pull/5334) ([tests](tests/valkey/5334-bd169bc17/)): Iterate only created databases instead of all configured databases (#5334): 1 of 10 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#3245](https://github.com/valkey-io/valkey/pull/3245): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 
 ### valkey-io/valkey-bloom
 
@@ -129,7 +129,7 @@ Updated 2026-11-24T13:39+00:00.
 
 ## Retries
 
-None.
+- [valkey-io/valkey#3245](https://github.com/valkey-io/valkey/pull/3245): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 
 ## Given up
 
