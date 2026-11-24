@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b16df2e55e3ab5e530085fd6fec312bf55f1b99",
+  "parent": "b5c423aa88103554ca2a7b0cdd971d6e5290f600",
+  "pr": 5556,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refuse to load a replicaof cycle from nodes.conf (#5556)",
+  "date": "2026-11-24",
+  "unstable": "5b16df2e55e3ab5e530085fd6fec312bf55f1b99",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 14,
+    "executed": 10,
+    "percent": 71,
+    "uncovered": [
+      "src/cluster_legacy.c:706",
+      "src/cluster_legacy.c:707",
+      "src/cluster_legacy.c:1092",
+      "src/cluster_legacy.c:1095"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.8977,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b5c423aa8810..5b16df2e55e3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-741d4c3fe570
+seed: 2002
+experiment:
+  id: valkey.slot-migration-chaos
+  inputs:
+    keys_per_slot: 50
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100

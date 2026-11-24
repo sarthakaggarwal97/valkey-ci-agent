@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b5c423aa8810..5b16df2e55e3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-56ccdd9865dc
+seed: 1001
+experiment:
+  id: valkey.cluster-election-durability
+  inputs:
+    election: kill_primary
+    second_election: kill_primary
+    save_behavior: sync
+    second_election_delay_s: 2.5
+    restart_delay_s: 0
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7000
