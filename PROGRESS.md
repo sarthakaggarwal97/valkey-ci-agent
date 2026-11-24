@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-24T17:27+00:00.
+Updated 2026-11-24T17:30+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -23,7 +23,7 @@ Updated 2026-11-24T17:27+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-24T17:00:12+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45443482428): 0 merge(s) tested, 0 without a code change.
+[2026-11-24T17:30:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45449292300): 0 merge(s) tested, 0 without a code change.
 
 
 ### valkey-io/valkey-search
@@ -128,7 +128,7 @@ Updated 2026-11-24T17:27+00:00.
 
 ## Retries
 
-- [valkey-io/valkey#3245](https://github.com/valkey-io/valkey/pull/3245): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3245](https://github.com/valkey-io/valkey/pull/3245): refusal 1 of 5, next try after 2026-11-25T13:46:56+00:00, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 
 ## Given up
 
