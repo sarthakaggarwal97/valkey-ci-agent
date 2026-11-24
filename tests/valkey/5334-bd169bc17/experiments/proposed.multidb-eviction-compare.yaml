@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.multidb-eviction-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: allkeys-random and allkeys-lru eviction over databases created out
+    of id order keeps accepting writes under maxmemory
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-random], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 5mb], expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SETRANGE, "r9:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r9:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r9:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r9:4", 262143, x], expect: {equals: 262144}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SETRANGE, "r2:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r2:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r2:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r2:4", 262143, x], expect: {equals: 262144}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SETRANGE, "r5:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r5:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r5:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "r5:4", 262143, x], expect: {equals: 262144}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SETRANGE, "l9:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l9:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l9:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l9:4", 262143, x], expect: {equals: 262144}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SETRANGE, "l2:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l2:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l2:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l2:4", 262143, x], expect: {equals: 262144}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SETRANGE, "l5:1", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l5:2", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l5:3", 262143, x], expect: {equals: 262144}}
+    - {command: [SETRANGE, "l5:4", 262143, x], expect: {equals: 262144}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, probe, v], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

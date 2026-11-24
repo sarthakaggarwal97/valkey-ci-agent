@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.multidb-out-of-order-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Databases created out of SELECT order survive SAVE and restart, SWAPDB
+    with an uncreated db, DEBUG DIGEST, INFO keyspace, and active expire visits every
+    created db
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multidb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SET, k9, v9], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SET, k5, v5], expect: {equals: OK}}
+    - {command: [SET, k5b, v5b], expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [SET, k15, v15], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "db9:keys=1,"}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "db5:keys=2,"}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [SWAPDB, 5, 12], expect: {equals: OK}}
+    - {command: [SELECT, 12], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [GET, k5], expect: {equals: v5}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [GET, k9], expect: {equals: v9}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [SELECT, 12], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [GET, k5], expect: {equals: v5}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [GET, k15], expect: {equals: v15}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "db12:keys=2,"}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SET, vol9a, x, PX, 150], expect: {equals: OK}}
+    - {command: [SET, vol9b, y, PX, 150], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SET, vol2, z, PX, 150], expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 20, expect: {equals: 1}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 20, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [multidb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multidb}

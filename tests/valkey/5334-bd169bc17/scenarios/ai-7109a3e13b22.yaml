@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b16df2e55e3..bd169bc17797.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7109a3e13b22
+seed: 104
+experiment:
+  id: proposed.multidb-aof-rewrite-compare
+deployment:
+  mode: standalone
+  base_port: 7300

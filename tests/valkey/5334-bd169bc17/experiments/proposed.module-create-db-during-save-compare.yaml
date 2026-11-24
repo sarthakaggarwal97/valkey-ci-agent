@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.module-create-db-during-save-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module creates a lower-id database in the middle of an RDB save;
+    the save completes, every database is written once, and the restart loads it back
+components:
+- use: valkey.action.commands
+  id: modsave
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [testrdb.set.key, tkey, tval], expect: {equals: 1}}
+    - {command: [SET, plain, v], expect: {equals: OK}}
+    - {command: [testrdb.create_db_on_save, 2], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [testrdb.get.key, tkey], expect: {equals: tval}}
+    - {command: [GET, plain], expect: {equals: v}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modsave}

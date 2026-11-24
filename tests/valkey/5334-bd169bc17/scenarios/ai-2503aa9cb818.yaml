@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b16df2e55e3..bd169bc17797.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2503aa9cb818
+seed: 103
+experiment:
+  id: proposed.multidb-eviction-compare
+deployment:
+  mode: standalone
+  base_port: 7200

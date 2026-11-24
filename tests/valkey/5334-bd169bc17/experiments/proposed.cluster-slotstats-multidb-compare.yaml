@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slotstats-multidb-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SLOT-STATS key-count, COUNTKEYSINSLOT and FLUSHSLOT sum over
+    multiple databases created out of id order
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-databases: 16}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, KEYSLOT, "{s}"], expect: {equals: 3828}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SET, "{s}b1", v], expect: {equals: OK}}
+    - {command: [SET, "{s}b2", v], expect: {equals: OK}}
+    - {command: [SET, "{s}b3", v], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, "{s}a", v], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, "{s}z", v], expect: {equals: OK}}
+    - {command: [SET, plainkey, v], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], expect: {equals: 5}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 3828, 3828], expect: {equals: [
+          [3828, [key-count, 5]]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 1, DESC], expect: {
+        equals: [[3828, [key-count, 5]]]}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 3000, 4000]}
+    - {command: [SELECT, 12], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 3828, 3828], expect: {equals: [
+          [3828, [key-count, 5]]]}}
+    - {command: [CLUSTER, FLUSHSLOT, 3828], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3828], expect: {equals: 0}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 3828, 3828], expect: {equals: [
+          [3828, [key-count, 0]]]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

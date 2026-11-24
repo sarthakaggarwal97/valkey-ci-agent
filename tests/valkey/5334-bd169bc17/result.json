@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bd169bc17797d73a7141ddbd112e0c8a77e5f529",
+  "parent": "5b16df2e55e3ab5e530085fd6fec312bf55f1b99",
+  "pr": 5334,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Iterate only created databases instead of all configured databases (#5334)",
+  "date": "2026-11-24",
+  "unstable": "bd169bc17797d73a7141ddbd112e0c8a77e5f529",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 1,
+  "hunted": 10,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 130,
+    "executed": 111,
+    "percent": 85,
+    "uncovered": [
+      "src/cluster_migrateslots.c:257",
+      "src/cluster_migrateslots.c:1668",
+      "src/cluster_migrateslots.c:1669",
+      "src/db.c:1884",
+      "src/defrag.c:1232",
+      "src/defrag.c:1233",
+      "src/evict.c:567",
+      "src/evict.c:568",
+      "src/evict.c:569",
+      "src/forkless.c:104",
+      "src/forkless.c:105",
+      "src/forkless.c:106",
+      "src/server.c:1664",
+      "src/server.c:1667",
+      "src/server.c:1668",
+      "src/server.c:1669",
+      "src/server.c:1671",
+      "src/server.c:3107",
+      "src/server.c:3108"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4204,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-07bdeb90c510",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'slotstats' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLUSTER COUNTKEYSINSLOT 3828)"
+    }
+  ]
+}

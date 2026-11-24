@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.multidb-aof-rewrite-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite in AOF format over databases created out of id order, then
+    a restart loads every database back
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 90
+    commands:
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SET, a9, v9], expect: {equals: OK}}
+    - {command: [SET, vol9, w, EX, 10000], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, a3, v3], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, aof-use-rdb-preamble, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, post, v], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [GET, a9], expect: {equals: v9}}
+    - {command: [GET, vol9], expect: {equals: w}}
+    - {command: [TTL, vol9], compare: skip, expect: {min: 1}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [GET, post], expect: {equals: v}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "db9:keys=2,"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

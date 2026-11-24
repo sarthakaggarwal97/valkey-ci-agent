@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b16df2e55e3..bd169bc17797.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58e82881b08c
+seed: 106
+experiment:
+  id: proposed.module-create-db-during-save-compare
+deployment:
+  mode: standalone
+  base_port: 7500

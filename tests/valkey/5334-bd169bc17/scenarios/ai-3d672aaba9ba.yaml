@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b16df2e55e3..bd169bc17797.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3d672aaba9ba
+seed: 101
+experiment:
+  id: proposed.multidb-out-of-order-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
