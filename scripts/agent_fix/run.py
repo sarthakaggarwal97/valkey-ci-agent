@@ -366,7 +366,7 @@ def publish_and_report(
 def _published(gh: Any, fix_plan: FixPlan, candidate: FixCandidate, *, git_env: dict[str, str]) -> FixResult:
     """Publish ``candidate`` as its target says, after what only its front door can recheck."""
     task, request = fix_plan.task, fix_plan.task.request
-    bot_login = f"{APP_LOGIN}[bot]"
+    bot_login = os.environ.get("E2E_BOT_LOGIN") or f"{APP_LOGIN}[bot]"  # Fork rehearsal only, do not merge
     # Only an issue's fix reads the variable: a bad value cannot stop a PR's.
     mode = IssuePublication.DRAFT_PR
     if task.target.kind is TargetKind.DRAFT_PR and request is None:
@@ -470,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         parser.error("TARGET_TOKEN is required")
     gh = Github(auth=Auth.Token(token))
-    bot_login = f"{APP_LOGIN}[bot]"
+    bot_login = os.environ.get("E2E_BOT_LOGIN") or f"{APP_LOGIN}[bot]"  # Fork rehearsal only, do not merge
     if args.command == "plan":
         try:
             request = json.loads(args.request)

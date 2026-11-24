@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     agent_repo, ref = os.environ["GITHUB_REPOSITORY"], os.environ.get("GITHUB_REF_NAME", "main")
     name = LABELLED_WORKFLOW if args.queue == "labelled" else WORKFLOW
     workflow = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"])).get_repo(agent_repo).get_workflow(name)
-    bot_login = f"{APP_LOGIN}[bot]"
+    bot_login = os.environ.get("E2E_BOT_LOGIN") or f"{APP_LOGIN}[bot]"  # Fork rehearsal only, do not merge
 
     def start(issue: int, inputs: dict[str, str]) -> None:
         if args.dry_run:

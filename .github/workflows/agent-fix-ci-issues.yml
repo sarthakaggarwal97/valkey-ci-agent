@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   fix:
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # Fork rehearsal only, do not merge
     permissions:
       actions: read
       contents: read
@@ -40,7 +40,7 @@ jobs:
     uses: ./.github/workflows/agent-fix-run.yml
     with:
       front_door: issue
-      request: ${{ format('{{"repo":"valkey-io/valkey","issue":{0}}}', inputs.issue) }}
+      request: ${{ format('{{"repo":"sarthakaggarwal97/valkey","issue":{0}}}', inputs.issue) }}  # Fork rehearsal only
       key: issue-${{ inputs.issue }}
     secrets:
       VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}

@@ -37,7 +37,7 @@ jobs:
   dispatch:
     name: "Dispatch labelled issues"
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent'
       && (github.event_name == 'workflow_dispatch' || vars.AGENT_FIX_DISPATCH == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -60,23 +60,18 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          # Read issues, their events and comments, and the bot's pull
-          # requests; nothing is written.
-          permission-issues: read
-          permission-pull-requests: read
-          permission-metadata: read
+        # Fork rehearsal only, do not merge: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          E2E_BOT_LOGIN: sarthakaggarwal97  # Fork rehearsal only: the PAT's user stands in for the bot
           MAX_RUNS: ${{ inputs.max_runs || vars.AGENT_FIX_MAX_RUNS || '2' }}
           AGENT_FIX_PUBLISH: ${{ vars.AGENT_FIX_PUBLISH }}
           AGENT_FIX_REVIEWED_THROUGH: ${{ vars.AGENT_FIX_REVIEWED_THROUGH }}
@@ -84,7 +79,7 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           set -euo pipefail
-          args=(--repo valkey-io/valkey --queue labelled --max-runs "${MAX_RUNS}")
+          args=(--repo sarthakaggarwal97/valkey --queue labelled --max-runs "${MAX_RUNS}")  # Fork rehearsal only
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi
@@ -97,7 +92,7 @@ jobs:
   upkeep:
     name: "Look after the bot's pull requests"
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent' && github.event_name == 'schedule'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent' && github.event_name == 'schedule'
       && vars.AGENT_FIX_DISPATCH == 'true' && vars.AGENT_FIX_PUBLISH == 'draft-pr'
     concurrency:
       group: agent-fix-labelled-upkeep
@@ -109,9 +104,6 @@ jobs:
     uses: ./.github/workflows/agent-fix-run.yml
     with:
       front_door: upkeep
-      request: '{"repo":"valkey-io/valkey"}'
+      request: '{"repo":"sarthakaggarwal97/valkey"}'  # Fork rehearsal only
       key: upkeep-valkey
-    secrets:
-      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+    secrets: inherit  # Fork rehearsal only, do not merge: the PAT stands in for the App

@@ -1486,6 +1486,8 @@ def guide_for(repo_full_name: str, *, failed_job: bool = False) -> str:
     from a test written for it, which is right by construction.
     """
     name = repo_full_name.replace("/", "__")
+    if name == "sarthakaggarwal97__valkey":  # Fork rehearsal only, do not merge: the fork gets Valkey's guide
+        name = "valkey-io__valkey"
     try:
         guide = (_GUIDES_DIR / f"{name}.md").read_text(encoding="utf-8")
     except OSError:

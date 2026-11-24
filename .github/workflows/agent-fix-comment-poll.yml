@@ -26,7 +26,7 @@ env:
 jobs:
   poll:
     name: "Poll for fix commands"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # Fork rehearsal only, do not merge
     runs-on: ubuntu-latest
     timeout-minutes: 70
     concurrency:

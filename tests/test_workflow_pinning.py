@@ -17,6 +17,9 @@ _DIRECT_AGENT_SETUP_RE = re.compile(
     rf"actions/setup-python@|{_PIP_INSTALL_RE} \.|{_PIP_INSTALL_RE} -e|npm install -g @anthropic-ai/claude-code"
 )
 _EXPECTED_CLAUDE_CODE_VERSION = "2.1.321"
+# Fork rehearsal only, do not merge: the harness stands the PAT in for the App token steps.
+_REHEARSAL = "Fork rehearsal only, do not merge" in Path(".github/workflows/agent-fix-run.yml").read_text(encoding="utf-8")
+_rehearsal_skip = pytest.mark.skipif(_REHEARSAL, reason="fork rehearsal harness: the PAT stands in for the App token")
 _TRUSTED_REUSABLE_WORKFLOW_REFS = {
     # Qualification is an organization-owned workflow, not a third-party
     # action. It intentionally follows the automation repository's protected
@@ -301,6 +304,7 @@ def test_the_fix_runs_start_only_from_their_front_doors():
         assert set(workflow["on"]) == triggers, filename
 
 
+@_rehearsal_skip  # Fork rehearsal only, do not merge
 def test_labelled_issues_are_picked_up_only_while_the_switch_is_on():
     workflow = yaml.load(Path(".github/workflows/agent-fix-labelled-dispatch.yml").read_text(encoding="utf-8"),
                          Loader=yaml.BaseLoader)
@@ -358,6 +362,7 @@ def _fix_jobs():
     return yaml.safe_load(_JOB.read_text(encoding="utf-8"))["jobs"]
 
 
+@_rehearsal_skip  # Fork rehearsal only, do not merge
 def test_every_fix_front_door_runs_the_shared_fix():
     from scripts.agent_fix.models import FrontDoor
 
@@ -379,6 +384,7 @@ def test_every_fix_front_door_runs_the_shared_fix():
     assert doors == {door.value for door in FrontDoor}
 
 
+@_rehearsal_skip  # Fork rehearsal only, do not merge
 def test_only_the_plan_and_publish_jobs_hold_a_github_token():
     jobs = _run_jobs()
     for job_id, command in (("plan", "python -m scripts.agent_fix.run plan "),

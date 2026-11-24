@@ -33,7 +33,7 @@ jobs:
   dispatch:
     name: "Dispatch detector issue fixes"
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent'
       && (github.event_name == 'workflow_dispatch' || (vars.AGENT_FIX_CI_ISSUES_AUTO_DISPATCH || vars.CI_FIX_ISSUES_AUTO_DISPATCH) != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -77,7 +77,7 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           set -euo pipefail
-          args=(--repo valkey-io/valkey --max-runs "${MAX_RUNS}")
+          args=(--repo sarthakaggarwal97/valkey --max-runs "${MAX_RUNS}")  # Fork rehearsal only
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi

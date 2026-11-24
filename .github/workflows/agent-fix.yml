@@ -55,7 +55,7 @@ permissions: {}
 
 jobs:
   agent-fix:
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # Fork rehearsal only, do not merge
     permissions:
       actions: read
       contents: read
