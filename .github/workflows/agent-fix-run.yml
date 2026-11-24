@@ -102,6 +102,7 @@ jobs:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
           AGENT_TOKEN: ${{ github.token }}
           E2E_BOT_LOGIN: sarthakaggarwal97  # Fork rehearsal only: the PAT's user stands in for the bot
+          AGENT_FIX_AUTH_ALLOWLIST: sarthakaggarwal97  # Fork rehearsal only: a personal account has no team
           FRONT_DOOR: ${{ inputs.front_door }}
           REQUEST: ${{ inputs.request }}
           KEY: ${{ inputs.key }}
