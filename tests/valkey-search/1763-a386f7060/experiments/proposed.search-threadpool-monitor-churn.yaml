@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.search-threadpool-monitor-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO's used_read_cpu/used_write_cpu fields polled while the search
+    reader and writer thread pools resize, racing worker startup and retirement against
+    GetAvgCPUPercentage after ThreadMonitor was embedded in ThreadPool::Thread; replies
+    compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 8}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [INFO, everything], compare: skip}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', t, a, n, 3], expect: {equals: 2}}
+    - {command: [HSET, 'doc:4', t, a, n, 4], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:4'}}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 32], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [HSET, 'doc:1', n, 11], expect: {equals: 0}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:2'}}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 32], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [HSET, 'doc:2', n, 22], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:3'}}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 32], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [HSET, 'doc:3', n, 33], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:4'}}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 32], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [FT.SEARCH, idx, '@t:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [INFO, everything], compare: skip}
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

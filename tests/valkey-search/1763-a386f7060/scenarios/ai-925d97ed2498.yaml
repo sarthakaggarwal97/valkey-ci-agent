@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search deebfcb1806e..a386f7060014.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-925d97ed2498
+seed: 102
+experiment:
+  id: proposed.search-threadpool-monitor-churn
+  inputs:
+    resp: 3
+    concurrency: 8
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
