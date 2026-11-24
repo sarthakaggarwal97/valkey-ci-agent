@@ -71,7 +71,4 @@ jobs:
       # (scripts/agent_fix/main.py).
       request: ${{ toJSON(inputs) }}
       key: pr-${{ inputs.pr }}
-    secrets:
-      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+    secrets: inherit  # Fork rehearsal only, do not merge: the PAT stands in for the App

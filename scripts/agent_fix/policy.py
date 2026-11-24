@@ -95,7 +95,7 @@ def target_capabilities(kind: TargetKind) -> TargetCapabilities:
 
 def is_bot_author(author: str) -> bool:
     """Whether ``author`` is the App, whose namespaced PR branches the agent may update."""
-    return author == f"{APP_LOGIN}[bot]"
+    return author == f"{APP_LOGIN}[bot]" or bool(author) and author == os.environ.get("E2E_BOT_LOGIN")  # Fork rehearsal only
 
 
 def is_writable_branch(branch: str) -> bool:

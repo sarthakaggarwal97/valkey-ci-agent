@@ -278,6 +278,7 @@ def test_backport_sweep_exposes_scoped_req_res_validation_bypass():
     )
 
 
+@_rehearsal_skip  # Fork rehearsal only, do not merge
 def test_the_comment_poller_dispatches_with_a_separate_token():
     workflow = yaml.load(Path(".github/workflows/agent-fix-comment-poll.yml").read_text(encoding="utf-8"),
                          Loader=yaml.BaseLoader)

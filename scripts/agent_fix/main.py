@@ -63,7 +63,7 @@ def plan_request(
     actor = os.environ.get("GITHUB_ACTOR", "")
     commenter = str(request.get("commenter") or "") if actor in ("", bot_login) else actor
     comment_id = int(request.get("comment_id") or 0)
-    if repo_full_name != _SCOPE:
+    if repo_full_name not in (_SCOPE, "sarthakaggarwal97/valkey"):  # Fork rehearsal only, do not merge
         raise ValueError(f"agent-fix.yml is scoped to {_SCOPE} (got {repo_full_name!r})")
     if not (pr_number > 0 and commenter):
         raise ValueError("an agent-fix request needs a positive PR number and a commenter")
@@ -142,6 +142,7 @@ def review_comments(repo: Any, pull: Any, bot_login: str) -> tuple[str, ...]:
     is_committer = labelled.committer_check(repo)
     # A thread names the bot without the "[bot]" a review does.
     own = {bot_login, bot_login.removesuffix("[bot]")}
+    own -= {os.environ.get("E2E_BOT_LOGIN", "")}  # Fork rehearsal only, do not merge: the PAT's user also reviews
 
     def committer(login: str) -> bool:
         return login not in own and is_committer(login)

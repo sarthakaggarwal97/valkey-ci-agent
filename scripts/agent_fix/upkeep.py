@@ -69,7 +69,10 @@ def plan_request(
 ) -> FixPlan | dict[str, Any]:
     """The plan for the first thing one of ``request``'s (``{"repo"}``) pull requests needs, or that none does."""
     repo_full_name = str(request["repo"])
-    entry = load_registry(registry).get_repo(repo_full_name)
+    if repo_full_name == "sarthakaggarwal97/valkey":  # Fork rehearsal only, do not merge: the fork as Valkey
+        entry = replace(load_registry(registry).get_repo("valkey-io/valkey"), repo=repo_full_name)
+    else:
+        entry = load_registry(registry).get_repo(repo_full_name)
     repo = retry_github_call(lambda: gh.get_repo(repo_full_name), retries=2, description=f"get {repo_full_name}")
     branch = str(repo.default_branch)
     reasons: dict[str, str] = {}
