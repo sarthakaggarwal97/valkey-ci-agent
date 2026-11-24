@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-24T17:04+00:00.
+Updated 2026-11-24T17:05+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,9 +13,8 @@ Updated 2026-11-24T17:04+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-24T17:04:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45442241773): 1 merge(s) tested, 0 without a code change.
+[2026-11-24T17:05:44+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45444556462): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5584](https://github.com/valkey-io/valkey/pull/5584) ([tests](tests/valkey/5584-38e5b3aef/)): Fix double free of the key iterator on AOF rewrite write error (#5584): declined: The fix sets kvs_it = NULL on the success path of each per-DB loop in rewriteAppendOnlyFileRio so the werr: error path won't double-free the iterator. That error path is reached only when a rioWrite on a later DB's SELECT header returns 0, i.e. a genuine AOF write failure (disk full / EIO 
 
 ### valkey-io/valkey-bloom
 
