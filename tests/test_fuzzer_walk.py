@@ -335,6 +335,17 @@ def test_a_refused_merge_is_retried_a_day_later_without_counting_an_attempt():
     assert state["done"][refused["sha"]]["reason"] == REFUSED
 
 
+def test_progress_shows_a_refused_merge_as_waiting_not_a_stuck_attempt():
+    # valkey #3245: PROGRESS.md said "attempt 0 of 3" of a refused merge, which read as a retry stuck at zero
+    # when the walk was waiting out retry_after on purpose.
+    refused = _merge(sha="c" * 40, pr=3245)
+    planned = {"repo": walk.VALKEY_REPO, "merges": [refused], "skipped": [], "pointer": {"head": "h"}}
+    state = update(initial_state(walk.VALKEY_REPO), planned, [_result(refused, error=REFUSED)], now=NOW)
+    text = progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+    assert f"refusal 1 of {walk.MAX_REFUSALS}, next try after 2026-11-05T12:00:00+00:00" in text
+    assert "attempt 0" not in text
+
+
 def test_an_output_token_overflow_gives_the_merge_up_at_once():
     # valkey #2146 and #1115: an answer past the output token maximum overflows the same way every retry (#2146
     # burned $52 over three runs), so the merge is done with its error on the first one.

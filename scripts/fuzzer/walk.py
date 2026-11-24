@@ -1724,8 +1724,12 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
               f"{verdicts.count('rejected')} rejected, {verdicts.count('error')} failed; {len(pulls)} pull request(s)",
               *(f"  - {url}" for url in pulls)]
     lines += ["", "## Retries", ""]
-    lines += [f"- {name(sha, e)}: attempt {e['attempts']} of {MAX_ATTEMPTS}, {e['error'][:200]}"
-              for sha, e in failed.items()] or ["None."]
+    # A refused merge counts refusals, not attempts, and waits out retry_after: "attempt 0 of 3" read as a
+    # retry stuck at zero when the walk was waiting on purpose (valkey #3245).
+    lines += [f"- {name(sha, e)}: "
+              + (f"refusal {e.get('refusals', 0)} of {MAX_REFUSALS}, next try after {e['retry_after']}"
+                 if "retry_after" in e else f"attempt {e['attempts']} of {MAX_ATTEMPTS}")
+              + f", {e['error'][:200]}" for sha, e in failed.items()] or ["None."]
     # The merges given up with an error stay listed: once the backlog reads done and the retries empty, nothing
     # else says they were never tested (36 merges, 26 of them a valkey-search build window whose recipe fix
     # landed after they ran out of attempts), so a walk that silently skipped them would look complete.
