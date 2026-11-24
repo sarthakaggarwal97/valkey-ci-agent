@@ -1,0 +1,74 @@
+name: Agent Fix Comment Poll
+
+# Scans recent valkey-io/valkey PR comments for "@valkeyrie-ops fix [<ci-link>]"
+# and dispatches the agent-fix workflow for each new one. The trigger only; the
+# fix itself runs in agent-fix.yml. Idempotency is a reaction marker on the
+# comment, so overlapping or replayed ticks never double-dispatch.
+
+on:
+  # Fork rehearsal only, do not merge: registered for dispatch, never scheduled from main.
+  workflow_dispatch:
+    inputs:
+      lookback_minutes:
+        description: "Comment lookback window in minutes (default 180; widen to backfill after an outage, capped at 7 days)"
+        required: false
+        type: string
+        default: "180"
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  poll:
+    name: "Poll for fix commands"
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # Fork rehearsal only, do not merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    concurrency:
+      group: agent-fix-comment-poll
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate App token
+        id: token
+        # Fork rehearsal only, do not merge: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate dispatch token
+        id: dispatch-token
+        # Fork rehearsal only, do not merge: the PAT dispatches, so agent-fix.yml runs as the bot's stand-in.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Poll and dispatch
+        env:
+          AGENT_FIX_POLL_TOKEN: ${{ steps.token.outputs.token }}
+          AGENT_FIX_POLL_DISPATCH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          AGENT_FIX_POLL_APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          # Fork rehearsal only, do not merge: the fork, this ref, and the PAT's user as bot and committer.
+          AGENT_FIX_POLL_TARGET_REPO: sarthakaggarwal97/valkey
+          AGENT_FIX_POLL_AGENT_REPO: sarthakaggarwal97/valkey-ci-agent
+          AGENT_FIX_POLL_REF: ${{ github.ref_name }}
+          AGENT_FIX_POLL_BOT_LOGIN: sarthakaggarwal97
+          AGENT_FIX_AUTH_ALLOWLIST: sarthakaggarwal97
+          AGENT_FIX_POLL_LOOKBACK_MINUTES: ${{ inputs.lookback_minutes || '180' }}
+          AGENT_FIX_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '1800' || '0' }}
+          AGENT_FIX_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
+        run: python -m scripts.agent_fix.comment_poll

@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: true
+      upkeep:
+        description: "Fork rehearsal only, do not merge: also look after the bot's pull requests now"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -91,8 +96,10 @@ jobs:
   upkeep:
     name: "Look after the bot's pull requests"
     if: >-
-      github.repository == 'sarthakaggarwal97/valkey-ci-agent' && github.event_name == 'schedule'
-      && vars.AGENT_FIX_DISPATCH == 'true' && vars.AGENT_FIX_PUBLISH == 'draft-pr'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent'
+      && (github.event_name == 'schedule' && vars.AGENT_FIX_DISPATCH == 'true'
+      || github.event_name == 'workflow_dispatch' && inputs.upkeep)
+      && vars.AGENT_FIX_PUBLISH == 'draft-pr'
     concurrency:
       group: agent-fix-labelled-upkeep
       cancel-in-progress: false
