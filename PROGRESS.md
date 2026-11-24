@@ -4,7 +4,7 @@ Updated 2026-11-24T17:04+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2577 | 1 | #12477 (2023-08-14) | 3 | 5.0 |
+| valkey-io/valkey | 2578 | 1 | #12477 (2023-08-14) | 4 | 5.1 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 1 | 5.9 |
@@ -13,8 +13,9 @@ Updated 2026-11-24T17:04+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-24T16:22:45+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45436232455): 0 merge(s) tested, 0 without a code change.
+[2026-11-24T17:04:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45442241773): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#5584](https://github.com/valkey-io/valkey/pull/5584) ([tests](tests/valkey/5584-38e5b3aef/)): Fix double free of the key iterator on AOF rewrite write error (#5584): declined: The fix sets kvs_it = NULL on the success path of each per-DB loop in rewriteAppendOnlyFileRio so the werr: error path won't double-free the iterator. That error path is reached only when a rioWrite on a later DB's SELECT header returns 0, i.e. a genuine AOF write failure (disk full / EIO 
 
 ### valkey-io/valkey-bloom
 
@@ -36,7 +37,7 @@ Updated 2026-11-24T17:04+00:00.
 - Merges whose tests reached the change: 1013 of 1625 tested (62%)
 - Changed-line coverage: median 100% of 1087 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $21.38 in the last 24 hours, $196.49 in the last 7 days, $11806.54 in all
+- Claude: $23.09 in the last 24 hours, $198.20 in the last 7 days, $11808.26 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
