@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-24T03:20+00:00.
+Updated 2026-11-24T03:21+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -28,9 +28,8 @@ Updated 2026-11-24T03:20+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-24T03:20:52+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45302511660): 1 merge(s) tested, 0 without a code change.
+[2026-11-24T03:21:45+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45318881500): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1763](https://github.com/valkey-io/valkey-search/pull/1763) ([tests](tests/valkey-search/1763-a386f7060/)): Embed ThreadMonitor in ThreadPool::Thread to avoid allocation on worker startup (#1763): 0 of 3 test(s) reached the change
 
 ## Totals
 
