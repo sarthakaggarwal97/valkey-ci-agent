@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c2c9f9f72861b244814106f949e180334b601aff",
+  "parent": "bd169bc17797d73a7141ddbd112e0c8a77e5f529",
+  "pr": 3245,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix assertion crash in processIOThreadsReadDone when DONT_PARSE client has stale argc (#3245)",
+  "date": "2026-11-24",
+  "unstable": "ac4130d401a2bf4a2a876910dd59b4206a7ad000",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6816,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix removes an assertion crash in processIOThreadsReadDone that only occurs under a precise IO-thread race: a client with a stale argc from a partial parse must have close_after_reply set between reads (so the next offloaded read carries READ_FLAGS_DONT_PARSE) and then receive more bytes. The only deterministic way to set that flag at the right instant is the DEBUG SET-CLOSE-AFTER-REPLY subcommand this same PR adds, fired from a separate control connection against the victim's captured client ID and synchronized on tot-net-in byte counts. That subcommand exists only on the fixed build, not"
+}
