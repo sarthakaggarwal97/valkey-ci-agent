@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-25T14:45+00:00.
+Updated 2026-11-25T14:46+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,9 +13,8 @@ Updated 2026-11-25T14:45+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-25T14:45:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45633481941): 1 merge(s) tested, 0 without a code change.
+[2026-11-25T14:46:01+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45637493439): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#3245](https://github.com/valkey-io/valkey/pull/3245) ([tests](tests/valkey/3245-c2c9f9f72/)): Fix assertion crash in processIOThreadsReadDone when DONT_PARSE client has stale argc (#3245): declined: The fix removes an assertion crash in processIOThreadsReadDone that only occurs under a precise IO-thread race: a client with a stale argc from a partial parse must have close_after_reply set between reads (so the next offloaded read carries READ_FLAGS_DONT_PARSE) and then receive more byt
 
 ### valkey-io/valkey-bloom
 
