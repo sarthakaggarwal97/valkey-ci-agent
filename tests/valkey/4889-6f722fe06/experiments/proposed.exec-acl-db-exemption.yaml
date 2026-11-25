@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.exec-acl-db-exemption
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Bare EXEC (no conditions) is exempt from the ACL db-selector restriction on the
+    active database, while EXEC with condition keys, EXEC with a malformed condition,
+    and the queued commands themselves are still denied.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: exec-acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, db1user, on, ">pass", "db=1", "+@all", "~*", "&*"],
+      expect: {equals: OK}}
+    - {connection: ruser, command: [AUTH, db1user, pass], expect: {equals: OK}}
+    - {connection: ruser, command: [EXEC], expect_difference: true, expect: {error: "EXEC\
+          \ without MULTI"}}
+    - {connection: ruser, command: [MULTI], expect: {equals: OK}}
+    - {connection: ruser, command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {connection: ruser, command: [SET, exec-db1-key, v1], expect: {equals: QUEUED}}
+    - {connection: ruser, command: [EXEC], expect_difference: true, expect: {equals: [
+          OK, OK]}}
+    - {connection: ruser, command: [GET, exec-db1-key], expect_difference: true, expect: {
+        equals: v1}}
+    - {connection: ruser, command: [RESET], expect: {equals: RESET}}
+    - {connection: ruser, command: [AUTH, db1user, pass], expect: {equals: OK}}
+    - {connection: ruser, command: [MULTI], expect: {equals: OK}}
+    - {connection: ruser, command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {connection: ruser, command: [EXEC, XX, exec-db1-key], expect: {error: "database"}}
+    - {connection: ruser, command: [EXEC, bogus], expect: {error: "database"}}
+    - {connection: ruser, command: [SELECT, 1], expect: {equals: OK}}
+    - {connection: ruser, command: [SET, guardkey, g], expect: {equals: OK}}
+    - {connection: ruser, command: [MULTI], expect: {equals: OK}}
+    - {connection: ruser, command: [SET, k2, v2], expect: {equals: QUEUED}}
+    - {connection: ruser, command: [EXEC, XX, guardkey], expect: {equals: [OK]}}
+    - {connection: ruser, command: [MULTI], expect: {equals: OK}}
+    - {connection: ruser, command: [SET, k3, v3], expect: {equals: QUEUED}}
+    - {connection: ruser, command: [EXEC, NX, guardkey], expect: {equals: null}}
+    - {connection: ruser, command: [GET, k3], expect: {equals: null}}
+    - {connection: ruser, command: [MULTI], expect: {equals: OK}}
+    - {connection: ruser, command: [SELECT, 0], expect: {error: "NOPERM"}}
+    - {connection: ruser, command: [EXEC], expect: {error: "EXECABORT"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [exec-acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: exec-acl}

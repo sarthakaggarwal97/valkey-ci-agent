@@ -4,7 +4,7 @@ Updated 2026-11-25T13:03+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2580 | 1 | #12477 (2023-08-14) | 4 | 5.4 |
+| valkey-io/valkey | 2581 | 1 | #12477 (2023-08-14) | 5 | 5.6 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 0 | 5.9 |
@@ -13,8 +13,9 @@ Updated 2026-11-25T13:03+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-25T12:03:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45610063797): 0 merge(s) tested, 0 without a code change.
+[2026-11-25T13:03:58+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45614973707): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#4889](https://github.com/valkey-io/valkey/pull/4889) ([tests](tests/valkey/4889-6f722fe06/)): Allow EXEC without conditions from a database the user cannot access (#4889): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +34,10 @@ Updated 2026-11-25T13:03+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1013 of 1626 tested (62%)
-- Changed-line coverage: median 100% of 1088 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1014 of 1627 tested (62%)
+- Changed-line coverage: median 100% of 1089 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $6.58 in the last 24 hours, $200.65 in the last 7 days, $11810.71 in all
+- Claude: $12.00 in the last 24 hours, $206.07 in the last 7 days, $11816.12 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
