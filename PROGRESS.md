@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-25T09:26+00:00.
+Updated 2026-11-25T09:28+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2579 | 1 | #12477 (2023-08-14) | 3 | 5.3 |
+| valkey-io/valkey | 2580 | 1 | #12477 (2023-08-14) | 4 | 5.4 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 0 | 5.9 |
@@ -13,8 +13,9 @@ Updated 2026-11-25T09:26+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-25T08:41:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45578431233): 0 merge(s) tested, 0 without a code change.
+[2026-11-25T09:28:51+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45583123771): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#4828](https://github.com/valkey-io/valkey/pull/4828) ([tests](tests/valkey/4828-1c9b6a381/)): Optimize bulk integer replies by building them in a single buffer (#4828): 0 of 3 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +34,10 @@ Updated 2026-11-25T09:26+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1013 of 1625 tested (62%)
-- Changed-line coverage: median 100% of 1087 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1013 of 1626 tested (62%)
+- Changed-line coverage: median 100% of 1088 merge(s) measured, 79 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $4.13 in the last 24 hours, $198.20 in the last 7 days, $11808.26 in all
+- Claude: $6.58 in the last 24 hours, $200.65 in the last 7 days, $11810.71 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

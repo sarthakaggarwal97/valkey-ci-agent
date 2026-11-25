@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 334dd6cc8c75..1c9b6a3815de.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8a3e60949ec7
+seed: 482801
+experiment:
+  id: proposed.bulk-int-reply-equivalence
+  inputs:
+    resp: 2
+    io_threads: 1
+deployment:
+  mode: standalone
+  base_port: 7000
