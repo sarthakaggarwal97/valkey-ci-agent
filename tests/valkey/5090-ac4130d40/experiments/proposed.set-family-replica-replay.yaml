@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.set-family-replica-replay
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A replica of each build replays its primary's propagated stream. On the parent,
+    SET IFEQ/IFNE GET drops the comparison value spelled GET, the replica rejects
+    the rewritten SET and the dataset diverges; the propagated forms of the other
+    shifted callers (SETNX, SETEX, PSETEX, GETEX, INCREX, HSETEX, HGETEX) must replay
+    identically on both builds.
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, foo, GET], expect: {equals: OK}}
+    - {command: [SET, foo, bar, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, foo2, other], expect: {equals: OK}}
+    - {command: [SET, foo2, baz, IFNE, GET, GET], expect: {equals: other}}
+    - {command: [SETNX, k1, v1], expect: {equals: 1}}
+    - {command: [SETEX, k2, 100, v2], expect: {equals: OK}}
+    - {command: [PSETEX, k3, 100000, v3], expect: {equals: OK}}
+    - {command: [GETEX, k2, PERSIST], expect: {equals: v2}}
+    - {command: [INCREX, ctr, BYINT, 7, EX, 60], expect: {equals: [7, 7]}}
+    - {command: [HSETEX, h, EX, 100, FIELDS, 1, f1, v1], expect: {equals: 1}}
+    - {command: [HGETEX, h, PERSIST, FIELDS, 1, f1], expect: {equals: [v1]}}
+    - {command: [GET, foo], node: 1, wait_s: 15, expect_difference: true, expect: {
+        equals: bar}}
+    - {command: [GET, foo2], node: 1, wait_s: 15, expect_difference: true, expect: {
+        equals: baz}}
+    - {command: [GET, k1], node: 1, wait_s: 15, expect: {equals: v1}}
+    - {command: [GET, k2], node: 1, wait_s: 15, expect: {equals: v2}}
+    - {command: [GET, k3], node: 1, wait_s: 15, expect: {equals: v3}}
+    - {command: [GET, ctr], node: 1, wait_s: 15, expect: {equals: "7"}}
+    - {command: [HGET, h, f1], node: 1, wait_s: 15, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

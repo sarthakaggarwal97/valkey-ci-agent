@@ -1,0 +1,61 @@
+extends: [valkey.base]
+id: proposed.set-ifeq-get-under-replica-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Conditional SET GET commands with comparison values spelled GET stream
+    through a replica kill and resync with no crash or lost acknowledged write
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: ifeq-phase1
+  depends_on: [warm-up]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [SET, cond1, GET], expect: {equals: OK}}
+    - {command: [SET, cond1, v1, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, cond1, GET, IFNE, GET, GET], expect: {equals: v1}}
+    - {command: [SET, cond1, v2, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, condGETkey, GET], expect: {equals: OK}}
+    - {command: [SET, condGETkey, w1, IFEQ, GET, GET, GET], expect: {equals: GET}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: ifeq-phase1.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: resync-window
+  depends_on: [ifeq-phase1]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: ifeq-phase2
+  depends_on: [resync-window]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [SET, cond2, GET], expect: {equals: OK}}
+    - {command: [SET, cond2, p2a, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, cond2, p2b, IFNE, GET, GET], expect: {equals: p2a}}
+    - {command: [SET, cond3, GET], expect: {equals: OK}}
+    - {command: [SET, cond3, p2c, IFEQ, GET, GET, GET], expect: {equals: GET}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [ifeq-phase2]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [ifeq-phase1.completed, ifeq-phase2.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: ifeq-phase1}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ac4130d401a2bf4a2a876910dd59b4206a7ad000",
+  "parent": "6f722fe06f331e665a0eb1cae43db4cc8a0170ee",
+  "pr": 5090,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep an IFEQ/IFNE value spelled GET when propagating SET GET (#5090)",
+  "date": "2026-11-25",
+  "unstable": "ac4130d401a2bf4a2a876910dd59b4206a7ad000",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 7,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 15.4026,
+  "findings": [],
+  "recorded": []
+}

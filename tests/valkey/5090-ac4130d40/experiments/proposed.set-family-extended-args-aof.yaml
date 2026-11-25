@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.set-family-extended-args-aof
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Runs every caller of parseExtendedCommandArgumentsOrReply that the compare_idx
+    parameter shift touched (SETNX, SETEX, PSETEX, GETEX, INCREX, HSETEX, HGETEX)
+    with its full option grammar, anchored on the SET IFEQ/IFNE GET propagation fix
+    observed by replaying the AOF across a restart.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, GET], expect: {equals: OK}}
+    - {command: [SET, foo, bar, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, foo2, other], expect: {equals: OK}}
+    - {command: [SET, foo2, baz, IFNE, GET, GET], expect: {equals: other}}
+    - {command: [SET, e, GET], expect: {equals: OK}}
+    - {command: [SET, e, x, IFEQ, GET, GET, GET, GET], expect: {equals: GET}}
+    - {command: [SET, g, GET], expect: {equals: OK}}
+    - {command: [SET, g, y, IFEQ, GET, EX, 100, GET], expect: {equals: GET}}
+    - {command: [SETNX, k1, v1], expect: {equals: 1}}
+    - {command: [SETNX, k1, v2], expect: {equals: 0}}
+    - {command: [SETNX, '', ''], expect: {equals: 1}}
+    - {command: [SETEX, k2, 100, v2], expect: {equals: OK}}
+    - {command: [SETEX, k2, 0, v], expect: {error: "invalid expire"}}
+    - {command: [SETEX, k2, 9223372036854775807, v], expect: {error: "invalid expire"}}
+    - {command: [PSETEX, k3, 100000, v3], expect: {equals: OK}}
+    - {command: [PSETEX, k3, -1, v], expect: {error: "invalid expire"}}
+    - {command: [GETEX, k2, PERSIST], expect: {equals: v2}}
+    - {command: [GETEX, k2, EXAT, 9999999999], expect: {equals: v2}}
+    - {command: [GETEX, k2, IFEQ, x], expect: {error: "syntax error"}}
+    - {command: [GETEX, k2, GET], expect: {error: "syntax error"}}
+    - {command: [INCREX, ctr, BYINT, 5, EX, 100], expect: {equals: [5, 5]}}
+    - {command: [INCREX, ctr, BYINT, 100, UBOUND, 50, SATURATE], expect: {equals: [
+          50, 45]}}
+    - {command: [INCREX, ctr, IFEQ, x], expect: {error: "syntax error"}}
+    - {command: [INCREX, ctr, BYFLOAT, 1.5, PERSIST]}
+    - {command: [HSETEX, h, EX, 100, FIELDS, 2, f1, v1, f2, v2], expect: {equals: 1}}
+    - {command: [HSETEX, h, FNX, FIELDS, 1, f1, vx], expect: {equals: 0}}
+    - {command: [HSETEX, h, XX, KEEPTTL, FIELDS, 1, f1, v9], expect: {equals: 1}}
+    - {command: [HSETEX, h, IFEQ, x, FIELDS, 1, f1, v], expect: {error: "syntax error"}}
+    - {command: [HSETEX, h, GET, FIELDS, 1, f1, v], expect: {error: "syntax error"}}
+    - {command: [HSETEX, h, FIELDS, 2, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [HGETEX, h, EX, 50, FIELDS, 1, f1], expect: {equals: [v9]}}
+    - {command: [HGETEX, h, PERSIST, FIELDS, 2, f1, f2], expect: {equals: [v9, v2]}}
+    - {command: [HGETEX, h, IFNE, x, FIELDS, 1, f1], expect: {error: "syntax error"}}
+    - {command: [HGETEX, h, EXAT, 99999999999, PXAT, 99, FIELDS, 1, f1], expect: {
+        error: "syntax error"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - {command: [GET, foo2], expect_difference: true, expect: {equals: baz}}
+    - {command: [GET, e], expect_difference: true, expect: {equals: x}}
+    - {command: [GET, g], expect: {equals: y}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

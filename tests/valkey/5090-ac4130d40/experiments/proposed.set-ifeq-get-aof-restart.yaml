@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.set-ifeq-get-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: SET GET with an IFEQ comparison value spelled GET must survive an AOF
+    reload
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [SET, foo, GET], expect: {equals: OK}}
+    - {command: [SET, foo, bar, IFEQ, GET, GET], expect: {equals: GET}}
+    - {command: [SET, k2, GET], expect: {equals: OK}}
+    - {command: [SET, k2, v2, IFNE, zzz, GET], expect: {equals: GET}}
+    - {command: [SET, GET, GET], expect: {equals: OK}}
+    - {command: [SET, GET, repl, IFEQ, GET, GET, GET], expect: {equals: GET}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - {command: [GET, GET], expect_difference: true, expect: {equals: repl}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

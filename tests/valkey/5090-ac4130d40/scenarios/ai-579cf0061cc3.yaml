@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6f722fe06f33..ac4130d401a2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-579cf0061cc3
+seed: 105
+experiment:
+  id: proposed.set-ifeq-get-under-replica-kill
+  inputs:
+    signal: SIGSTOP
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
