@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-25T07:02+00:00.
+Updated 2026-11-25T07:09+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2578 | 1 | #12477 (2023-08-14) | 2 | 5.1 |
+| valkey-io/valkey | 2579 | 1 | #12477 (2023-08-14) | 3 | 5.3 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 0 | 5.9 |
@@ -13,7 +13,7 @@ Updated 2026-11-25T07:02+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-25T06:27:43+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45560680824): 0 merge(s) tested, 0 without a code change.
+[2026-11-25T07:09:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45564481115): 0 merge(s) tested, 1 without a code change.
 
 
 ### valkey-io/valkey-bloom
