@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-26T15:08+00:00.
+Updated 2026-11-26T15:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2583 | 0 | #12477 (2023-08-14) | 0 | 5.9 |
+| valkey-io/valkey | 2584 | 0 | #12477 (2023-08-14) | 1 | 6.0 |
 | valkey-io/valkey-bloom | 112 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.6 |
 | valkey-io/valkey-json | 66 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.1 |
 | valkey-io/valkey-search | 712 | 0 | f8106e72e984 (2024-11-27) | 0 | 5.9 |
@@ -13,8 +13,9 @@ Updated 2026-11-26T15:08+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-26T13:01:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45825069412): 0 merge(s) tested, 0 without a code change.
+[2026-11-26T15:29:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/45830047097): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#4971](https://github.com/valkey-io/valkey/pull/4971) ([tests](tests/valkey/4971-b8d6a54e7/)): Skip pubsub channel defrag while a pending reply holds a reference (#4971): 0 of 4 test(s) reached the change, coverage 0%
 
 ### valkey-io/valkey-bloom
 
@@ -33,10 +34,10 @@ Updated 2026-11-26T15:08+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 1015 of 1628 tested (62%)
-- Changed-line coverage: median 100% of 1090 merge(s) measured, 79 under 50%
+- Merges whose tests reached the change: 1015 of 1629 tested (62%)
+- Changed-line coverage: median 100% of 1091 merge(s) measured, 80 under 50%
 - Recall: 269 parents flagged of 421 fix merges
-- Claude: $0.00 in the last 24 hours, $224.15 in the last 7 days, $11834.21 in all
+- Claude: $2.77 in the last 24 hours, $226.92 in the last 7 days, $11836.98 in all
 - Issues filed: 86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

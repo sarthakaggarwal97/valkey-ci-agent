@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8d6a54e7a5eb2adf7e71a18a8731e83f548d767",
+  "parent": "ac4130d401a2bf4a2a876910dd59b4206a7ad000",
+  "pr": 4971,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip pubsub channel defrag while a pending reply holds a reference (#4971)",
+  "date": "2026-11-26",
+  "unstable": "b8d6a54e7a5eb2adf7e71a18a8731e83f548d767",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/defrag.c:746",
+      "src/defrag.c:747",
+      "src/defrag.c:749",
+      "src/defrag.c:750",
+      "src/defrag.c:751",
+      "src/defrag.c:768"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 2.7699,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9fb36abb3385",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'defrag' returned ERROR: the parent died before marked commands ran on it, so they were not compared: 7 (PING)"
+    },
+    {
+      "scenario": "ai-b085f6276476",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'defrag' returned ERROR: the parent died before marked commands ran on it, so they were not compared: 7 (PING)"
+    }
+  ]
+}

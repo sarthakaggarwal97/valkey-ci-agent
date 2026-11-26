@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac4130d401a2..b8d6a54e7a5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-abb1a6cd6700
+seed: 7002
+experiment:
+  id: proposed.defrag-pubsub-queued-channel-ref
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

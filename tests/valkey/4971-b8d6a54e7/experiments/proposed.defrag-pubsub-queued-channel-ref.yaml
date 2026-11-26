@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.defrag-pubsub-queued-channel-ref
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag scanning a pubsub channel whose name is still referenced
+    by a queued reply must not assert or corrupt the channel
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: defrag_pubsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      min-io-threads-avoid-copy-reply: 1
+      active-defrag-threshold-lower: 0
+      active-defrag-ignore-bytes: 1
+      active-defrag-cycle-min: 25
+      active-defrag-cycle-max: 75
+      maxmemory-policy: noeviction
+    commands:
+    - {command: [CONFIG, SET, client-output-buffer-limit, "pubsub 0 0 0"], expect: {
+        equals: OK}}
+    - {connection: listener, command: [SUBSCRIBE, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      expect: {exists: true}}
+    - {connection: stalled, command: [CLIENT, SETNAME, stalled], expect: {equals: OK}}
+    - {connection: stalled, command: [SUBSCRIBE, filler], expect: {exists: true}}
+    - {command: [PUBLISH, filler, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {min: 0}}
+    - {connection: stalled, command: [SUBSCRIBE, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      expect: {exists: true}}
+    - {connection: stalled, command: [UNSUBSCRIBE, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [PUBSUB, NUMSUB, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      wait_s: 20, expect: {contains: 1}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [PUBLISH, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,
+        hello], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag_pubsub}
